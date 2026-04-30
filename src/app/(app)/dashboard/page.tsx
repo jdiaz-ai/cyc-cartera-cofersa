@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCRC } from '@/lib/utils'
+import { fmtCRC, fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import { AlertTriangle, TrendingDown, Users, ClipboardCheck, Handshake, RefreshCw, Activity, Shield } from 'lucide-react'
 
 interface CarteraRow {
@@ -10,25 +10,11 @@ interface CarteraRow {
 interface PromesaRow { id: string; cliente_cod: string; monto: number; fecha_promesa: string }
 interface GestionRow  { id: string; cliente_cod: string; tipo: string; resultado: string; hora: string }
 
-function parseFecha(raw: string) {
-  if (!raw) return '—'
-  const d = new Date(raw)
-  if (!isNaN(d.getTime())) {
-    return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`
-  }
-  return raw
-}
-function abrev(n: number) {
-  if (n >= 1e9) return (n/1e9).toFixed(2)+'B'
-  if (n >= 1e6) return (n/1e6).toFixed(1)+'M'
-  if (n >= 1e3) return (n/1e3).toFixed(0)+'K'
-  return Math.round(n).toString()
-}
 function pct(a: number, b: number) { return b ? Math.round((a/b)*100) : 0 }
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const hoyStr = new Date(Date.now() - 6*3600*1000).toISOString().split('T')[0]
+  const hoyStr = hoyISO()
 
   let rows: CarteraRow[] = [], fechaCorte = '', totalClientes = 0
   try {
@@ -40,7 +26,7 @@ export default async function DashboardPage() {
       .select('no_vencido,mora_1_30,mora_31_60,mora_61_90,mora_91_120,mora_120_plus,total,dias_mora,fecha_corte')
       .range(0, 4999)
     rows = (data ?? []) as CarteraRow[]
-    if (rows[0]) fechaCorte = parseFecha(rows[0].fecha_corte ?? '')
+    if (rows[0]) fechaCorte = fmtFecha(rows[0].fecha_corte ?? '')
   } catch {}
 
   const nv   = rows.reduce((s,r) => s+(r.no_vencido||0), 0)
@@ -103,7 +89,7 @@ export default async function DashboardPage() {
           <span className="text-blue-300">Sincronización automática 3× al día</span>
         </div>
         <div className="hidden lg:flex items-center gap-8">
-          <Stat label="Cartera Total" valor={`CRC ${abrev(cartera)}`} />
+          <Stat label="Cartera Total" valor={{fmtM(cartera)}} />
           <Stat label="Clientes Activos" valor={nClientes.toLocaleString()} />
           <Stat label="DSO" valor={`${dso} días`} warn={dso>40} />
         </div>
@@ -123,7 +109,7 @@ export default async function DashboardPage() {
           {/* Cartera total — protagonista navy */}
           <KPICard
             label="Cartera Total"
-            valor={`CRC ${abrev(cartera)}`}
+            valor={{fmtM(cartera)}}
             sub={`${nClientes.toLocaleString()} clientes activos`}
             gradient="linear-gradient(135deg, #003B5C 0%, #005a8e 100%)"
             textColor="white"
@@ -134,7 +120,7 @@ export default async function DashboardPage() {
           {/* Mora total — amber/red */}
           <KPICard
             label="Total en Mora"
-            valor={`CRC ${abrev(mora)}`}
+            valor={{fmtM(mora)}}
             sub={`${nMora.toLocaleString()} clientes`}
             gradient={pMora>20
               ? "linear-gradient(135deg, #991b1b 0%, #dc2626 100%)"
@@ -196,7 +182,7 @@ export default async function DashboardPage() {
               </div>
               <div className="text-right hidden sm:block">
                 <p className="text-xs text-gray-400">Total analizado</p>
-                <p className="text-sm font-black text-gray-900">CRC {abrev(cartera)}</p>
+                <p className="text-sm font-black text-gray-900">{fmtM(cartera)}</p>
               </div>
             </div>
 
@@ -246,7 +232,7 @@ export default async function DashboardPage() {
                     </div>
                     {/* Amount */}
                     <div className="w-32 flex-shrink-0 text-right">
-                      <p className="text-sm font-black text-gray-900">CRC {abrev(t.v)}</p>
+                      <p className="text-sm font-black text-gray-900">{fmtM(t.v)}</p>
                     </div>
                     {/* Pct badge */}
                     <div className="w-14 flex-shrink-0 text-right">
@@ -274,7 +260,7 @@ export default async function DashboardPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mora &gt;90d</span>
-                <span className="text-sm font-black text-gray-800">CRC {abrev(m91+m120)}</span>
+                <span className="text-sm font-black text-gray-800">{fmtM(m91+m120)}</span>
               </div>
             </div>
           </div>
@@ -305,7 +291,7 @@ export default async function DashboardPage() {
                         <p className="text-xs font-bold text-gray-800">{p.cliente_cod}</p>
                         <p className="text-xs text-red-500 font-medium">{p.fecha_promesa}</p>
                       </div>
-                      <p className="text-xs font-black text-red-700">CRC {abrev(p.monto)}</p>
+                      <p className="text-xs font-black text-red-700">{fmtM(p.monto)}</p>
                     </div>
                   ))}
                 </div>
@@ -369,7 +355,7 @@ export default async function DashboardPage() {
                   <p className="text-blue-200 text-xs font-bold uppercase tracking-widest">Meta Mensual</p>
                   <Users size={14} className="text-blue-300"/>
                 </div>
-                <p className="text-white text-xl font-black mb-4">CRC {abrev(meta)}</p>
+                <p className="text-white text-xl font-black mb-4">{fmtM(meta)}</p>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.15)'}}>
                   <div className="h-full rounded-full" style={{width:'0%', background:'#009ee3'}}/>
                 </div>

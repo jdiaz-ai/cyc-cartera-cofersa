@@ -49,9 +49,34 @@
 }
 
 :root {
-  /* Cofersa brand */
-  --cofersa-navy: #003B5C;
-  --cofersa-cyan: #009ee3;
+  /* ── Identidad Cofersa (inamovibles) ── */
+  --cofersa-navy:        #003B5C;
+  --cofersa-cyan:        #009ee3;
+
+  /* ── Fondo y superficies ── */
+  --bg-app:              #f0f4f8;
+  --bg-card:             #ffffff;
+  --bg-sidebar:          #003B5C;
+
+  /* ── Semáforo de urgencia ── */
+  --riesgo-alto:         #dc2626;
+  --riesgo-medio:        #f59e0b;
+  --riesgo-bajo:         #22c55e;
+
+  /* ── Estados de solicitudes y promesas ── */
+  --estado-pendiente:    #f59e0b;
+  --estado-aprobado:     #22c55e;
+  --estado-rechazado:    #dc2626;
+  --estado-revision:     #009ee3;
+
+  /* ── Aging — colores por tramo ── */
+  --aging-aldia:         #009ee3;
+  --aging-1-30:          #f59e0b;
+  --aging-31-60:         #f97316;
+  --aging-61-90:         #ef4444;
+  --aging-91-120:        #dc2626;
+  --aging-120plus:       #991b1b;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -126,8 +151,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: var(--bg-app);
   }
   html {
     @apply font-sans;
+  }
+  /* Montos numéricos — alineación tabular para tablas */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
   }
 }
