@@ -9,16 +9,23 @@ export default async function FichaClientePage({ params }: PageProps) {
   const supabase = await createClient()
   const cod      = decodeURIComponent(params.cod)
 
-  // ── Cartera (aging) ────────────────────────────────────────────────
-  const { data: carteraRaw } = await supabase
-    .from('cartera').select('*').eq('cliente_cod', cod).single()
-  if (!carteraRaw) return notFound()
-  const cartera = carteraRaw as Cartera
+  // ── Cartera (aging) — usa el registro más reciente del cliente ────────
+  // .single() falla si hay múltiples rows por distintos syncs, por eso limit(1)
+  const { data: carteraRows } = await supabase
+    .from('cartera').select('*')
+    .eq('cliente_cod', cod)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  if (!carteraRows || carteraRows.length === 0) return notFound()
+  const cartera = carteraRows[0] as Cartera
 
   // ── Maestro clientes (info comercial) ──────────────────────────────
-  const { data: maestroRaw } = await supabase
-    .from('maestro_clientes').select('*').eq('cliente_cod', cod).single()
-  const maestro = (maestroRaw ?? null) as MaestroCliente | null
+  const { data: maestroRows } = await supabase
+    .from('maestro_clientes').select('*')
+    .eq('cliente_cod', cod)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const maestro = ((maestroRows ?? [])[0] ?? null) as MaestroCliente | null
 
   // ── Facturas (por contribuyente) ────────────────────────────────────
   const { data: facturasRaw } = await supabase
