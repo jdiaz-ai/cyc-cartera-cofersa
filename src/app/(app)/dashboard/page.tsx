@@ -89,7 +89,7 @@ export default async function DashboardPage() {
           <span className="text-blue-300">Sincronización automática 3× al día</span>
         </div>
         <div className="hidden lg:flex items-center gap-8">
-          <Stat label="Cartera Total" valor={{fmtM(cartera)}} />
+          <Stat label="Cartera Total" valor={fmtM(cartera)} />
           <Stat label="Clientes Activos" valor={nClientes.toLocaleString()} />
           <Stat label="DSO" valor={`${dso} días`} warn={dso>40} />
         </div>
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
           {/* Cartera total — protagonista navy */}
           <KPICard
             label="Cartera Total"
-            valor={{fmtM(cartera)}}
+            valor={fmtM(cartera)}
             sub={`${nClientes.toLocaleString()} clientes activos`}
             gradient="linear-gradient(135deg, #003B5C 0%, #005a8e 100%)"
             textColor="white"
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
           {/* Mora total — amber/red */}
           <KPICard
             label="Total en Mora"
-            valor={{fmtM(mora)}}
+            valor={fmtM(mora)}
             sub={`${nMora.toLocaleString()} clientes`}
             gradient={pMora>20
               ? "linear-gradient(135deg, #991b1b 0%, #dc2626 100%)"
