@@ -43,16 +43,17 @@ export default async function AppLayout({
   // Contar notificaciones no leídas del usuario actual
   let notiCount = 0
   try {
-    const usuarioRow = await supabase
+    const { data: usuarioRow } = await supabase
       .from('usuarios')
       .select('id')
       .eq('email', user.email!)
       .single()
-    if (usuarioRow.data?.id) {
+    const uid = (usuarioRow as { id: string } | null)?.id
+    if (uid) {
       const { count } = await supabase
         .from('notificaciones')
         .select('*', { count: 'exact', head: true })
-        .eq('usuario_id', usuarioRow.data.id)
+        .eq('usuario_id', uid)
         .eq('leida', false)
       notiCount = count ?? 0
     }

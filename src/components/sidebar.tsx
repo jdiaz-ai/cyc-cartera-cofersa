@@ -140,16 +140,16 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className="px-3 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
-          className="rounded-xl px-3 py-2 flex items-center justify-center"
-          style={{ background: 'white', minHeight: '46px' }}
+          className="rounded-xl px-4 py-3 flex items-center justify-center"
+          style={{ background: 'white', minHeight: '60px' }}
         >
           <Image
             src="/logo-cofersa.png"
             alt="Cofersa"
-            width={120}
-            height={34}
+            width={160}
+            height={46}
             priority
-            style={{ objectFit: 'contain', maxHeight: '34px', width: 'auto' }}
+            style={{ objectFit: 'contain', maxHeight: '46px', width: '100%' }}
           />
         </div>
         <p
@@ -197,7 +197,7 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
                           'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
                           isActive
                             ? 'text-white'
-                            : 'text-blue-200 hover:text-white hover:bg-white/8'
+                            : 'text-blue-200 hover:text-white hover:bg-white/10'
                         )}
                         style={
                           isActive
@@ -224,7 +224,7 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
       >
         {/* Notificaciones */}
         <button
-          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/8"
+          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/10"
           style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}
         >
           <div className="relative flex-shrink-0">
@@ -285,7 +285,7 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
         {/* Cerrar sesión */}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-white/8"
+          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-white/10"
           style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}
         >
           <LogOut size={15} className="flex-shrink-0" />
