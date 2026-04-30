@@ -137,16 +137,16 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
       style={{ width: '210px', backgroundColor: '#003B5C' }}
     >
       {/* ── Logo ─────────────────────────────────────────────── */}
-      <div className="px-3 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div className="px-3 pt-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
-          className="rounded-xl flex items-center justify-center overflow-hidden"
-          style={{ background: 'white', padding: '10px 12px' }}
+          className="rounded-xl overflow-hidden"
+          style={{ background: 'white', width: '100%', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo-cofersa.png"
             alt="Cofersa"
-            style={{ width: '100%', height: 'auto', maxHeight: '52px', objectFit: 'contain', display: 'block' }}
+            style={{ width: '90%', height: '90%', objectFit: 'contain', display: 'block' }}
           />
         </div>
         <p
