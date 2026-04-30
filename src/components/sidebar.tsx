@@ -14,79 +14,114 @@ import {
   Settings,
   Package,
   LogOut,
-  ChevronRight,
+  Bell,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Usuario } from '@/types/database'
 
-type NavItem = {
+// ── Tipos ─────────────────────────────────────────────────────────
+
+type Rol = 'COORDINADOR' | 'ANALISTA'
+
+interface NavItem {
   label: string
   href: string
   icon: React.ReactNode
-  roles: Array<'COORDINADOR' | 'ANALISTA'>
+  roles: Rol[]
 }
 
-const NAV_ITEMS: NavItem[] = [
+interface NavSection {
+  label: string | null   // null = sin encabezado de sección
+  items: NavItem[]
+}
+
+// ── Navegación agrupada por sección ──────────────────────────────
+
+const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Dashboard',
-    href: '/dashboard',
-    icon: <LayoutDashboard size={18} />,
-    roles: ['COORDINADOR'],
+    label: null,
+    items: [
+      {
+        label: 'Dashboard',
+        href: '/dashboard',
+        icon: <LayoutDashboard size={16} />,
+        roles: ['COORDINADOR'],
+      },
+      {
+        label: 'Mi Cartera',
+        href: '/mi-cartera',
+        icon: <Package size={16} />,
+        roles: ['ANALISTA'],
+      },
+    ],
   },
   {
-    label: 'Mi Cartera',
-    href: '/mi-cartera',
-    icon: <Package size={18} />,
-    roles: ['ANALISTA'],
+    label: 'Gestión',
+    items: [
+      {
+        label: 'Clientes',
+        href: '/clientes',
+        icon: <Users size={16} />,
+        roles: ['COORDINADOR', 'ANALISTA'],
+      },
+      {
+        label: 'Gestiones',
+        href: '/gestiones',
+        icon: <ClipboardList size={16} />,
+        roles: ['COORDINADOR', 'ANALISTA'],
+      },
+      {
+        label: 'Promesas',
+        href: '/promesas',
+        icon: <Handshake size={16} />,
+        roles: ['COORDINADOR', 'ANALISTA'],
+      },
+      {
+        label: 'Solicitudes',
+        href: '/solicitudes',
+        icon: <ClipboardList size={16} />,
+        roles: ['COORDINADOR', 'ANALISTA'],
+      },
+    ],
   },
   {
-    label: 'Clientes',
-    href: '/clientes',
-    icon: <Users size={18} />,
-    roles: ['COORDINADOR', 'ANALISTA'],
-  },
-  {
-    label: 'Gestiones',
-    href: '/gestiones',
-    icon: <ClipboardList size={18} />,
-    roles: ['COORDINADOR', 'ANALISTA'],
-  },
-  {
-    label: 'Promesas',
-    href: '/promesas',
-    icon: <Handshake size={18} />,
-    roles: ['COORDINADOR', 'ANALISTA'],
-  },
-  {
-    label: 'Mi Equipo',
-    href: '/equipo',
-    icon: <UserCheck size={18} />,
-    roles: ['COORDINADOR'],
-  },
-  {
-    label: 'Reportes',
-    href: '/reportes',
-    icon: <BarChart3 size={18} />,
-    roles: ['COORDINADOR'],
-  },
-  {
-    label: 'Configuración',
-    href: '/configuracion',
-    icon: <Settings size={18} />,
-    roles: ['COORDINADOR'],
+    label: 'Administración',
+    items: [
+      {
+        label: 'Mi Equipo',
+        href: '/equipo',
+        icon: <UserCheck size={16} />,
+        roles: ['COORDINADOR'],
+      },
+      {
+        label: 'Reportes',
+        href: '/reportes',
+        icon: <BarChart3 size={16} />,
+        roles: ['COORDINADOR'],
+      },
+      {
+        label: 'Configuración',
+        href: '/configuracion',
+        icon: <Settings size={16} />,
+        roles: ['COORDINADOR'],
+      },
+    ],
   },
 ]
 
+// ── Props ─────────────────────────────────────────────────────────
+
 interface SidebarProps {
   usuario: Pick<Usuario, 'nombre' | 'email' | 'rol' | 'iniciales' | 'color'> | null
+  notiCount: number
 }
 
-export default function Sidebar({ usuario }: SidebarProps) {
+// ── Componente ────────────────────────────────────────────────────
+
+export default function Sidebar({ usuario, notiCount }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const rol = usuario?.rol ?? 'ANALISTA'
-
-  const navFiltrado = NAV_ITEMS.filter((item) => item.roles.includes(rol))
+  const rol: Rol = (usuario?.rol as Rol) ?? 'ANALISTA'
 
   async function handleLogout() {
     const supabase = createClient()
@@ -99,81 +134,162 @@ export default function Sidebar({ usuario }: SidebarProps) {
 
   return (
     <aside
-      className="flex flex-col w-64 h-screen flex-shrink-0"
-      style={{ backgroundColor: '#003B5C' }}
+      className="flex flex-col flex-shrink-0 h-screen"
+      style={{ width: '210px', backgroundColor: '#003B5C' }}
     >
-      {/* Logo */}
-      <div className="px-4 py-4 border-b border-white/10">
-        <div className="bg-white rounded-xl px-3 py-2 flex items-center justify-center" style={{minHeight:'52px'}}>
+      {/* ── Logo ─────────────────────────────────────────────── */}
+      <div className="px-3 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div
+          className="rounded-xl px-3 py-2 flex items-center justify-center"
+          style={{ background: 'white', minHeight: '46px' }}
+        >
           <Image
             src="/logo-cofersa.png"
             alt="Cofersa"
-            width={130}
-            height={38}
+            width={120}
+            height={34}
             priority
-            style={{ objectFit: 'contain', maxHeight: '38px', width: 'auto' }}
+            style={{ objectFit: 'contain', maxHeight: '34px', width: 'auto' }}
           />
         </div>
-        <p className="text-blue-300 text-xs text-center mt-2 font-semibold tracking-wide uppercase">
+        <p
+          className="text-center mt-2 font-bold uppercase tracking-widest"
+          style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', letterSpacing: '0.12em' }}
+        >
           Crédito y Cobro
         </p>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
-        <ul className="space-y-0.5">
-          {navFiltrado.map((item) => {
-            const isActive =
-              item.href === '/dashboard'
-                ? pathname === '/dashboard'
-                : pathname.startsWith(item.href)
+      {/* ── Nav ──────────────────────────────────────────────── */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2">
+        {NAV_SECTIONS.map((section, si) => {
+          // Filtrar items por rol
+          const itemsFiltrados = section.items.filter((item) =>
+            item.roles.includes(rol)
+          )
+          if (itemsFiltrados.length === 0) return null
 
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'text-white'
-                      : 'text-blue-200 hover:text-white hover:bg-white/10'
-                  )}
-                  style={isActive ? { backgroundColor: '#009ee3' } : {}}
+          return (
+            <div key={si} className={si > 0 ? 'mt-4' : ''}>
+              {/* Encabezado de sección */}
+              {section.label && (
+                <p
+                  className="px-3 mb-1 font-bold uppercase tracking-widest"
+                  style={{ color: 'rgba(255,255,255,0.3)', fontSize: '9px', letterSpacing: '0.1em' }}
                 >
-                  {item.icon}
-                  <span className="flex-1">{item.label}</span>
-                  {isActive && <ChevronRight size={14} className="opacity-70" />}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+                  {section.label}
+                </p>
+              )}
+
+              {/* Items */}
+              <ul className="space-y-0.5">
+                {itemsFiltrados.map((item) => {
+                  const isActive =
+                    item.href === '/dashboard' || item.href === '/mi-cartera'
+                      ? pathname === item.href
+                      : pathname.startsWith(item.href)
+
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+                          isActive
+                            ? 'text-white'
+                            : 'text-blue-200 hover:text-white hover:bg-white/8'
+                        )}
+                        style={
+                          isActive
+                            ? { backgroundColor: '#009ee3', fontSize: '13px' }
+                            : { fontSize: '13px' }
+                        }
+                      >
+                        <span className="flex-shrink-0">{item.icon}</span>
+                        <span className="flex-1 leading-none">{item.label}</span>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )
+        })}
       </nav>
 
-      {/* Usuario + logout */}
-      <div className="px-3 pb-4 border-t border-white/10 pt-4">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-lg mb-2">
+      {/* ── Footer: notificaciones + usuario + logout ─────────── */}
+      <div
+        className="px-2 pb-3 pt-3"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+      >
+        {/* Notificaciones */}
+        <button
+          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/8"
+          style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}
+        >
+          <div className="relative flex-shrink-0">
+            <Bell size={16} />
+            {notiCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-white font-bold"
+                style={{
+                  background: '#dc2626',
+                  fontSize: '9px',
+                  minWidth: '14px',
+                  height: '14px',
+                  padding: '0 3px',
+                  lineHeight: 1,
+                }}
+              >
+                {notiCount > 99 ? '99+' : notiCount}
+              </span>
+            )}
+          </div>
+          <span className="flex-1 text-left font-semibold">Notificaciones</span>
+          {notiCount === 0 && (
+            <span
+              className="text-xs rounded-full px-1.5 py-0.5 font-medium"
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}
+            >
+              0
+            </span>
+          )}
+        </button>
+
+        {/* Usuario */}
+        <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg mb-1">
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ backgroundColor: color }}
+            className="flex items-center justify-center rounded-full text-white font-bold flex-shrink-0"
+            style={{
+              backgroundColor: color,
+              width: '28px',
+              height: '28px',
+              fontSize: '11px',
+            }}
           >
             {iniciales}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-medium truncate">
+            <p
+              className="font-bold truncate leading-tight"
+              style={{ color: 'white', fontSize: '12px' }}
+            >
               {usuario?.nombre || 'Usuario'}
             </p>
-            <p className="text-blue-300 text-xs truncate">
+            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px' }}>
               {rol === 'COORDINADOR' ? 'Coordinador' : 'Analista'}
             </p>
           </div>
         </div>
+
+        {/* Cerrar sesión */}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-200 hover:text-white hover:bg-white/10 transition-colors"
+          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-white/8"
+          style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}
         >
-          <LogOut size={16} />
-          <span>Cerrar sesión</span>
+          <LogOut size={15} className="flex-shrink-0" />
+          <span className="font-semibold">Cerrar sesión</span>
         </button>
       </div>
     </aside>

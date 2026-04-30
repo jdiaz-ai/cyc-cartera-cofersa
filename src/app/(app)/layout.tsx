@@ -40,9 +40,27 @@ export default async function AppLayout({
     }
   }
 
+  // Contar notificaciones no leídas del usuario actual
+  let notiCount = 0
+  try {
+    const usuarioRow = await supabase
+      .from('usuarios')
+      .select('id')
+      .eq('email', user.email!)
+      .single()
+    if (usuarioRow.data?.id) {
+      const { count } = await supabase
+        .from('notificaciones')
+        .select('*', { count: 'exact', head: true })
+        .eq('usuario_id', usuarioRow.data.id)
+        .eq('leida', false)
+      notiCount = count ?? 0
+    }
+  } catch { /* tabla puede no existir aún */ }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar usuario={perfil} />
+    <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2F7' }}>
+      <Sidebar usuario={perfil} notiCount={notiCount} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
