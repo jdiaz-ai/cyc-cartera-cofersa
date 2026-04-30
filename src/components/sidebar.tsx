@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -140,16 +139,14 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className="px-3 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
-          className="rounded-xl px-4 py-3 flex items-center justify-center"
-          style={{ background: 'white', minHeight: '60px' }}
+          className="rounded-xl flex items-center justify-center overflow-hidden"
+          style={{ background: 'white', padding: '10px 12px' }}
         >
-          <Image
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src="/logo-cofersa.png"
             alt="Cofersa"
-            width={160}
-            height={46}
-            priority
-            style={{ objectFit: 'contain', maxHeight: '46px', width: '100%' }}
+            style={{ width: '100%', height: 'auto', maxHeight: '52px', objectFit: 'contain', display: 'block' }}
           />
         </div>
         <p
