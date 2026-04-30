@@ -147,8 +147,8 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
             width: '100%',
             height: '68px',
             backgroundImage: "url('/logo-cofersa.png')",
-            backgroundSize: 'auto 180%',
-            backgroundPosition: '20% center',
+            backgroundSize: '140% auto',
+            backgroundPosition: '35% center',
             backgroundRepeat: 'no-repeat',
             backgroundColor: 'white',
           }}
