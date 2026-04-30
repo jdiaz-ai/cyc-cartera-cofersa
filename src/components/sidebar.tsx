@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -102,17 +103,20 @@ export default function Sidebar({ usuario }: SidebarProps) {
       style={{ backgroundColor: '#003B5C' }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-          style={{ backgroundColor: '#009ee3' }}
-        >
-          C
+      <div className="px-4 py-4 border-b border-white/10">
+        <div className="bg-white rounded-xl px-3 py-2 flex items-center justify-center" style={{minHeight:'52px'}}>
+          <Image
+            src="/logo-cofersa.png"
+            alt="Cofersa"
+            width={130}
+            height={38}
+            priority
+            style={{ objectFit: 'contain', maxHeight: '38px', width: 'auto' }}
+          />
         </div>
-        <div>
-          <p className="text-white font-bold text-sm leading-tight">CYC Cofersa</p>
-          <p className="text-blue-300 text-xs">Crédito y Cobro</p>
-        </div>
+        <p className="text-blue-300 text-xs text-center mt-2 font-semibold tracking-wide uppercase">
+          Crédito y Cobro
+        </p>
       </div>
 
       {/* Nav */}

@@ -30,8 +30,12 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const hoyStr = new Date(Date.now() - 6*3600*1000).toISOString().split('T')[0]
 
-  let rows: CarteraRow[] = [], fechaCorte = ''
+  let rows: CarteraRow[] = [], fechaCorte = '', totalClientes = 0
   try {
+    // Count real sin límite
+    const { count } = await supabase.from('cartera').select('*', { count: 'exact', head: true })
+    totalClientes = count ?? 0
+    // Datos financieros (range amplio para no perder montos)
     const { data } = await supabase.from('cartera')
       .select('no_vencido,mora_1_30,mora_31_60,mora_61_90,mora_91_120,mora_120_plus,total,dias_mora,fecha_corte')
       .range(0, 4999)
@@ -47,7 +51,7 @@ export default async function DashboardPage() {
   const m120 = rows.reduce((s,r) => s+(r.mora_120_plus||0), 0)
   const cartera = rows.reduce((s,r) => s+(r.total||0), 0)
   const mora    = m130+m31+m61+m91+m120
-  const nClientes = rows.length
+  const nClientes = totalClientes || rows.length
   const nMora     = rows.filter(r=>(r.dias_mora||0)>0).length
   const pMora     = pct(mora,cartera)
   const dso       = cartera ? Math.round((mora/cartera)*30) : 0
@@ -91,31 +95,17 @@ export default async function DashboardPage() {
     <div className="min-h-full" style={{background:'#EEF2F7'}}>
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
-      <div style={{background:'#003B5C'}} className="px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"/>
-            <span className="text-green-300 text-xs font-semibold uppercase tracking-widest">En vivo</span>
-          </div>
-          <span className="text-white/20 text-xs">·</span>
-          <div className="flex items-center gap-1.5 text-blue-300 text-xs">
-            <RefreshCw size={11}/>
-            <span>Corte Softland: <strong className="text-white">{fechaCorte || '—'}</strong></span>
-          </div>
+      <div style={{background:'#002d47', borderBottom:'1px solid rgba(255,255,255,0.07)'}} className="px-8 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-blue-300 text-xs">
+          <RefreshCw size={11}/>
+          <span>Último corte Softland: <strong className="text-white font-bold">{fechaCorte || '—'}</strong></span>
+          <span className="text-white/20 mx-1">·</span>
+          <span className="text-blue-300">Sincronización automática 3× al día</span>
         </div>
-        <div className="hidden lg:flex items-center gap-6">
-          <div className="text-right">
-            <p className="text-blue-300 text-xs">Cartera total</p>
-            <p className="text-white text-sm font-black">CRC {abrev(cartera)}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-blue-300 text-xs">Clientes activos</p>
-            <p className="text-white text-sm font-black">{nClientes.toLocaleString()}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-blue-300 text-xs">DSO actual</p>
-            <p className={`text-sm font-black ${dso>40?'text-red-400':'text-green-400'}`}>{dso} días</p>
-          </div>
+        <div className="hidden lg:flex items-center gap-8">
+          <Stat label="Cartera Total" valor={`CRC ${abrev(cartera)}`} />
+          <Stat label="Clientes Activos" valor={nClientes.toLocaleString()} />
+          <Stat label="DSO" valor={`${dso} días`} warn={dso>40} />
         </div>
       </div>
 
@@ -391,6 +381,17 @@ export default async function DashboardPage() {
         </div>
 
       </div>
+    </div>
+  )
+}
+
+// ── Top bar stat ─────────────────────────────────────────────────────
+
+function Stat({ label, valor, warn }: { label: string; valor: string; warn?: boolean }) {
+  return (
+    <div className="text-right">
+      <p className="text-blue-400 text-xs font-medium">{label}</p>
+      <p className={`text-sm font-black ${warn ? 'text-red-400' : 'text-white'}`}>{valor}</p>
     </div>
   )
 }
