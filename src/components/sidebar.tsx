@@ -138,17 +138,21 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
     >
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        {/* background-image en lugar de <img> para recortar el whitespace del PNG */}
         <div
-          className="rounded-xl overflow-hidden"
-          style={{ background: 'white', width: '100%', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo-cofersa.png"
-            alt="Cofersa"
-            style={{ width: '90%', height: '90%', objectFit: 'contain', display: 'block' }}
-          />
-        </div>
+          className="rounded-xl"
+          role="img"
+          aria-label="Cofersa"
+          style={{
+            width: '100%',
+            height: '68px',
+            backgroundImage: "url('/logo-cofersa.png')",
+            backgroundSize: 'auto 180%',
+            backgroundPosition: '20% center',
+            backgroundRepeat: 'no-repeat',
+            backgroundColor: 'white',
+          }}
+        />
         <p
           className="text-center mt-2 font-bold uppercase tracking-widest"
           style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', letterSpacing: '0.12em' }}
