@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { fmtCRC, fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
-import { AlertTriangle, TrendingDown, Users, ClipboardCheck, Handshake, RefreshCw, Activity, Shield } from 'lucide-react'
+import { fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
+import { AlertTriangle, TrendingDown, Users, ClipboardCheck, Handshake, Activity, Shield, Timer } from 'lucide-react'
 
 interface CarteraRow {
   no_vencido: number; mora_1_30: number; mora_31_60: number
@@ -80,31 +80,10 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-full" style={{background:'#EEF2F7'}}>
 
-      {/* ── Top bar ────────────────────────────────────────────────── */}
-      <div style={{background:'#002d47', borderBottom:'1px solid rgba(255,255,255,0.07)'}} className="px-8 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-blue-300 text-xs">
-          <RefreshCw size={11}/>
-          <span>Último corte Softland: <strong className="text-white font-bold">{fechaCorte || '—'}</strong></span>
-          <span className="text-white/20 mx-1">·</span>
-          <span className="text-blue-300">Sincronización automática 3× al día</span>
-        </div>
-        <div className="hidden lg:flex items-center gap-8">
-          <Stat label="Cartera Total" valor={fmtM(cartera)} />
-          <Stat label="Clientes Activos" valor={nClientes.toLocaleString()} />
-          <Stat label="DSO" valor={`${dso} días`} warn={dso>40} />
-        </div>
-      </div>
+      <div className="px-6 pt-5 pb-6 space-y-5">
 
-      {/* ── Page header ────────────────────────────────────────────── */}
-      <div className="px-8 pt-7 pb-4">
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Dashboard de Cartera</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Resumen ejecutivo · Cofersa · Corte {fechaCorte || 'pendiente'}</p>
-      </div>
-
-      <div className="px-8 pb-8 space-y-6">
-
-        {/* ── KPI row ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* ── KPI row — 6 tarjetas ───────────────────────────────────── */}
+        <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
 
           {/* Cartera total — protagonista navy */}
           <KPICard
@@ -155,6 +134,31 @@ export default async function DashboardPage() {
             badge={promVencidas.length>0?'urgente':null}
             badgeGood={false}
             icon={<Handshake size={16}/>}
+          />
+
+          {/* Clientes activos */}
+          <KPICard
+            label="Clientes Activos"
+            valor={String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
+            sub={`${nMora.toLocaleString()} con mora activa`}
+            gradient="linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%)"
+            textColor="white"
+            badge={null}
+            icon={<Users size={16}/>}
+          />
+
+          {/* DSO */}
+          <KPICard
+            label="DSO"
+            valor={`${dso}d`}
+            sub="benchmark &lt; 40 días"
+            gradient={dso>40
+              ? "linear-gradient(135deg, #991b1b 0%, #ef4444 100%)"
+              : "linear-gradient(135deg, #065f46 0%, #059669 100%)"}
+            textColor="white"
+            badge={dso>40?'↑ alto':'✓ ok'}
+            badgeGood={dso<=40}
+            icon={<Timer size={16}/>}
           />
         </div>
 
@@ -367,17 +371,6 @@ export default async function DashboardPage() {
         </div>
 
       </div>
-    </div>
-  )
-}
-
-// ── Top bar stat ─────────────────────────────────────────────────────
-
-function Stat({ label, valor, warn }: { label: string; valor: string; warn?: boolean }) {
-  return (
-    <div className="text-right">
-      <p className="text-blue-400 text-xs font-medium">{label}</p>
-      <p className={`text-sm font-black ${warn ? 'text-red-400' : 'text-white'}`}>{valor}</p>
     </div>
   )
 }

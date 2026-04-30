@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/sidebar'
+import Topbar from '@/components/topbar'
 import type { Usuario } from '@/types/database'
 
 export default async function AppLayout({
@@ -9,13 +10,10 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Buscar perfil en tabla usuarios
+  // Perfil del usuario
   let perfil: Pick<Usuario, 'nombre' | 'email' | 'rol' | 'iniciales' | 'color'> | null = null
   try {
     const { data } = await supabase
@@ -24,11 +22,8 @@ export default async function AppLayout({
       .eq('email', user.email!)
       .single()
     perfil = data
-  } catch {
-    // La tabla puede no existir aún — continuar con datos del auth
-  }
+  } catch { /* continuar sin perfil */ }
 
-  // Si no existe en la tabla, usar datos del auth con rol por defecto
   if (!perfil) {
     const nombre = user.user_metadata?.full_name || user.email || 'Usuario'
     perfil = {
@@ -40,7 +35,7 @@ export default async function AppLayout({
     }
   }
 
-  // Contar notificaciones no leídas del usuario actual
+  // Notificaciones no leídas
   let notiCount = 0
   try {
     const { data: usuarioRow } = await supabase
@@ -59,10 +54,28 @@ export default async function AppLayout({
     }
   } catch { /* tabla puede no existir aún */ }
 
+  // Fecha del último corte Softland (para el topbar)
+  let fechaCorte = ''
+  try {
+    const { data } = await supabase
+      .from('cartera')
+      .select('fecha_corte')
+      .limit(1)
+      .single()
+    const carteraRow = data as { fecha_corte: string } | null
+    if (carteraRow?.fecha_corte) {
+      const d = new Date(carteraRow.fecha_corte)
+      if (!isNaN(d.getTime())) {
+        fechaCorte = `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`
+      }
+    }
+  } catch { /* sin datos aún */ }
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2F7' }}>
       <Sidebar usuario={perfil} notiCount={notiCount} />
       <div className="flex-1 flex flex-col overflow-hidden">
+        <Topbar notiCount={notiCount} fechaCorte={fechaCorte} />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
