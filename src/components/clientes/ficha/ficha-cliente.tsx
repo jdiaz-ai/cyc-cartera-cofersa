@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { fmtM, fmtCRC, fmtFecha, fmtFechaHora } from '@/lib/utils/formato'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
+import ModalGestion from './modal-gestion'
 
 // ── Constantes ─────────────────────────────────────────────────────────
 const TABS = ['Aging', 'Facturas', 'Gestiones', 'Promesas', 'Solicitudes'] as const
@@ -60,7 +61,8 @@ export default function FichaCliente({
   cartera, maestro, facturas, gestiones, promesas, solicitudes, analistaNombre,
 }: Props) {
   const router   = useRouter()
-  const [tab, setTab] = useState<Tab>('Aging')
+  const [tab, setTab]           = useState<Tab>('Aging')
+  const [modalGestion, setModalGestion] = useState(false)
 
   const mora_total =
     (cartera.mora_1_30    || 0) + (cartera.mora_31_60 || 0) +
@@ -147,6 +149,7 @@ export default function FichaCliente({
               Estado de cuenta
             </button>
             <button
+              onClick={() => setModalGestion(true)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
               style={{ backgroundColor: '#009ee3' }}
             >
@@ -503,6 +506,18 @@ export default function FichaCliente({
         )}
 
       </div>
+
+      {/* ── Modal Registrar Gestión ──────────────────────────────── */}
+      {modalGestion && (
+        <ModalGestion
+          clienteCod    = {cartera.cliente_cod}
+          clienteNombre = {cartera.cliente_nombre}
+          contribuyente = {cartera.contribuyente}
+          analistaEmail = {maestro?.analista_email ?? ''}
+          onClose       = {() => setModalGestion(false)}
+          onSuccess     = {() => { setModalGestion(false); router.refresh() }}
+        />
+      )}
     </div>
   )
 }
