@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -16,7 +17,8 @@ import {
   Bell,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Usuario } from '@/types/database'
+import type { Usuario, Notificacion } from '@/types/database'
+import PanelNotificaciones from '@/components/notificaciones/panel-notificaciones'
 
 // ── Tipos ─────────────────────────────────────────────────────────
 
@@ -113,14 +115,17 @@ const NAV_SECTIONS: NavSection[] = [
 interface SidebarProps {
   usuario: Pick<Usuario, 'nombre' | 'email' | 'rol' | 'iniciales' | 'color'> | null
   notiCount: number
+  notificaciones: Notificacion[]
+  usuarioId: string
 }
 
 // ── Componente ────────────────────────────────────────────────────
 
-export default function Sidebar({ usuario, notiCount }: SidebarProps) {
+export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const rol: Rol = (usuario?.rol as Rol) ?? 'ANALISTA'
+  const [panelOpen, setPanelOpen] = useState(false)
 
   async function handleLogout() {
     const supabase = createClient()
@@ -225,6 +230,7 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
       >
         {/* Notificaciones */}
         <button
+          onClick={() => setPanelOpen(true)}
           className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/10"
           style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}
         >
@@ -293,6 +299,15 @@ export default function Sidebar({ usuario, notiCount }: SidebarProps) {
           <span className="font-semibold">Cerrar sesión</span>
         </button>
       </div>
+
+      {/* Panel de notificaciones */}
+      {panelOpen && (
+        <PanelNotificaciones
+          notificaciones={notificaciones}
+          usuarioId={usuarioId}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
     </aside>
   )
 }

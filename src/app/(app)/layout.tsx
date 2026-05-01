@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/sidebar'
 import Topbar from '@/components/topbar'
-import type { Usuario } from '@/types/database'
+import type { Usuario, Notificacion } from '@/types/database'
 
 export default async function AppLayout({
   children,
@@ -35,8 +35,9 @@ export default async function AppLayout({
     }
   }
 
-  // Notificaciones no leídas
-  let notiCount = 0
+  // Usuario id + notificaciones completas
+  let usuarioId = ''
+  let notificaciones: Notificacion[] = []
   try {
     const { data: usuarioRow } = await supabase
       .from('usuarios')
@@ -45,14 +46,19 @@ export default async function AppLayout({
       .single()
     const uid = (usuarioRow as { id: string } | null)?.id
     if (uid) {
-      const { count } = await supabase
+      usuarioId = uid
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: notiRows } = await (supabase as any)
         .from('notificaciones')
-        .select('*', { count: 'exact', head: true })
+        .select('*')
         .eq('usuario_id', uid)
-        .eq('leida', false)
-      notiCount = count ?? 0
+        .order('created_at', { ascending: false })
+        .limit(50)
+      notificaciones = (notiRows ?? []) as Notificacion[]
     }
   } catch { /* tabla puede no existir aún */ }
+
+  const notiCount = notificaciones.filter(n => !n.leida).length
 
   // Fecha del último corte Softland (para el topbar)
   let fechaCorte = ''
@@ -73,7 +79,12 @@ export default async function AppLayout({
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2F7' }}>
-      <Sidebar usuario={perfil} notiCount={notiCount} />
+      <Sidebar
+        usuario={perfil}
+        notiCount={notiCount}
+        notificaciones={notificaciones}
+        usuarioId={usuarioId}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar notiCount={notiCount} fechaCorte={fechaCorte} />
         <main className="flex-1 overflow-y-auto">{children}</main>
