@@ -3,11 +3,13 @@ import { notFound }        from 'next/navigation'
 import FichaCliente        from '@/components/clientes/ficha/ficha-cliente'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 
-interface PageProps { params: { cod: string } }
+// Next.js 15+ requiere que params sea awaited
+interface PageProps { params: Promise<{ cod: string }> }
 
 export default async function FichaClientePage({ params }: PageProps) {
-  const supabase = await createClient()
-  const cod      = decodeURIComponent(params.cod)
+  const supabase     = await createClient()
+  const { cod: raw } = await params
+  const cod          = decodeURIComponent(raw ?? '')
 
   // ── Cartera (aging) ───────────────────────────────────────────────────
   // Sin .single() ni .order() para evitar fallos si la columna no existe.
@@ -17,18 +19,7 @@ export default async function FichaClientePage({ params }: PageProps) {
     .select('*')
     .eq('cliente_cod', cod)
 
-  // DEBUG TEMPORAL — muestra info para diagnosticar el 404
-  if (carteraErr || !carteraRows || carteraRows.length === 0) {
-    return (
-      <div style={{ padding: '2rem', fontFamily: 'monospace', fontSize: '13px' }}>
-        <h2>🔍 Debug Ficha Cliente</h2>
-        <p><b>Código buscado:</b> {cod}</p>
-        <p><b>Error Supabase:</b> {carteraErr ? carteraErr.message : 'ninguno'}</p>
-        <p><b>Rows encontrados:</b> {carteraRows ? carteraRows.length : 'null'}</p>
-        <p><b>Error code:</b> {carteraErr ? (carteraErr as { code?: string }).code : '—'}</p>
-      </div>
-    )
-  }
+  if (carteraErr || !carteraRows || carteraRows.length === 0) return notFound()
 
   // Si hay múltiples syncs, preferir el de fecha_corte más reciente
   const rows = carteraRows as Cartera[]
