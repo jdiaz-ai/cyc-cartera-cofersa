@@ -11,6 +11,10 @@ export default async function FichaClientePage({ params }: PageProps) {
   const { cod: raw } = await params
   const cod          = decodeURIComponent(raw ?? '')
 
+  // Email del usuario logueado (quien registra la gestión)
+  const { data: { user } } = await supabase.auth.getUser()
+  const userEmail = user?.email ?? ''
+
   // ── Cartera (aging) ───────────────────────────────────────────────────
   // Sin .single() ni .order() para evitar fallos si la columna no existe.
   // La tabla puede tener múltiples rows por sync; tomamos el [0].
@@ -93,6 +97,7 @@ export default async function FichaClientePage({ params }: PageProps) {
       promesas       = {promesas}
       solicitudes    = {solicitudes}
       analistaNombre = {analistaNombre}
+      userEmail      = {userEmail}
     />
   )
 }

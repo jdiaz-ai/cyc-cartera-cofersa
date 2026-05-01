@@ -93,7 +93,7 @@ export default function ModalGestion({
     } as any)
 
     if (gErr) {
-      setError('Error al guardar la gestión. Intentá de nuevo.')
+      setError(`Error al guardar: ${gErr.message}`)
       setLoading(false)
       return
     }

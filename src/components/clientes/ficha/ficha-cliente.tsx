@@ -52,13 +52,14 @@ interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   solicitudes:   any[]
   analistaNombre:string
+  userEmail:     string
 }
 
 // ══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════
 export default function FichaCliente({
-  cartera, maestro, facturas, gestiones, promesas, solicitudes, analistaNombre,
+  cartera, maestro, facturas, gestiones, promesas, solicitudes, analistaNombre, userEmail,
 }: Props) {
   const router   = useRouter()
   const [tab, setTab]           = useState<Tab>('Aging')
@@ -513,7 +514,7 @@ export default function FichaCliente({
           clienteCod    = {cartera.cliente_cod}
           clienteNombre = {cartera.cliente_nombre}
           contribuyente = {cartera.contribuyente}
-          analistaEmail = {maestro?.analista_email ?? ''}
+          analistaEmail = {userEmail}
           onClose       = {() => setModalGestion(false)}
           onSuccess     = {() => { setModalGestion(false); router.refresh() }}
         />
