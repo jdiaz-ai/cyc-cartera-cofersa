@@ -1,23 +1,46 @@
-import { ClipboardList } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import TablaGestiones  from '@/components/gestiones/tabla-gestiones'
+import type { Gestion } from '@/types/database'
 
-export default function GestionesPage() {
+export default async function GestionesPage() {
+  const supabase = await createClient()
+
+  // Rol del usuario logueado
+  const { data: { user } } = await supabase.auth.getUser()
+  const userEmail = user?.email ?? ''
+  const { data: usuRow } = await supabase
+    .from('usuarios').select('rol, nombre').eq('email', userEmail).limit(1)
+  const rol    = ((usuRow ?? [])[0] as { rol: string }  | undefined)?.rol    ?? 'ANALISTA'
+  const nombre = ((usuRow ?? [])[0] as { nombre: string } | undefined)?.nombre ?? ''
+
+  // Fetch gestiones — ANALISTA solo las propias, COORDINADOR todas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabase
+    .from('gestiones')
+    .select('*')
+    .order('fecha', { ascending: false })
+    .order('hora', { ascending: false })
+    .limit(500)
+  if (rol === 'ANALISTA') query = query.eq('analista_email', userEmail)
+
+  const { data: gestionesRaw } = await query
+  const gestiones = (gestionesRaw ?? []) as Gestion[]
+
+  // Analistas para filtro (solo COORDINADOR)
+  let analistas: { email: string; nombre: string }[] = []
+  if (rol === 'COORDINADOR') {
+    const { data: aRows } = await supabase
+      .from('usuarios').select('email, nombre').eq('rol', 'ANALISTA').eq('activo', true)
+    analistas = (aRows ?? []) as { email: string; nombre: string }[]
+  }
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Gestiones</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Registro de llamadas, correos y visitas de cobro
-        </p>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-200 p-12 flex flex-col items-center justify-center text-center">
-        <ClipboardList size={48} className="text-gray-300 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Módulo en construcción</h2>
-        <p className="text-sm text-gray-500 max-w-md">
-          Gestiones permitirá registrar acciones de cobro (llamada, correo, visita)
-          con tipo, resultado y promesa asociada. Indicará visualmente qué clientes
-          ya fueron gestionados hoy. Disponible en Sprint 2.
-        </p>
-      </div>
-    </div>
+    <TablaGestiones
+      gestiones = {gestiones}
+      rol       = {rol as 'COORDINADOR' | 'ANALISTA'}
+      userEmail = {userEmail}
+      userName  = {nombre}
+      analistas = {analistas}
+    />
   )
 }

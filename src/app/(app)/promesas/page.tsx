@@ -1,24 +1,43 @@
-import { Handshake } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import TablaPromesas   from '@/components/promesas/tabla-promesas'
+import type { Promesa } from '@/types/database'
 
-export default function PromesasPage() {
+export default async function PromesasPage() {
+  const supabase = await createClient()
+
+  // Rol del usuario logueado
+  const { data: { user } } = await supabase.auth.getUser()
+  const userEmail = user?.email ?? ''
+  const { data: usuRow } = await supabase
+    .from('usuarios').select('rol').eq('email', userEmail).limit(1)
+  const rol = ((usuRow ?? [])[0] as { rol: string } | undefined)?.rol ?? 'ANALISTA'
+
+  // Fetch promesas — ANALISTA solo las propias, COORDINADOR todas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabase
+    .from('promesas')
+    .select('*')
+    .order('fecha_promesa', { ascending: true })
+    .limit(500)
+  if (rol === 'ANALISTA') query = query.eq('analista_email', userEmail)
+
+  const { data: promesasRaw } = await query
+  const promesas = (promesasRaw ?? []) as Promesa[]
+
+  // Analistas para filtro (solo COORDINADOR)
+  let analistas: { email: string; nombre: string }[] = []
+  if (rol === 'COORDINADOR') {
+    const { data: aRows } = await supabase
+      .from('usuarios').select('email, nombre').eq('rol', 'ANALISTA').eq('activo', true)
+    analistas = (aRows ?? []) as { email: string; nombre: string }[]
+  }
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Promesas de Pago</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Seguimiento de compromisos de pago por cliente
-        </p>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-200 p-12 flex flex-col items-center justify-center text-center">
-        <Handshake size={48} className="text-gray-300 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Módulo en construcción</h2>
-        <p className="text-sm text-gray-500 max-w-md">
-          Promesas mostrará tabs Hoy / Esta Semana / Todas con estados
-          Pendiente · Abono Parcial · Cumplida · Incumplida.
-          Permitirá gestionar el seguimiento y actualizar el estado de cada promesa.
-          Disponible en Sprint 3.
-        </p>
-      </div>
-    </div>
+    <TablaPromesas
+      promesas  = {promesas}
+      rol       = {rol as 'COORDINADOR' | 'ANALISTA'}
+      userEmail = {userEmail}
+      analistas = {analistas}
+    />
   )
 }
