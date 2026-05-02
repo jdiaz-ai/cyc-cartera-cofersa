@@ -15,6 +15,13 @@ import {
   Package,
   LogOut,
   Bell,
+  FileText,
+  CreditCard,
+  Clock,
+  PieChart,
+  Target,
+  AlertTriangle,
+  CalendarRange,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Usuario, Notificacion } from '@/types/database'
@@ -24,69 +31,183 @@ import PanelNotificaciones from '@/components/notificaciones/panel-notificacione
 
 type Rol = 'COORDINADOR' | 'ANALISTA'
 
+export interface BadgeCounts {
+  gestionesHoy?: number
+  promesasVencidas?: number
+  solicitudesPendientes?: number
+}
+
 interface NavItem {
   label: string
   href: string
   icon: React.ReactNode
   roles: Rol[]
+  badgeKey?: keyof BadgeCounts   // referencia a BadgeCounts para mostrar el número
+  exactMatch?: boolean           // true = solo activo si pathname === href
 }
 
 interface NavSection {
   label: string | null   // null = sin encabezado de sección
+  roles: Rol[]           // roles que ven esta sección
   items: NavItem[]
 }
 
-// ── Navegación agrupada por sección ──────────────────────────────
+// ── Navegación por rol ──────────────────────────────────────────
 
 const NAV_SECTIONS: NavSection[] = [
+  // ── Raíz COORDINADOR ────────────────────────────────────────
   {
     label: null,
+    roles: ['COORDINADOR'],
     items: [
       {
         label: 'Dashboard',
         href: '/dashboard',
         icon: <LayoutDashboard size={16} />,
         roles: ['COORDINADOR'],
+        exactMatch: true,
       },
+    ],
+  },
+
+  // ── Raíz ANALISTA ────────────────────────────────────────────
+  {
+    label: null,
+    roles: ['ANALISTA'],
+    items: [
       {
         label: 'Mi Cartera',
         href: '/mi-cartera',
         icon: <Package size={16} />,
         roles: ['ANALISTA'],
+        exactMatch: true,
       },
     ],
   },
+
+  // ── GESTIÓN (compartido) ─────────────────────────────────────
   {
     label: 'Gestión',
+    roles: ['COORDINADOR'],
     items: [
       {
         label: 'Clientes',
         href: '/clientes',
         icon: <Users size={16} />,
-        roles: ['COORDINADOR', 'ANALISTA'],
+        roles: ['COORDINADOR'],
       },
       {
         label: 'Gestiones',
         href: '/gestiones',
         icon: <ClipboardList size={16} />,
-        roles: ['COORDINADOR', 'ANALISTA'],
+        roles: ['COORDINADOR'],
       },
       {
         label: 'Promesas',
         href: '/promesas',
         icon: <Handshake size={16} />,
-        roles: ['COORDINADOR', 'ANALISTA'],
+        roles: ['COORDINADOR'],
       },
       {
         label: 'Solicitudes',
         href: '/solicitudes',
-        icon: <ClipboardList size={16} />,
-        roles: ['COORDINADOR', 'ANALISTA'],
+        icon: <FileText size={16} />,
+        roles: ['COORDINADOR'],
       },
     ],
   },
+
+  // ── GESTIÓN DE CARTERA (analista) ────────────────────────────
+  {
+    label: 'Gestión de Cartera',
+    roles: ['ANALISTA'],
+    items: [
+      {
+        label: 'Clientes',
+        href: '/clientes',
+        icon: <Users size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Gestiones',
+        href: '/gestiones',
+        icon: <ClipboardList size={16} />,
+        roles: ['ANALISTA'],
+        badgeKey: 'gestionesHoy',
+      },
+      {
+        label: 'Promesas',
+        href: '/promesas',
+        icon: <Handshake size={16} />,
+        roles: ['ANALISTA'],
+        badgeKey: 'promesasVencidas',
+      },
+      {
+        label: 'Solicitudes',
+        href: '/solicitudes',
+        icon: <FileText size={16} />,
+        roles: ['ANALISTA'],
+        badgeKey: 'solicitudesPendientes',
+      },
+    ],
+  },
+
+  // ── GESTIÓN DE PAGOS (analista) ──────────────────────────────
+  {
+    label: 'Gestión de Pagos',
+    roles: ['ANALISTA'],
+    items: [
+      {
+        label: 'Pagos Aplicados',
+        href: '/gestion-pagos/pagos-aplicados',
+        icon: <CreditCard size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Pagos Pendientes',
+        href: '/gestion-pagos/pagos-pendientes',
+        icon: <Clock size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Análisis',
+        href: '/gestion-pagos/analisis',
+        icon: <PieChart size={16} />,
+        roles: ['ANALISTA'],
+      },
+    ],
+  },
+
+  // ── REPORTES (analista) ──────────────────────────────────────
+  {
+    label: 'Reportes',
+    roles: ['ANALISTA'],
+    items: [
+      {
+        label: 'Presupuesto',
+        href: '/reportes/presupuesto',
+        icon: <Target size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Cartera Vencida',
+        href: '/reportes/cartera-vencida',
+        icon: <AlertTriangle size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Gestiones del Período',
+        href: '/reportes/gestiones-periodo',
+        icon: <CalendarRange size={16} />,
+        roles: ['ANALISTA'],
+      },
+    ],
+  },
+
+  // ── ADMINISTRACIÓN (coordinador) ─────────────────────────────
   {
     label: 'Administración',
+    roles: ['COORDINADOR'],
     items: [
       {
         label: 'Mi Equipo',
@@ -99,6 +220,7 @@ const NAV_SECTIONS: NavSection[] = [
         href: '/reportes',
         icon: <BarChart3 size={16} />,
         roles: ['COORDINADOR'],
+        exactMatch: true,
       },
       {
         label: 'Configuración',
@@ -117,11 +239,39 @@ interface SidebarProps {
   notiCount: number
   notificaciones: Notificacion[]
   usuarioId: string
+  badgeCounts?: BadgeCounts
+}
+
+// ── Badge inline ──────────────────────────────────────────────────
+
+function NavBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <span
+      className="flex items-center justify-center rounded-full text-white font-bold ml-auto flex-shrink-0"
+      style={{
+        background: '#dc2626',
+        fontSize: '9px',
+        minWidth: '16px',
+        height: '16px',
+        padding: '0 4px',
+        lineHeight: 1,
+      }}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
 }
 
 // ── Componente ────────────────────────────────────────────────────
 
-export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId }: SidebarProps) {
+export default function Sidebar({
+  usuario,
+  notiCount,
+  notificaciones,
+  usuarioId,
+  badgeCounts = {},
+}: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const rol: Rol = (usuario?.rol as Rol) ?? 'ANALISTA'
@@ -136,6 +286,9 @@ export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId 
   const iniciales = usuario?.iniciales || usuario?.nombre?.slice(0, 2).toUpperCase() || '??'
   const color = usuario?.color || '#009ee3'
 
+  // Filtrar secciones por rol
+  const seccionesFiltradas = NAV_SECTIONS.filter((s) => s.roles.includes(rol))
+
   return (
     <aside
       className="flex flex-col flex-shrink-0 h-screen"
@@ -143,7 +296,6 @@ export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId 
     >
       {/* ── Logo ─────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        {/* background-image en lugar de <img> para recortar el whitespace del PNG */}
         <div
           className="rounded-xl"
           role="img"
@@ -168,7 +320,7 @@ export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId 
 
       {/* ── Nav ──────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
-        {NAV_SECTIONS.map((section, si) => {
+        {seccionesFiltradas.map((section, si) => {
           // Filtrar items por rol
           const itemsFiltrados = section.items.filter((item) =>
             item.roles.includes(rol)
@@ -190,10 +342,11 @@ export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId 
               {/* Items */}
               <ul className="space-y-0.5">
                 {itemsFiltrados.map((item) => {
-                  const isActive =
-                    item.href === '/dashboard' || item.href === '/mi-cartera'
-                      ? pathname === item.href
-                      : pathname.startsWith(item.href)
+                  const isActive = item.exactMatch
+                    ? pathname === item.href
+                    : pathname.startsWith(item.href)
+
+                  const badgeCount = item.badgeKey ? (badgeCounts[item.badgeKey] ?? 0) : 0
 
                   return (
                     <li key={item.href}>
@@ -213,6 +366,7 @@ export default function Sidebar({ usuario, notiCount, notificaciones, usuarioId 
                       >
                         <span className="flex-shrink-0">{item.icon}</span>
                         <span className="flex-1 leading-none">{item.label}</span>
+                        <NavBadge count={badgeCount} />
                       </Link>
                     </li>
                   )
