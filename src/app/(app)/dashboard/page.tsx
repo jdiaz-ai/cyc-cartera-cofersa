@@ -15,6 +15,22 @@ interface CarteraRow {
   total: number; dias_mora: number; fecha_corte: string
 }
 interface CarteraRowFull extends CarteraRow { cliente_cod: string; cliente_nombre: string }
+
+// Resultado de la función RPC get_kpis_cartera() — agrega en Supabase,
+// evita el límite de 1000 filas de PostgREST
+interface KpisCartera {
+  total_cartera:       number
+  total_no_vencido:    number
+  total_mora_1_30:     number
+  total_mora_31_60:    number
+  total_mora_61_90:    number
+  total_mora_91_120:   number
+  total_mora_120_plus: number
+  total_mora:          number
+  n_clientes:          number
+  n_en_mora:           number
+  fecha_corte:         string
+}
 interface PromesaRow   { id: string; cliente_cod: string; monto: number; fecha_promesa: string; estado?: string }
 interface GestionRow   { id: string; cliente_cod: string; tipo: string; resultado: string; hora: string; analista_email: string; nota?: string }
 interface AnalistaRow  { id: string; nombre: string; email: string; iniciales: string; color: string }
@@ -51,30 +67,33 @@ async function DashboardCoordinador({ supabase, hoyStr }: {
   supabase: Awaited<ReturnType<typeof createClient>>
   hoyStr: string
 }) {
-  // ── Cartera ──────────────────────────────────────────────────────────
-  let rows: CarteraRow[] = [], fechaCorte = '', totalClientes = 0
+  // ── Cartera — agregación server-side via RPC ──────────────────────────
+  // IMPORTANTE: NO usar .range(0, N) + suma en JS porque Supabase PostgREST
+  // limita a 1000 filas por defecto. La función get_kpis_cartera() hace
+  // SUM() directamente en PostgreSQL y devuelve un único registro con totales.
+  let nv=0, m130=0, m31=0, m61=0, m91=0, m120=0
+  let cartera=0, mora=0, nClientes=0, nMora=0, fechaCorte=''
   try {
-    const { count } = await supabase.from('cartera').select('*', { count: 'exact', head: true })
-    totalClientes = count ?? 0
-    const { data } = await supabase.from('cartera')
-      .select('no_vencido,mora_1_30,mora_31_60,mora_61_90,mora_91_120,mora_120_plus,total,dias_mora,fecha_corte')
-      .range(0, 4999)
-    rows = (data ?? []) as CarteraRow[]
-    if (rows[0]) fechaCorte = fmtFecha(rows[0].fecha_corte ?? '')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_kpis_cartera')
+    if (!error && data && (data as KpisCartera[]).length > 0) {
+      const k = (data as KpisCartera[])[0]
+      nv        = Number(k.total_no_vencido)    || 0
+      m130      = Number(k.total_mora_1_30)      || 0
+      m31       = Number(k.total_mora_31_60)     || 0
+      m61       = Number(k.total_mora_61_90)     || 0
+      m91       = Number(k.total_mora_91_120)    || 0
+      m120      = Number(k.total_mora_120_plus)  || 0
+      cartera   = Number(k.total_cartera)        || 0
+      mora      = Number(k.total_mora)           || 0
+      nClientes = Number(k.n_clientes)           || 0
+      nMora     = Number(k.n_en_mora)            || 0
+      fechaCorte = fmtFecha(k.fecha_corte || '')
+    }
   } catch {}
 
-  const nv    = rows.reduce((s, r) => s + (r.no_vencido    || 0), 0)
-  const m130  = rows.reduce((s, r) => s + (r.mora_1_30     || 0), 0)
-  const m31   = rows.reduce((s, r) => s + (r.mora_31_60    || 0), 0)
-  const m61   = rows.reduce((s, r) => s + (r.mora_61_90    || 0), 0)
-  const m91   = rows.reduce((s, r) => s + (r.mora_91_120   || 0), 0)
-  const m120  = rows.reduce((s, r) => s + (r.mora_120_plus || 0), 0)
-  const cartera   = rows.reduce((s, r) => s + (r.total || 0), 0)
-  const mora      = m130 + m31 + m61 + m91 + m120
-  const nClientes = totalClientes || rows.length
-  const nMora     = rows.filter(r => (r.dias_mora || 0) > 0).length
-  const pMora     = pct(mora, cartera)
-  const dso       = cartera ? Math.round((mora / cartera) * 30) : 0
+  const pMora = pct(mora, cartera)
+  const dso   = cartera ? Math.round((mora / cartera) * 30) : 0
 
   // ── Gestiones ────────────────────────────────────────────────────────
   let gHoy = 0, gestiones: GestionRow[] = []
