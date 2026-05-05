@@ -117,13 +117,17 @@ export default async function AppLayout({
     <div className="flex h-screen overflow-hidden" style={{ background: '#EEF2F7' }}>
       <Sidebar
         usuario={perfil}
-        notiCount={notiCount}
         notificaciones={notificaciones}
         usuarioId={usuarioId}
         badgeCounts={badgeCounts}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar notiCount={notiCount} fechaCorte={fechaCorte} />
+        <Topbar
+          notiCount={notiCount}
+          fechaCorte={fechaCorte}
+          notificaciones={notificaciones}
+          usuarioId={usuarioId}
+        />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

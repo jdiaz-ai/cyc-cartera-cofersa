@@ -2,15 +2,16 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
+import { Mail } from 'lucide-react'
 
 export default function LoginPage() {
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
   const [showEmail, setShowEmail] = useState(false)
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail]         = useState('')
+  const [password, setPassword]   = useState('')
 
-  // ── Google OAuth ──────────────────────────────────────────────────
+  // ── Google OAuth ──────────────────────────────────────────────
   async function handleGoogleLogin() {
     setLoading(true)
     setError(null)
@@ -25,7 +26,7 @@ export default function LoginPage() {
     }
   }
 
-  // ── Email / Password ──────────────────────────────────────────────
+  // ── Email / Password ──────────────────────────────────────────
   async function handleEmailLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -36,136 +37,260 @@ export default function LoginPage() {
       setError('Correo o contraseña incorrectos.')
       setLoading(false)
     }
-    // Si es exitoso, el listener de auth redirige automáticamente
   }
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
-      style={{ background: 'linear-gradient(135deg, #001f38 0%, #003B5C 60%, #005a8e 100%)' }}
+      className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
+      style={{ fontFamily: 'Nunito, sans-serif' }}
     >
-      <div className="w-full max-w-sm px-4">
+      {/* ── Capa 1: Foto de fondo ──────────────────────────────── */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/Fondo.jpg')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
 
-        {/* Logo + título */}
-        <div className="text-center mb-8">
+      {/* ── Capa 2: Overlay oscuro ────────────────────────────── */}
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(0,21,41,0.58)' }}
+      />
+
+      {/* ── Capa 3: Radial cyan sutil ─────────────────────────── */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'radial-gradient(ellipse at 30% 60%, rgba(0,158,227,0.10) 0%, transparent 60%)',
+        }}
+      />
+
+      {/* ── Capa 4: Patrón de puntos ──────────────────────────── */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,1) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          opacity: 0.03,
+        }}
+      />
+
+      {/* ── Capa 5: Tagline decorativa ────────────────────────── */}
+      <div
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap select-none"
+        style={{
+          fontSize: '36px',
+          fontWeight: 800,
+          color: 'white',
+          opacity: 0.05,
+          pointerEvents: 'none',
+          letterSpacing: '-0.01em',
+        }}
+      >
+        Su crecimiento, es nuestra meta
+      </div>
+
+      {/* ── Card centrada ─────────────────────────────────────── */}
+      <div className="relative z-10 w-full flex flex-col items-center px-4">
+        <div
+          className="w-full relative"
+          style={{
+            maxWidth: '400px',
+            background: 'white',
+            borderRadius: '20px',
+            padding: '40px 44px 36px',
+            border: '0.5px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.35), 0 4px 16px rgba(0,0,0,0.15)',
+          }}
+        >
+          {/* Línea decorativa superior */}
           <div
-            className="mx-auto mb-4 rounded-2xl overflow-hidden"
+            className="absolute top-0 left-11 right-11 rounded-full"
             style={{
-              width: '200px',
-              height: '72px',
-              backgroundColor: 'white',
-              backgroundImage: "url('/logo-cofersa.png')",
-              backgroundSize: '125% auto',
-              backgroundPosition: '50% center',
-              backgroundRepeat: 'no-repeat',
+              height: '2px',
+              background: 'linear-gradient(90deg, transparent, #009ee3, transparent)',
             }}
           />
-          <p className="text-blue-300 text-xs font-bold uppercase tracking-widest mt-2">
+
+          {/* 1. Logo */}
+          <div className="flex justify-center mb-4">
+            <div
+              style={{
+                backgroundImage: "url('/logo-cofersa.png')",
+                backgroundSize: '115% auto',
+                backgroundPosition: '50% center',
+                backgroundRepeat: 'no-repeat',
+                backgroundColor: '#f8f9fa',
+                width: '180px',
+                height: '60px',
+                borderRadius: '12px',
+                border: '0.5px solid #e5e7eb',
+                padding: '8px 20px',
+              }}
+            />
+          </div>
+
+          {/* 2. Crédito y Cobro */}
+          <p
+            className="text-center font-bold uppercase tracking-widest mb-2"
+            style={{ fontSize: '11px', color: '#009ee3', letterSpacing: '0.14em' }}
+          >
             Crédito y Cobro
+          </p>
+
+          {/* 3. Subtítulo */}
+          <p
+            className="text-center mb-7"
+            style={{ fontSize: '13px', color: '#64748b' }}
+          >
+            Plataforma de Gestión de Cartera
+          </p>
+
+          {/* 4. Divisor */}
+          <div
+            className="mb-6"
+            style={{ height: '0.5px', backgroundColor: '#e5e7eb' }}
+          />
+
+          {/* Error */}
+          {error && (
+            <div className="mb-5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {!showEmail ? (
+            <>
+              {/* 5. Botón Google */}
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: '#003B5C',
+                  color: 'white',
+                  borderRadius: '10px',
+                  padding: '13px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  marginBottom: '10px',
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                }}
+                onMouseEnter={e => { if (!loading) e.currentTarget.style.backgroundColor = '#002a44' }}
+                onMouseLeave={e => { if (!loading) e.currentTarget.style.backgroundColor = '#003B5C' }}
+              >
+                {/* Ícono Google SVG real */}
+                <svg width="16" height="16" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                {loading ? 'Redirigiendo...' : 'Ingresar con Google'}
+              </button>
+
+              {/* 6. Botón correo */}
+              <button
+                onClick={() => setShowEmail(true)}
+                className="w-full flex items-center justify-center gap-2 transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: '0.5px solid #d1d5db',
+                  color: '#64748b',
+                  borderRadius: '10px',
+                  padding: '11px 16px',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = '#f8fafc'
+                  e.currentTarget.style.color = '#374151'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                  e.currentTarget.style.color = '#64748b'
+                }}
+              >
+                <Mail size={14} />
+                Iniciar con correo y contraseña
+              </button>
+            </>
+          ) : (
+            /* Formulario email/password */
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Correo electrónico
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  placeholder="correo@cofersa.cr"
+                  className="w-full border border-gray-200 px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none transition"
+                  style={{ borderRadius: '10px' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full border border-gray-200 px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none transition"
+                  style={{ borderRadius: '10px' }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full text-white font-bold transition disabled:opacity-60"
+                style={{
+                  backgroundColor: '#009ee3',
+                  borderRadius: '10px',
+                  padding: '13px 16px',
+                  fontSize: '13px',
+                }}
+              >
+                {loading ? 'Verificando...' : 'Ingresar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowEmail(false); setError(null) }}
+                className="w-full text-xs text-gray-400 hover:text-gray-600 transition pt-1"
+              >
+                ← Volver al inicio con Google
+              </button>
+            </form>
+          )}
+
+          {/* 7. Texto de acceso */}
+          <p
+            className="text-center mt-6"
+            style={{ fontSize: '11px', color: '#94a3b8' }}
+          >
+            Acceso exclusivo para colaboradores de{' '}
+            <span style={{ color: '#009ee3', fontWeight: 600 }}>Cofersa</span>
           </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="px-8 py-8">
-            <h1 className="text-gray-900 text-lg font-bold text-center mb-1">
-              Iniciar sesión
-            </h1>
-            <p className="text-gray-400 text-xs text-center mb-7">
-              Solo cuentas autorizadas por Cofersa tienen acceso
-            </p>
-
-            {/* Error */}
-            {error && (
-              <div className="mb-5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            {!showEmail ? (
-              /* ── Vista principal: Google + enlace email ── */
-              <>
-                <button
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 hover:border-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                  </svg>
-                  {loading ? 'Redirigiendo...' : 'Continuar con Google (@cofersa.cr)'}
-                </button>
-
-                {/* Separador */}
-                <div className="flex items-center gap-3 my-5">
-                  <div className="flex-1 h-px bg-gray-100" />
-                  <span className="text-gray-300 text-xs">o</span>
-                  <div className="flex-1 h-px bg-gray-100" />
-                </div>
-
-                <button
-                  onClick={() => setShowEmail(true)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
-                >
-                  Iniciar con correo y contraseña
-                </button>
-              </>
-            ) : (
-              /* ── Formulario email/password ── */
-              <form onSubmit={handleEmailLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Correo electrónico
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    placeholder="correo@empresa.com"
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    Contraseña
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full rounded-xl px-4 py-3 text-sm font-bold text-white transition disabled:opacity-60 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: '#009ee3' }}
-                >
-                  {loading ? 'Verificando...' : 'Ingresar'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setShowEmail(false); setError(null) }}
-                  className="w-full text-xs text-gray-400 hover:text-gray-600 transition pt-1"
-                >
-                  ← Volver al inicio con Google
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-
-        <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          © 2026 Cofersa / Overseas Logistics Operations S.A.
+        {/* Footer fuera de la card */}
+        <p
+          className="mt-6 text-center"
+          style={{ fontSize: '11px', color: 'rgba(255,255,255,0.30)' }}
+        >
+          © 2026 COFERSA — Sistema CxC
         </p>
       </div>
     </div>

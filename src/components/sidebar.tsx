@@ -14,7 +14,6 @@ import {
   Settings,
   Package,
   LogOut,
-  Bell,
   FileText,
   CreditCard,
   Clock,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Usuario, Notificacion } from '@/types/database'
-import PanelNotificaciones from '@/components/notificaciones/panel-notificaciones'
 
 // ── Tipos ─────────────────────────────────────────────────────────
 
@@ -42,20 +40,20 @@ interface NavItem {
   href: string
   icon: React.ReactNode
   roles: Rol[]
-  badgeKey?: keyof BadgeCounts   // referencia a BadgeCounts para mostrar el número
-  exactMatch?: boolean           // true = solo activo si pathname === href
+  badgeKey?: keyof BadgeCounts
+  exactMatch?: boolean
 }
 
 interface NavSection {
-  label: string | null   // null = sin encabezado de sección
-  roles: Rol[]           // roles que ven esta sección
+  label: string | null
+  roles: Rol[]
   items: NavItem[]
 }
 
-// ── Navegación por rol ──────────────────────────────────────────
+// ── Navegación ────────────────────────────────────────────────────
 
 const NAV_SECTIONS: NavSection[] = [
-  // ── Raíz COORDINADOR ────────────────────────────────────────
+  // ── Raíz COORDINADOR ─────────────────────────────────────────
   {
     label: null,
     roles: ['COORDINADOR'],
@@ -70,11 +68,18 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
 
-  // ── Raíz ANALISTA ────────────────────────────────────────────
+  // ── Raíz ANALISTA — Dashboard + Mi Cartera ───────────────────
   {
     label: null,
     roles: ['ANALISTA'],
     items: [
+      {
+        label: 'Dashboard',
+        href: '/dashboard',
+        icon: <LayoutDashboard size={16} />,
+        roles: ['ANALISTA'],
+        exactMatch: true,
+      },
       {
         label: 'Mi Cartera',
         href: '/mi-cartera',
@@ -85,7 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
 
-  // ── GESTIÓN (compartido) ─────────────────────────────────────
+  // ── GESTIÓN (coordinador) ─────────────────────────────────────
   {
     label: 'Gestión',
     roles: ['COORDINADOR'],
@@ -170,7 +175,7 @@ const NAV_SECTIONS: NavSection[] = [
         roles: ['ANALISTA'],
       },
       {
-        label: 'Análisis',
+        label: 'Análisis de Pagos',
         href: '/gestion-pagos/analisis',
         icon: <PieChart size={16} />,
         roles: ['ANALISTA'],
@@ -184,7 +189,7 @@ const NAV_SECTIONS: NavSection[] = [
     roles: ['ANALISTA'],
     items: [
       {
-        label: 'Presupuesto',
+        label: 'Presupuesto de Cobro',
         href: '/reportes/presupuesto',
         icon: <Target size={16} />,
         roles: ['ANALISTA'],
@@ -232,16 +237,6 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ]
 
-// ── Props ─────────────────────────────────────────────────────────
-
-interface SidebarProps {
-  usuario: Pick<Usuario, 'nombre' | 'email' | 'rol' | 'iniciales' | 'color'> | null
-  notiCount: number
-  notificaciones: Notificacion[]
-  usuarioId: string
-  badgeCounts?: BadgeCounts
-}
-
 // ── Badge inline ──────────────────────────────────────────────────
 
 function NavBadge({ count }: { count: number }) {
@@ -263,19 +258,24 @@ function NavBadge({ count }: { count: number }) {
   )
 }
 
+// ── Props ─────────────────────────────────────────────────────────
+
+interface SidebarProps {
+  usuario: Pick<Usuario, 'nombre' | 'email' | 'rol' | 'iniciales' | 'color'> | null
+  notificaciones: Notificacion[]
+  usuarioId: string
+  badgeCounts?: BadgeCounts
+}
+
 // ── Componente ────────────────────────────────────────────────────
 
 export default function Sidebar({
   usuario,
-  notiCount,
-  notificaciones,
-  usuarioId,
   badgeCounts = {},
 }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
+  const router   = useRouter()
   const rol: Rol = (usuario?.rol as Rol) ?? 'ANALISTA'
-  const [panelOpen, setPanelOpen] = useState(false)
 
   async function handleLogout() {
     const supabase = createClient()
@@ -284,17 +284,16 @@ export default function Sidebar({
   }
 
   const iniciales = usuario?.iniciales || usuario?.nombre?.slice(0, 2).toUpperCase() || '??'
-  const color = usuario?.color || '#009ee3'
+  const color     = usuario?.color || '#009ee3'
 
-  // Filtrar secciones por rol
-  const seccionesFiltradas = NAV_SECTIONS.filter((s) => s.roles.includes(rol))
+  const seccionesFiltradas = NAV_SECTIONS.filter(s => s.roles.includes(rol))
 
   return (
     <aside
       className="flex flex-col flex-shrink-0 h-screen"
       style={{ width: '210px', backgroundColor: '#003B5C' }}
     >
-      {/* ── Logo ─────────────────────────────────────────────── */}
+      {/* ── Logo ──────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
           className="rounded-xl"
@@ -321,15 +320,11 @@ export default function Sidebar({
       {/* ── Nav ──────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         {seccionesFiltradas.map((section, si) => {
-          // Filtrar items por rol
-          const itemsFiltrados = section.items.filter((item) =>
-            item.roles.includes(rol)
-          )
+          const itemsFiltrados = section.items.filter(item => item.roles.includes(rol))
           if (itemsFiltrados.length === 0) return null
 
           return (
             <div key={si} className={si > 0 ? 'mt-4' : ''}>
-              {/* Encabezado de sección */}
               {section.label && (
                 <p
                   className="px-3 mb-1 font-bold uppercase tracking-widest"
@@ -339,9 +334,8 @@ export default function Sidebar({
                 </p>
               )}
 
-              {/* Items */}
               <ul className="space-y-0.5">
-                {itemsFiltrados.map((item) => {
+                {itemsFiltrados.map(item => {
                   const isActive = item.exactMatch
                     ? pathname === item.href
                     : pathname.startsWith(item.href)
@@ -377,56 +371,17 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* ── Footer: notificaciones + usuario + logout ─────────── */}
+      {/* ── Footer: usuario + logout ──────────────────────────── */}
+      {/* Notificaciones removidas del sidebar — ahora están en el header */}
       <div
         className="px-2 pb-3 pt-3"
         style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
       >
-        {/* Notificaciones */}
-        <button
-          onClick={() => setPanelOpen(true)}
-          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/10"
-          style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}
-        >
-          <div className="relative flex-shrink-0">
-            <Bell size={16} />
-            {notiCount > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full text-white font-bold"
-                style={{
-                  background: '#dc2626',
-                  fontSize: '9px',
-                  minWidth: '14px',
-                  height: '14px',
-                  padding: '0 3px',
-                  lineHeight: 1,
-                }}
-              >
-                {notiCount > 99 ? '99+' : notiCount}
-              </span>
-            )}
-          </div>
-          <span className="flex-1 text-left font-semibold">Notificaciones</span>
-          {notiCount === 0 && (
-            <span
-              className="text-xs rounded-full px-1.5 py-0.5 font-medium"
-              style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}
-            >
-              0
-            </span>
-          )}
-        </button>
-
         {/* Usuario */}
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg mb-1">
           <div
             className="flex items-center justify-center rounded-full text-white font-bold flex-shrink-0"
-            style={{
-              backgroundColor: color,
-              width: '28px',
-              height: '28px',
-              fontSize: '11px',
-            }}
+            style={{ backgroundColor: color, width: '28px', height: '28px', fontSize: '11px' }}
           >
             {iniciales}
           </div>
@@ -453,15 +408,6 @@ export default function Sidebar({
           <span className="font-semibold">Cerrar sesión</span>
         </button>
       </div>
-
-      {/* Panel de notificaciones */}
-      {panelOpen && (
-        <PanelNotificaciones
-          notificaciones={notificaciones}
-          usuarioId={usuarioId}
-          onClose={() => setPanelOpen(false)}
-        />
-      )}
     </aside>
   )
 }
