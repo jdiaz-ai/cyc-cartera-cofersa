@@ -137,7 +137,7 @@ export default function LoginPage() {
           {/* 2. Crédito y Cobro */}
           <p
             className="text-center font-bold uppercase tracking-widest mb-2"
-            style={{ fontSize: '11px', color: '#009ee3', letterSpacing: '0.14em' }}
+            style={{ fontSize: '15px', color: '#009ee3', letterSpacing: '0.12em' }}
           >
             Crédito y Cobro
           </p>
@@ -145,7 +145,7 @@ export default function LoginPage() {
           {/* 3. Subtítulo */}
           <p
             className="text-center mb-7"
-            style={{ fontSize: '13px', color: '#64748b' }}
+            style={{ fontSize: '15px', color: '#64748b', fontWeight: 500 }}
           >
             Plataforma de Gestión de Cartera
           </p>
