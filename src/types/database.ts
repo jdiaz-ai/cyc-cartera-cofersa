@@ -53,7 +53,9 @@ export interface MaestroCliente {
   cliente_nombre: string
   vendedor_nombre: string
   analista_email: string
+  nombre_cxp: string
   telefono: string
+  telefono2: string
   correo: string
   segmento: string
   limite_credito: number

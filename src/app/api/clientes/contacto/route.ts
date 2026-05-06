@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// PATCH /api/clientes/contacto  { cliente_cod, telefono?, correo? }
+// PATCH /api/clientes/contacto  { cliente_cod, nombre_cxp?, telefono?, telefono2?, correo? }
 export async function PATCH(req: NextRequest) {
-  let body: { cliente_cod?: string; telefono?: string; correo?: string }
+  let body: { cliente_cod?: string; nombre_cxp?: string; telefono?: string; telefono2?: string; correo?: string }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { cliente_cod, telefono, correo } = body
+  const { cliente_cod, nombre_cxp, telefono, telefono2, correo } = body
   if (!cliente_cod) return NextResponse.json({ error: 'cliente_cod requerido' }, { status: 400 })
 
   const supabase = await createClient()
@@ -31,8 +31,10 @@ export async function PATCH(req: NextRequest) {
 
   // Solo actualizar los campos enviados
   const updates: Record<string, string> = { updated_at: new Date().toISOString() }
-  if (telefono !== undefined) updates.telefono = telefono.trim()
-  if (correo   !== undefined) updates.correo   = correo.trim()
+  if (nombre_cxp !== undefined) updates.nombre_cxp = nombre_cxp.trim()
+  if (telefono   !== undefined) updates.telefono   = telefono.trim().replace(/\D/g, '').slice(0, 8)
+  if (telefono2  !== undefined) updates.telefono2  = telefono2.trim().replace(/\D/g, '').slice(0, 8)
+  if (correo     !== undefined) updates.correo     = correo.trim()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)

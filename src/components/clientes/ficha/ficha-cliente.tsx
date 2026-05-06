@@ -769,30 +769,46 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   onToast:        (msg: string) => void
 }) {
   // Estado de edición por campo
-  const [editando,  setEditando]  = useState<'telefono' | 'correo' | null>(null)
-  const [valTel,    setValTel]    = useState(maestro?.telefono ?? '')
-  const [valCorreo, setValCorreo] = useState(maestro?.correo   ?? '')
-  const [saving,    setSaving]    = useState(false)
+  type CampoEditable = 'nombre_cxp' | 'telefono' | 'telefono2' | 'correo'
+  const [editando,   setEditando]   = useState<CampoEditable | null>(null)
+  const [valNombre,  setValNombre]  = useState(maestro?.nombre_cxp ?? '')
+  const [valTel,     setValTel]     = useState(maestro?.telefono  ?? '')
+  const [valTel2,    setValTel2]    = useState(maestro?.telefono2 ?? '')
+  const [valCorreo,  setValCorreo]  = useState(maestro?.correo    ?? '')
+  const [saving,     setSaving]     = useState(false)
 
-  async function guardar(campo: 'telefono' | 'correo') {
+  // Formato teléfono CR: XXXX-XXXX (solo 8 dígitos)
+  function fmtTel(v: string) {
+    const d = v.replace(/\D/g, '').slice(0, 8)
+    return d.length > 4 ? `${d.slice(0, 4)}-${d.slice(4)}` : d
+  }
+  function rawTel(v: string) { return v.replace(/\D/g, '').slice(0, 8) }
+  function telValido(v: string) { return rawTel(v).length === 8 || rawTel(v).length === 0 }
+
+  async function guardar(campo: CampoEditable) {
     setSaving(true)
-    const body: Record<string, string> = {
-      cliente_cod: cartera.cliente_cod,
-      ...(campo === 'telefono' ? { telefono: valTel }   : {}),
-      ...(campo === 'correo'   ? { correo:   valCorreo } : {}),
+    const valorMap: Record<CampoEditable, string> = {
+      nombre_cxp: valNombre,
+      telefono:   rawTel(valTel),
+      telefono2:  rawTel(valTel2),
+      correo:     valCorreo,
     }
     const res = await fetch('/api/clientes/contacto', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ cliente_cod: cartera.cliente_cod, [campo]: valorMap[campo] }),
     })
     setSaving(false)
-    if (res.ok) {
-      setEditando(null)
-      onToast('Guardado correctamente')
-    } else {
-      onToast('Error al guardar')
-    }
+    if (res.ok) { setEditando(null); onToast('Guardado correctamente') }
+    else         { onToast('Error al guardar') }
+  }
+
+  function cancelar(campo: CampoEditable) {
+    setEditando(null)
+    if (campo === 'nombre_cxp') setValNombre(maestro?.nombre_cxp ?? '')
+    if (campo === 'telefono')   setValTel(maestro?.telefono   ?? '')
+    if (campo === 'telefono2')  setValTel2(maestro?.telefono2 ?? '')
+    if (campo === 'correo')     setValCorreo(maestro?.correo  ?? '')
   }
 
   function copiar(valor: string, label: string) {
@@ -806,7 +822,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid gap-4 items-start" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
       {/* ── Columna izquierda: Contacto + Condiciones ─────────── */}
       <div className="space-y-4">
@@ -814,93 +830,80 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
       {/* ── SECCIÓN 1: Datos de contacto (editables) ──────────── */}
       <InfoCard titulo="Datos de contacto CxP">
 
-        {/* Teléfono CxP */}
-        <div className="flex items-center gap-3 py-1">
-          <span className="text-gray-300 flex-shrink-0"><Phone size={14} /></span>
-          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Teléfono CxP</span>
-          {editando === 'telefono' ? (
-            <div className="flex items-center gap-2 flex-1">
-              <input
-                autoFocus
-                type="tel"
-                value={valTel}
-                onChange={e => setValTel(e.target.value)}
-                className="flex-1 rounded-lg border border-blue-300 px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                placeholder="Ej: 2222-3333"
-              />
-              <button type="button" disabled={saving}
-                onClick={() => guardar('telefono')}
-                className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
-                style={{ backgroundColor: '#009ee3' }}>
-                {saving ? '...' : 'Guardar'}
-              </button>
-              <button type="button" onClick={() => { setEditando(null); setValTel(maestro?.telefono ?? '') }}
-                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
-                {valTel || <span className="text-gray-300 italic">Sin teléfono</span>}
-              </span>
-              {valTel && (
-                <button type="button" onClick={() => copiar(valTel, 'Teléfono')}
-                  className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
-                  Copiar
-                </button>
-              )}
-              <button type="button" onClick={() => setEditando('telefono')}
-                className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
-                Editar
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Nombre CxP */}
+        <CampoEditable
+          icon={<User size={14} />}
+          label="Nombre CxP"
+          valor={valNombre}
+          placeholder="Nombre del contacto"
+          editando={editando === 'nombre_cxp'}
+          saving={saving}
+          onEditar={() => setEditando('nombre_cxp')}
+          onGuardar={() => guardar('nombre_cxp')}
+          onCancelar={() => cancelar('nombre_cxp')}
+          onChange={v => setValNombre(v)}
+          onCopiar={valNombre ? () => copiar(valNombre, 'Nombre') : undefined}
+          vacio="Sin nombre"
+        />
+
+        {/* Teléfono 1 */}
+        <CampoEditable
+          icon={<Phone size={14} />}
+          label="Teléfono 1"
+          valor={valTel ? fmtTel(valTel) : ''}
+          valorInput={valTel}
+          placeholder="12345678"
+          type="tel"
+          maxLength={9}
+          editando={editando === 'telefono'}
+          saving={saving}
+          invalido={!telValido(valTel)}
+          onEditar={() => setEditando('telefono')}
+          onGuardar={() => guardar('telefono')}
+          onCancelar={() => cancelar('telefono')}
+          onChange={v => setValTel(fmtTel(v))}
+          onCopiar={valTel ? () => copiar(fmtTel(valTel), 'Teléfono 1') : undefined}
+          vacio="Sin teléfono"
+          hint="8 dígitos"
+        />
+
+        {/* Teléfono 2 */}
+        <CampoEditable
+          icon={<Phone size={14} />}
+          label="Teléfono 2"
+          valor={valTel2 ? fmtTel(valTel2) : ''}
+          valorInput={valTel2}
+          placeholder="12345678"
+          type="tel"
+          maxLength={9}
+          editando={editando === 'telefono2'}
+          saving={saving}
+          invalido={!telValido(valTel2)}
+          onEditar={() => setEditando('telefono2')}
+          onGuardar={() => guardar('telefono2')}
+          onCancelar={() => cancelar('telefono2')}
+          onChange={v => setValTel2(fmtTel(v))}
+          onCopiar={valTel2 ? () => copiar(fmtTel(valTel2), 'Teléfono 2') : undefined}
+          vacio="Sin teléfono"
+          hint="8 dígitos"
+        />
 
         {/* Email CxP */}
-        <div className="flex items-center gap-3 py-1">
-          <span className="text-gray-300 flex-shrink-0"><Mail size={14} /></span>
-          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Email CxP</span>
-          {editando === 'correo' ? (
-            <div className="flex items-center gap-2 flex-1">
-              <input
-                autoFocus
-                type="email"
-                value={valCorreo}
-                onChange={e => setValCorreo(e.target.value)}
-                className="flex-1 rounded-lg border border-blue-300 px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                placeholder="correo@empresa.com"
-              />
-              <button type="button" disabled={saving}
-                onClick={() => guardar('correo')}
-                className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
-                style={{ backgroundColor: '#009ee3' }}>
-                {saving ? '...' : 'Guardar'}
-              </button>
-              <button type="button" onClick={() => { setEditando(null); setValCorreo(maestro?.correo ?? '') }}
-                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
-                {valCorreo || <span className="text-gray-300 italic">Sin email</span>}
-              </span>
-              {valCorreo && (
-                <button type="button" onClick={() => copiar(valCorreo, 'Email')}
-                  className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
-                  Copiar
-                </button>
-              )}
-              <button type="button" onClick={() => setEditando('correo')}
-                className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
-                Editar
-              </button>
-            </div>
-          )}
-        </div>
+        <CampoEditable
+          icon={<Mail size={14} />}
+          label="Email CxP"
+          valor={valCorreo}
+          placeholder="correo@empresa.com"
+          type="email"
+          editando={editando === 'correo'}
+          saving={saving}
+          onEditar={() => setEditando('correo')}
+          onGuardar={() => guardar('correo')}
+          onCancelar={() => cancelar('correo')}
+          onChange={v => setValCorreo(v)}
+          onCopiar={valCorreo ? () => copiar(valCorreo, 'Email') : undefined}
+          vacio="Sin email"
+        />
 
         <p className="text-[10px] text-gray-300 mt-1 pl-7">
           {esCoordinador ? 'Coordinador puede editar todos los clientes.' : 'Podés editar los datos de contacto de tus clientes asignados.'}
@@ -918,8 +921,8 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Crédito disponible</span>
             <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
               {disponible >= 0
-                ? `${fmtCRC(disponible)} disponible`
-                : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
+                ? fmtCRC(disponible)
+                : `−${fmtCRC(Math.abs(disponible))}`}
             </span>
           </div>
         )}
@@ -947,7 +950,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
 
       {/* ── SECCIÓN 2: Información fiscal (read-only) ──────────── */}
       <InfoCard titulo="Información fiscal">
-        <InfoRowCopy label="RUC / Cédula"  valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'RUC')} mono />
+        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
         <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
         {maestro?.segmento && (
           <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
@@ -986,6 +989,78 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
 
       </div>
 
+    </div>
+  )
+}
+
+// ── CampoEditable: fila editable reutilizable ─────────────────────────
+function CampoEditable({ icon, label, valor, valorInput, placeholder, type = 'text', maxLength,
+  editando, saving, invalido, onEditar, onGuardar, onCancelar, onChange, onCopiar, vacio, hint }: {
+  icon:        React.ReactNode
+  label:       string
+  valor:       string
+  valorInput?: string
+  placeholder: string
+  type?:       string
+  maxLength?:  number
+  editando:    boolean
+  saving:      boolean
+  invalido?:   boolean
+  onEditar:    () => void
+  onGuardar:   () => void
+  onCancelar:  () => void
+  onChange:    (v: string) => void
+  onCopiar?:   () => void
+  vacio:       string
+  hint?:       string
+}) {
+  const inputVal = valorInput !== undefined ? valorInput : valor
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-gray-300 flex-shrink-0">{icon}</span>
+      <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '100px' }}>{label}</span>
+      {editando ? (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <input
+            autoFocus
+            type={type}
+            value={inputVal}
+            maxLength={maxLength}
+            onChange={e => onChange(e.target.value)}
+            className={`flex-1 min-w-0 rounded-lg border px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 transition ${
+              invalido ? 'border-red-300 focus:ring-red-100' : 'border-blue-300 focus:ring-blue-100'
+            }`}
+            placeholder={placeholder}
+          />
+          {hint && <span className="text-[10px] text-gray-400 flex-shrink-0">{hint}</span>}
+          <button type="button" disabled={saving || invalido}
+            onClick={onGuardar}
+            className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-50 transition"
+            style={{ backgroundColor: '#009ee3' }}>
+            {saving ? '...' : 'Guardar'}
+          </button>
+          <button type="button" onClick={onCancelar}
+            className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
+            {valor || <span className="text-gray-300 italic">{vacio}</span>}
+          </span>
+          {onCopiar && (
+            <button type="button" onClick={onCopiar}
+              className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
+              Copiar
+            </button>
+          )}
+          <button type="button" onClick={onEditar}
+            className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
+            Editar
+          </button>
+        </div>
+      )}
     </div>
   )
 }
