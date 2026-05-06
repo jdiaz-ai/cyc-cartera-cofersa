@@ -304,7 +304,7 @@ export default function CalendarioNotas({ eventos, hoyStr }: Props) {
                 ? 'Este día ya pasó — no se pueden editar notas'
                 : 'Agregá tus notas del día...'}
               disabled={isPasado(selected)}
-              rows={5}
+              rows={3}
               style={{
                 width: '100%',
                 resize: 'none',

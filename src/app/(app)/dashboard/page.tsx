@@ -4,6 +4,7 @@ import {
   AlertTriangle, TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
 } from 'lucide-react'
+import GestionRapida from '@/components/dashboard/gestion-rapida'
 import type { ClienteOpt } from '@/components/dashboard/gestion-rapida'
 import DashboardResumen from '@/components/analista/DashboardResumen'
 import CalendarioNotas from '@/components/analista/CalendarioNotas'
@@ -445,11 +446,10 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
         */}
         <div className="flex flex-col lg:flex-row gap-5">
 
-          {/* ── Columna izquierda (60%) ─────────────────────────── */}
+          {/* ── Columna izquierda (60%) — KPIs + Cola + Promesas ── */}
           <div className="flex-1 min-w-0">
             <DashboardResumen
               misRows={misRows}
-              misGestiones={misGestiones}
               misPromesas={misPromesas}
               cola={cola}
               gHoyCount={gHoyCount}
@@ -458,8 +458,6 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
               miMora={miMora}
               pMiMora={pMiMora}
               hoyStr={hoyStr}
-              clientesOpts={clientesOpts}
-              userEmail={userEmail}
             />
           </div>
 
@@ -472,9 +470,69 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
           </div>
 
         </div>
+
+        {/* ── Fila inferior FULL WIDTH — Mis Gestiones 50% | Gestión Rápida 50% ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+
+          {/* Mis gestiones hoy */}
+          <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
+                  <Activity size={15} style={{ color: '#009ee3' }} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">Mis Gestiones de Hoy</h2>
+                  <p className="text-xs text-gray-400">{gHoyCount} registradas</p>
+                </div>
+              </div>
+            </div>
+            {misGestiones.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="text-3xl mb-3">📋</div>
+                <p className="text-sm font-semibold text-gray-400">Sin gestiones hoy</p>
+                <p className="text-xs text-gray-300 mt-1">Usá el formulario de la derecha para registrar</p>
+              </div>
+            ) : (
+              <div className="p-3 space-y-1.5">
+                {misGestiones.map(g => (
+                  <div key={g.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{ background: '#F8FAFC' }}>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: 'rgba(0,59,92,0.07)' }}>
+                      {tipoIconAnalista[g.tipo] ?? '📋'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-800 truncate">{g.cliente_cod}</p>
+                      <p className="text-xs text-gray-500 truncate">{g.resultado}{g.nota ? ` · ${g.nota}` : ''}</p>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 flex-shrink-0">{g.hora?.slice(0, 5)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Gestión rápida */}
+          <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
+                <ClipboardCheck size={15} style={{ color: '#009ee3' }} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">Gestión Rápida</h2>
+                <p className="text-xs text-gray-400">Registrá una gestión en segundos</p>
+              </div>
+            </div>
+            <GestionRapida clientes={clientesOpts} analistaEmail={userEmail} hoyStr={hoyStr} />
+          </div>
+
+        </div>
       </div>
     </div>
   )
+}
+
+const tipoIconAnalista: Record<string, string> = {
+  LLAMADA: '📞', CORREO: '📧', VISITA: '🏢', WHATSAPP: '💬',
 }
 
 // ── KPI Card (compartida) ─────────────────────────────────────────────

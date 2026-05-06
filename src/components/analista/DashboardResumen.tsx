@@ -1,12 +1,10 @@
-// Columna izquierda del Dashboard Analista.
-// Recibe todos los datos ya cargados desde el Server Component padre (dashboard/page.tsx).
+// Columna izquierda del Dashboard Analista: KPIs + Cola del Día + Promesas.
+// La fila inferior (Mis Gestiones + Gestión Rápida) vive en dashboard/page.tsx a ancho completo.
 import {
   Package, TrendingDown, ClipboardCheck, Handshake,
-  AlertCircle, Activity, CheckCircle2,
+  AlertCircle, CheckCircle2,
 } from 'lucide-react'
 import { fmtM } from '@/lib/utils/formato'
-import GestionRapida from '@/components/dashboard/gestion-rapida'
-import type { ClienteOpt } from '@/components/dashboard/gestion-rapida'
 
 // ── Tipos locales ─────────────────────────────────────────────────────
 interface CarteraRowFull {
@@ -14,10 +12,6 @@ interface CarteraRowFull {
   no_vencido: number; mora_1_30: number; mora_31_60: number
   mora_61_90: number; mora_91_120: number; mora_120_plus: number
   total: number; dias_mora: number; fecha_corte: string
-}
-interface GestionRow {
-  id: string; cliente_cod: string; tipo: string
-  resultado: string; hora: string; analista_email: string; nota?: string
 }
 interface PromesaRow {
   id: string; cliente_cod: string; monto: number
@@ -30,18 +24,15 @@ interface ColaItem extends CarteraRowFull {
 }
 
 export interface DashboardResumenProps {
-  misRows:       CarteraRowFull[]
-  misGestiones:  GestionRow[]
-  misPromesas:   PromesaRow[]
-  cola:          ColaItem[]
-  gHoyCount:     number
-  promCount:     number
-  miCartera:     number
-  miMora:        number
-  pMiMora:       number
-  hoyStr:        string
-  clientesOpts:  ClienteOpt[]
-  userEmail:     string
+  misRows:    CarteraRowFull[]
+  misPromesas: PromesaRow[]
+  cola:       ColaItem[]
+  gHoyCount:  number
+  promCount:  number
+  miCartera:  number
+  miMora:     number
+  pMiMora:    number
+  hoyStr:     string
 }
 
 const urgCfg: Record<Urgencia, { dot: string }> = {
@@ -49,14 +40,10 @@ const urgCfg: Record<Urgencia, { dot: string }> = {
   AMARILLO: { dot: '#f59e0b' },
   VERDE:    { dot: '#16a34a' },
 }
-const tipoIcon: Record<string, string> = {
-  LLAMADA: '📞', CORREO: '📧', VISITA: '🏢', WHATSAPP: '💬',
-}
 
 export default function DashboardResumen({
-  misRows, misGestiones, misPromesas, cola,
-  gHoyCount, promCount, miCartera, miMora, pMiMora,
-  hoyStr, clientesOpts, userEmail,
+  misRows, misPromesas, cola,
+  gHoyCount, promCount, miCartera, miMora, pMiMora, hoyStr,
 }: DashboardResumenProps) {
   return (
     <div className="space-y-5">
@@ -201,67 +188,11 @@ export default function DashboardResumen({
           )}
         </div>
       </div>
-
-      {/* ── Mis gestiones de hoy + Gestión rápida ────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-
-        {/* Mis gestiones hoy */}
-        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
-                <Activity size={15} style={{ color: '#009ee3' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Mis Gestiones de Hoy</h2>
-                <p className="text-xs text-gray-400">{gHoyCount} registradas</p>
-              </div>
-            </div>
-          </div>
-          {misGestiones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="text-3xl mb-3">📋</div>
-              <p className="text-sm font-semibold text-gray-400">Sin gestiones hoy</p>
-              <p className="text-xs text-gray-300 mt-1">Usá el formulario de la derecha para registrar</p>
-            </div>
-          ) : (
-            <div className="p-3 space-y-1.5">
-              {misGestiones.map(g => (
-                <div key={g.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{ background: '#F8FAFC' }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: 'rgba(0,59,92,0.07)' }}>
-                    {tipoIcon[g.tipo] ?? '📋'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-gray-800 truncate">{g.cliente_cod}</p>
-                    <p className="text-xs text-gray-500 truncate">{g.resultado}{g.nota ? ` · ${g.nota}` : ''}</p>
-                  </div>
-                  <span className="text-xs font-medium text-gray-400 flex-shrink-0">{g.hora?.slice(0, 5)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Gestión rápida */}
-        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
-              <ClipboardCheck size={15} style={{ color: '#009ee3' }} />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-gray-900">Gestión Rápida</h2>
-              <p className="text-xs text-gray-400">Registrá una gestión en segundos</p>
-            </div>
-          </div>
-          <GestionRapida clientes={clientesOpts} analistaEmail={userEmail} hoyStr={hoyStr} />
-        </div>
-
-      </div>
     </div>
   )
 }
 
-// ── KPI Card local (igual a la del coordinador) ───────────────────────
+// ── KPI Card ──────────────────────────────────────────────────────────
 function KPICard({ label, valor, sub, gradient, badge, badgeGood, icon }: {
   label: string; valor: string; sub: string; gradient: string
   badge: string | null; badgeGood?: boolean; icon: React.ReactNode
