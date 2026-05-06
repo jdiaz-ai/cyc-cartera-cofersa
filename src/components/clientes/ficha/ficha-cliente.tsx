@@ -806,7 +806,10 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+
+      {/* ── Columna izquierda: Contacto + Condiciones ─────────── */}
+      <div className="space-y-4">
 
       {/* ── SECCIÓN 1: Datos de contacto (editables) ──────────── */}
       <InfoCard titulo="Datos de contacto CxP">
@@ -904,18 +907,6 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         </p>
       </InfoCard>
 
-      {/* ── SECCIÓN 2: Información fiscal (read-only) ──────────── */}
-      <InfoCard titulo="Información fiscal">
-        <InfoRowCopy label="RUC / Cédula"  valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'RUC')} mono />
-        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
-        {maestro?.segmento && (
-          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
-        )}
-        {maestro?.zona && (
-          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
-        )}
-      </InfoCard>
-
       {/* ── SECCIÓN 3: Condiciones comerciales ────────────────── */}
       <InfoCard titulo="Condiciones comerciales">
         <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
@@ -932,7 +923,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             </span>
           </div>
         )}
-        {/* Estado — coordinador editable, analista read-only */}
+        {/* Estado */}
         <div className="flex items-center gap-3 py-1">
           <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
           <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Estado</span>
@@ -947,6 +938,23 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
           )}
         </div>
+      </InfoCard>
+
+      </div>
+
+      {/* ── Columna derecha: Fiscal + Interna ─────────────────── */}
+      <div className="space-y-4">
+
+      {/* ── SECCIÓN 2: Información fiscal (read-only) ──────────── */}
+      <InfoCard titulo="Información fiscal">
+        <InfoRowCopy label="RUC / Cédula"  valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'RUC')} mono />
+        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
+        {maestro?.segmento && (
+          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
+        )}
+        {maestro?.zona && (
+          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
+        )}
       </InfoCard>
 
       {/* ── SECCIÓN 4: Información interna (read-only) ─────────── */}
@@ -975,6 +983,9 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             color={maestro!.promesas_cumplidas_pct >= 70 ? '#16a34a' : maestro!.promesas_cumplidas_pct >= 40 ? '#f59e0b' : '#dc2626'} />
         )}
       </InfoCard>
+
+      </div>
+
     </div>
   )
 }
