@@ -77,8 +77,9 @@ export default async function FichaClientePage({ params }: PageProps) {
     solicitudes = solRaw ?? []
   } catch { /* tabla aún no creada */ }
 
-  // ── Nombre del analista ─────────────────────────────────────────────
+  // ── Nombre del analista + rol del usuario logueado ─────────────────
   let analistaNombre = ''
+  let esCoordinador  = false
   if (maestro?.analista_email) {
     const { data: anaRow } = await supabase
       .from('usuarios')
@@ -86,6 +87,14 @@ export default async function FichaClientePage({ params }: PageProps) {
       .eq('email', maestro.analista_email)
       .limit(1)
     analistaNombre = ((anaRow ?? [])[0] as { nombre: string } | undefined)?.nombre ?? ''
+  }
+  if (userEmail) {
+    const { data: rolRow } = await supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('email', userEmail)
+      .limit(1)
+    esCoordinador = ((rolRow ?? [])[0] as { rol: string } | undefined)?.rol === 'COORDINADOR'
   }
 
   return (
@@ -98,6 +107,7 @@ export default async function FichaClientePage({ params }: PageProps) {
       solicitudes    = {solicitudes}
       analistaNombre = {analistaNombre}
       userEmail      = {userEmail}
+      esCoordinador  = {esCoordinador}
     />
   )
 }

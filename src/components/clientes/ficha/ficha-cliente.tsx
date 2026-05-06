@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, ClipboardList, Handshake, FileText, AlertTriangle,
-  CheckCircle2, XCircle, Clock, Circle, Send, Plus,
+  CheckCircle2, XCircle, Clock, Circle, Plus,
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
-  MailOpen, Receipt,
+  MailOpen, Receipt, MessageCircle, ChevronDown, FileDown, Send,
 } from 'lucide-react'
 import { fmtM, fmtCRC, fmtFecha, fmtFechaHora } from '@/lib/utils/formato'
+import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
 
@@ -66,17 +67,74 @@ interface Props {
   solicitudes:    any[]
   analistaNombre: string
   userEmail:      string
+  esCoordinador:  boolean
 }
+
+// ── Colores de estado del cliente ──────────────────────────────────────
+const ESTADO_CFG: Record<string, { bg: string; text: string }> = {
+  Normal:     { bg: '#f1f5f9', text: '#64748b' },
+  Bloqueado:  { bg: '#fee2e2', text: '#dc2626' },
+  Convenio:   { bg: '#fef9c3', text: '#a16207' },
+  Suspendido: { bg: '#ffedd5', text: '#c2410c' },
+}
+const ESTADOS_OPCIONES = ['Normal', 'Bloqueado', 'Convenio', 'Suspendido']
 
 // ══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════
 export default function FichaCliente({
-  cartera, maestro, facturas, gestiones, promesas, solicitudes, analistaNombre, userEmail,
+  cartera, maestro, facturas, gestiones, promesas, solicitudes,
+  analistaNombre, userEmail, esCoordinador,
 }: Props) {
-  const router = useRouter()
-  const [tab, setTab]               = useState<Tab>('Información')
+  const router   = useRouter()
+  const supabase = createClient()
+
+  const [tab,          setTab]          = useState<Tab>('Información')
   const [modalGestion, setModalGestion] = useState(false)
+  const [modalEmail,   setModalEmail]   = useState(false)
+  const [modalEdoCta,  setModalEdoCta]  = useState(false)
+  const [toast,        setToast]        = useState('')
+  const [estadoLocal,  setEstadoLocal]  = useState(maestro?.estado_manual ?? 'Normal')
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    setToast(msg)
+    if (toastRef.current) clearTimeout(toastRef.current)
+    toastRef.current = setTimeout(() => setToast(''), 2500)
+  }
+
+  async function copiarTelefono() {
+    const tel = maestro?.telefono ?? ''
+    if (!tel) return
+    try {
+      await navigator.clipboard.writeText(tel)
+      showToast('Teléfono copiado: ' + tel)
+    } catch {
+      showToast('No se pudo copiar')
+    }
+  }
+
+  function abrirWhatsApp() {
+    const tel = (maestro?.telefono ?? '').replace(/\D/g, '')
+    if (!tel) return
+    const numero = tel.startsWith('506') ? tel : '506' + tel
+    window.open(`https://wa.me/${numero}`, '_blank')
+  }
+
+  async function cambiarEstado(nuevoEstado: string) {
+    if (!window.confirm(`¿Cambiar estado del cliente a "${nuevoEstado}"?`)) return
+    const res = await fetch('/api/clientes/estado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente_cod: cartera.cliente_cod, estado: nuevoEstado }),
+    })
+    if (res.ok) {
+      setEstadoLocal(nuevoEstado)
+      showToast(`Estado actualizado a ${nuevoEstado}`)
+    } else {
+      showToast('Error al actualizar estado')
+    }
+  }
 
   // ── Cálculos de mora ──────────────────────────────────────────────
   const mora_total =
@@ -115,87 +173,172 @@ export default function FichaCliente({
       ═══════════════════════════════════════════════════════════ */}
       <div className="bg-white border-b border-gray-200 px-5 pt-4 pb-0 sticky top-0 z-10">
 
-        {/* Sección 1: back + identidad + acciones */}
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-start gap-3">
-            <button
-              onClick={() => router.push('/clientes')}
-              className="mt-0.5 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition flex-shrink-0"
-              style={{ width: '32px', height: '32px', color: '#64748b' }}
-            >
-              <ArrowLeft size={15} />
-            </button>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-bold text-gray-900" style={{ fontSize: '18px' }}>
-                  {cartera.cliente_nombre}
-                </h1>
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: urgColor }} />
-                {mora_total > 0 && (
-                  <span
-                    className="text-[11px] font-bold rounded-full px-2 py-0.5"
-                    style={{ backgroundColor: urgColor + '20', color: urgColor }}
-                  >
-                    {tramo_peor}
+        {/* ── SECCIÓN A: Identidad ─────────────────────────────── */}
+        <div className="flex items-start gap-3 mb-3">
+          <button
+            type="button"
+            onClick={() => router.push('/clientes')}
+            className="mt-1 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition flex-shrink-0"
+            style={{ width: '30px', height: '30px', color: '#64748b' }}
+          >
+            <ArrowLeft size={14} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 style={{ fontSize: '18px', fontWeight: 500, color: '#111827' }}>
+                {cartera.cliente_nombre}
+              </h1>
+              {/* Badge tramo de mora */}
+              {mora_total > 0 && (
+                <span className="text-[11px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
+                  style={{ backgroundColor: urgColor + '20', color: urgColor }}>
+                  {tramo_peor}
+                </span>
+              )}
+              {/* Badge estado del cliente */}
+              {(() => {
+                const cfg = ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal
+                return (
+                  <span className="text-[11px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
+                    style={{ backgroundColor: cfg.bg, color: cfg.text }}>
+                    {estadoLocal}
                   </span>
-                )}
-                {maestro?.estado_manual && maestro.estado_manual !== 'Normal' && (
-                  <span className="text-[11px] font-bold rounded-full px-2 py-0.5" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                    {maestro.estado_manual}
-                  </span>
-                )}
-              </div>
-              <p className="text-gray-400 text-[12px] mt-0.5">
-                Código: <span className="font-mono font-semibold text-gray-600">{cartera.cliente_cod}</span>
-                {maestro?.condicion_pago && (
-                  <> · Condición: <span className="font-semibold text-gray-600">{maestro.condicion_pago}</span></>
-                )}
-              </p>
+                )
+              })()}
             </div>
-          </div>
-
-          {/* Botones de acción */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition">
-              <Send size={12} />
-              Estado de cuenta
-            </button>
-            <button
-              onClick={() => setModalGestion(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
-              style={{ backgroundColor: '#009ee3' }}
-            >
-              <Plus size={12} />
-              Registrar gestión
-            </button>
+            <p className="text-[12px] mt-0.5" style={{ color: '#94a3b8' }}>
+              <span className="font-mono font-semibold" style={{ color: '#64748b' }}>{cartera.cliente_cod}</span>
+              {maestro?.condicion_pago && (
+                <> · Condición: <span className="font-semibold" style={{ color: '#64748b' }}>{maestro.condicion_pago}</span></>
+              )}
+            </p>
           </div>
         </div>
 
-        {/* Sección 2: KPIs inline */}
-        <div className="flex flex-wrap gap-4 mb-3">
-          <KpiChip label="Total cartera" valor={fmtM(cartera.total)} />
-          <Divider />
-          <KpiChip
-            label="En mora"
-            valor={mora_total > 0 ? `${fmtM(mora_total)} (${pct_mora}%)` : '—'}
-            color={mora_total > 0 ? '#dc2626' : '#22c55e'}
+        {/* ── SECCIÓN B: 4 KPI cards ───────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          {/* Card 1: Total cartera */}
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50"
+            title={fmtCRC(cartera.total)}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total cartera</p>
+            <p className="text-[15px] font-bold tabular-nums text-gray-800">{fmtM(cartera.total)}</p>
+          </div>
+
+          {/* Card 2: En mora */}
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">En mora</p>
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-[15px] font-bold tabular-nums" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
+                {mora_total > 0 ? fmtM(mora_total) : '—'}
+              </p>
+              {mora_total > 0 && (
+                <span className="text-[11px] font-bold rounded-full px-1.5 py-0.5"
+                  style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                  {pct_mora}%
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Límite de crédito */}
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Límite crédito</p>
+            {maestro?.limite_credito && maestro.limite_credito > 0 ? (
+              <>
+                <p className="text-[15px] font-bold tabular-nums text-gray-800">{fmtM(maestro.limite_credito)}</p>
+                {(() => {
+                  const disp = maestro.limite_credito - cartera.total
+                  return disp >= 0
+                    ? <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#16a34a' }}>{fmtM(disp)} disponible</p>
+                    : <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
+                })()}
+              </>
+            ) : (
+              <p className="text-[13px] font-semibold text-gray-300 italic">Sin límite</p>
+            )}
+          </div>
+
+          {/* Card 4: Vendedor / Analista */}
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Vendedor / Analista</p>
+            <p className="text-[12px] font-semibold text-gray-700 truncate">{cartera.vendedor_nombre || '—'}</p>
+            <p className="text-[11px] text-gray-400 truncate">{analistaNombre || '—'}</p>
+          </div>
+        </div>
+
+        {/* ── SECCIÓN C: Botones de acción ─────────────────────── */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {/* Llamar */}
+          <ActionBtn
+            icon={<Phone size={12} />}
+            label="Llamar"
+            disabled={!maestro?.telefono}
+            title={maestro?.telefono ? undefined : 'Sin teléfono registrado'}
+            onClick={copiarTelefono}
           />
-          {maestro?.limite_credito && maestro.limite_credito > 0 && (
-            <><Divider /><KpiChip label="Límite crédito" valor={fmtM(maestro.limite_credito)} /></>
+
+          {/* WhatsApp */}
+          <ActionBtn
+            icon={<MessageCircle size={12} />}
+            label="WhatsApp"
+            disabled={!maestro?.telefono}
+            onClick={abrirWhatsApp}
+            style={{ borderColor: maestro?.telefono ? '#86efac' : undefined, color: maestro?.telefono ? '#16a34a' : undefined }}
+          />
+
+          {/* Emails — placeholder junio 2026 */}
+          <ActionBtn
+            icon={<MailOpen size={12} />}
+            label="Emails"
+            disabled
+            title="Disponible Junio 2026 — Integración Gmail"
+          />
+
+          {/* Email de cobro */}
+          <ActionBtn
+            icon={<Send size={12} />}
+            label="Email de cobro"
+            onClick={() => setModalEmail(true)}
+            style={{ borderColor: '#7dd3fc', color: '#0369a1' }}
+          />
+
+          {/* Estado de cuenta */}
+          <ActionBtn
+            icon={<FileDown size={12} />}
+            label="Estado de cuenta"
+            onClick={() => setModalEdoCta(true)}
+          />
+
+          {/* Estado: solo coordinador editable */}
+          {esCoordinador ? (
+            <div className="relative">
+              <select
+                value={estadoLocal}
+                onChange={e => cambiarEstado(e.target.value)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 pl-2.5 pr-6 py-1.5 text-[12px] font-semibold transition hover:bg-gray-50 appearance-none cursor-pointer"
+                style={{ color: ESTADO_CFG[estadoLocal]?.text ?? '#64748b' }}
+              >
+                {ESTADOS_OPCIONES.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+            </div>
+          ) : (
+            <span className="flex items-center gap-1.5 rounded-lg border border-gray-100 px-3 py-1.5 text-[12px] font-semibold"
+              style={{ backgroundColor: ESTADO_CFG[estadoLocal]?.bg ?? '#f1f5f9', color: ESTADO_CFG[estadoLocal]?.text ?? '#64748b' }}>
+              {estadoLocal}
+            </span>
           )}
-          {cartera.dias_mora > 0 && (
-            <><Divider /><KpiChip label="Días mora mayor" valor={`${cartera.dias_mora}d`} color="#dc2626" /></>
-          )}
-          <Divider />
-          <KpiChip label="Vendedor" valor={cartera.vendedor_nombre || '—'} small />
-          {analistaNombre && (
-            <><Divider /><KpiChip label="Analista" valor={analistaNombre} small /></>
-          )}
-          {maestro?.telefono && (
-            <><Divider /><KpiChip label="Teléfono" valor={maestro.telefono} small /></>
-          )}
-          <Divider />
-          <KpiChip label="Score ICP" valor="Sin datos" color="#94a3b8" small italic />
+
+          {/* Registrar gestión — siempre último */}
+          <button
+            type="button"
+            onClick={() => setModalGestion(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90 ml-auto"
+            style={{ backgroundColor: '#009ee3' }}
+          >
+            <Plus size={12} />
+            Registrar gestión
+          </button>
         </div>
 
         {/* Sección 3: Tabs */}
@@ -540,6 +683,14 @@ export default function FichaCliente({
 
       </div>
 
+      {/* ── Toast ───────────────────────────────────────────────── */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl shadow-lg px-4 py-2.5 text-[13px] font-semibold text-white"
+          style={{ backgroundColor: '#1e293b', maxWidth: '320px', textAlign: 'center' }}>
+          {toast}
+        </div>
+      )}
+
       {/* ── Modal Registrar Gestión ──────────────────────────────── */}
       {modalGestion && (
         <ModalGestion
@@ -551,6 +702,34 @@ export default function FichaCliente({
           onSuccess     = {() => { setModalGestion(false); router.refresh() }}
         />
       )}
+
+      {/* ── Modal Email de cobro ─────────────────────────────────── */}
+      {modalEmail && (
+        <ModalEmailCobro
+          clienteNombre = {cartera.cliente_nombre}
+          clienteCod    = {cartera.cliente_cod}
+          contribuyente = {cartera.contribuyente}
+          correo        = {maestro?.correo ?? ''}
+          analistaEmail = {userEmail}
+          supabase      = {supabase}
+          onClose       = {() => setModalEmail(false)}
+          onSuccess     = {() => { setModalEmail(false); showToast('Email registrado'); router.refresh() }}
+        />
+      )}
+
+      {/* ── Modal Estado de cuenta ──────────────────────────────── */}
+      {modalEdoCta && (
+        <ModalEstadoCuenta
+          clienteNombre = {cartera.cliente_nombre}
+          clienteCod    = {cartera.cliente_cod}
+          contribuyente = {cartera.contribuyente}
+          correo        = {maestro?.correo ?? ''}
+          analistaEmail = {userEmail}
+          supabase      = {supabase}
+          onClose       = {() => setModalEdoCta(false)}
+          onSuccess     = {() => { setModalEdoCta(false); showToast('Estado de cuenta enviado'); router.refresh() }}
+        />
+      )}
     </div>
   )
 }
@@ -558,6 +737,200 @@ export default function FichaCliente({
 // ══════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTES
 // ══════════════════════════════════════════════════════════════════════
+
+// ── Botón de acción del header ────────────────────────────────────────
+function ActionBtn({ icon, label, onClick, disabled, title, style }: {
+  icon: React.ReactNode
+  label: string
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold transition"
+      style={{
+        color: disabled ? '#cbd5e1' : '#64748b',
+        borderColor: disabled ? '#f1f5f9' : undefined,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        backgroundColor: 'transparent',
+        ...(!disabled ? { ['--tw-hover-bg' as string]: '#f8fafc' } : {}),
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#f8fafc' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+// ── Modal Email de cobro ──────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, analistaEmail, supabase, onClose, onSuccess }: {
+  clienteNombre: string; clienteCod: string; contribuyente: string
+  correo: string; analistaEmail: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+  onClose: () => void; onSuccess: () => void
+}) {
+  const [para,    setPara]    = useState(correo)
+  const [asunto,  setAsunto]  = useState(`Estado de cuenta - ${clienteNombre}`)
+  const [mensaje, setMensaje] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+
+  async function handleEnviar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!mensaje.trim()) { setError('Escribí un mensaje.'); return }
+    setLoading(true); setError('')
+    // Registrar gestión automática
+    const hoy  = new Date()
+    const fecha = hoy.toISOString().split('T')[0]
+    const hora  = `${String(hoy.getHours()).padStart(2,'0')}:${String(hoy.getMinutes()).padStart(2,'0')}:00`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: gErr } = await supabase.from('gestiones').insert({
+      cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
+      fecha, hora, tipo: 'CORREO', resultado: 'Email enviado',
+      nota: `Email de cobro enviado a ${para}. Asunto: ${asunto}. ${mensaje}`,
+    } as any)
+    setLoading(false)
+    if (gErr) { setError('Error al registrar: ' + gErr.message); return }
+    onSuccess()
+  }
+
+  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">Email de cobro</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">{clienteNombre}</p>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={handleEnviar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-[12px] text-red-700 font-semibold">{error}</div>}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Para</label>
+          <input type="email" value={para} onChange={e => setPara(e.target.value)} className={inputCls} placeholder="correo@empresa.com" />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Asunto</label>
+          <input type="text" value={asunto} onChange={e => setAsunto(e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Mensaje</label>
+          <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={4} className={inputCls + ' resize-none'} placeholder="Escribí el mensaje de cobro..." />
+        </div>
+        <p className="text-[10px] text-gray-400">Se registrará una gestión de tipo EMAIL automáticamente.</p>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">Cancelar</button>
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90" style={{ backgroundColor: '#009ee3' }}>
+            {loading ? 'Registrando...' : 'Enviar y registrar'}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
+// ── Modal Estado de cuenta ────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, analistaEmail, supabase, onClose, onSuccess }: {
+  clienteNombre: string; clienteCod: string; contribuyente: string
+  correo: string; analistaEmail: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+  onClose: () => void; onSuccess: () => void
+}) {
+  const [loading, setLoading] = useState(false)
+
+  async function registrarGestion(accion: string) {
+    setLoading(true)
+    const hoy   = new Date()
+    const fecha = hoy.toISOString().split('T')[0]
+    const hora  = `${String(hoy.getHours()).padStart(2,'0')}:${String(hoy.getMinutes()).padStart(2,'0')}:00`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('gestiones').insert({
+      cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
+      fecha, hora, tipo: 'CORREO', resultado: 'Email enviado',
+      nota: `Estado de cuenta: ${accion}`,
+    } as any)
+    setLoading(false)
+    onSuccess()
+  }
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">Estado de cuenta</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">{clienteNombre}</p>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <div className="p-5 space-y-3">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => registrarGestion('Descarga de PDF solicitada')}
+          className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition disabled:opacity-60"
+        >
+          <FileDown size={18} className="text-gray-400" />
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-gray-800">Descargar PDF</p>
+            <p className="text-[11px] text-gray-400">Genera el estado de cuenta en PDF</p>
+          </div>
+        </button>
+        <button
+          type="button"
+          disabled={loading || !correo}
+          onClick={() => registrarGestion(`Enviado por email a ${correo}`)}
+          className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition disabled:opacity-60"
+          title={!correo ? 'Sin correo registrado para este cliente' : undefined}
+        >
+          <Send size={18} style={{ color: '#009ee3' }} />
+          <div className="text-left">
+            <p className="text-[13px] font-bold text-gray-800">Enviar por email</p>
+            <p className="text-[11px] text-gray-400">{correo || 'Sin correo registrado'}</p>
+          </div>
+        </button>
+        <p className="text-[10px] text-gray-400 text-center">Se registrará una gestión automáticamente al confirmar.</p>
+      </div>
+    </ModalOverlay>
+  )
+}
+
+// ── Overlay y botón cerrar compartidos ────────────────────────────────
+function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full overflow-hidden" style={{ maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function CloseBtn({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" onClick={onClose}
+      className="flex items-center justify-center rounded-lg hover:bg-gray-100 transition"
+      style={{ width: '32px', height: '32px', color: '#94a3b8' }}>
+      ✕
+    </button>
+  )
+}
 
 function Divider() {
   return <div className="w-px self-stretch bg-gray-100" />
