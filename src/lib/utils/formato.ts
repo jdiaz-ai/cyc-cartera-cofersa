@@ -93,3 +93,17 @@ export function diasDesde(raw: string | null | undefined): number {
 export function hoyISO(): string {
   return new Date(Date.now() - 6 * 3600 * 1000).toISOString().split('T')[0]
 }
+
+/**
+ * Monto completo con 2 decimales y puntos de miles — solo para la Ficha del Cliente.
+ * Limpia decimales raros de Supabase con Math.round(*100)/100.
+ * Ejemplo: 97342156.891 → "₡97.342.156,89"
+ * NUNCA usar en tablas de listado — usar fmtCRC() o fmtM() allá.
+ */
+export function fmtCRC2(n: number | null | undefined): string {
+  const val = Math.round((Number(n) || 0) * 100) / 100
+  const entero   = Math.floor(val)
+  const centavos = Math.round((val - entero) * 100).toString().padStart(2, '0')
+  const miles    = entero.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `₡${miles},${centavos}`
+}

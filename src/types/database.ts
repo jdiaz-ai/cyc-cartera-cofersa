@@ -90,6 +90,7 @@ export interface Gestion {
   promesa_fecha: string
   promesa_monto: number
   created_at: string
+  activo?: boolean
 }
 
 export interface Promesa {
@@ -103,6 +104,7 @@ export interface Promesa {
   estado: EstadoPromesa
   notas: string
   updated_at: string
+  activo?: boolean
 }
 
 export interface ConfigSistema {

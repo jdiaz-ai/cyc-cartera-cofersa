@@ -8,7 +8,7 @@ import {
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
   MailOpen, Receipt, MessageCircle, ChevronDown, FileDown, Send, Search,
 } from 'lucide-react'
-import { fmtM, fmtCRC, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
+import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
@@ -558,16 +558,25 @@ export default function FichaCliente({
         {/* ── TAB: GESTIONES ───────────────────────────────────── */}
         {tab === 'Gestiones' && (
           <TabGestiones
-            gestiones    = {gestiones}
+            gestiones      = {gestiones}
+            userEmail      = {userEmail}
+            esCoordinador  = {esCoordinador}
             onNuevaGestion = {() => setModalGestion(true)}
+            onToast        = {showToast}
+            onRefresh      = {() => router.refresh()}
           />
         )}
 
         {/* ── TAB: PROMESAS ─────────────────────────────────────── */}
         {tab === 'Promesas' && (
           <TabPromesas
-            promesas     = {promesas}
+            promesas       = {promesas}
+            clienteCod     = {cartera.cliente_cod}
+            contribuyente  = {cartera.contribuyente}
+            esCoordinador  = {esCoordinador}
             onNuevaGestion = {() => setModalGestion(true)}
+            onToast        = {showToast}
+            onRefresh      = {() => router.refresh()}
           />
         )}
 
@@ -577,8 +586,8 @@ export default function FichaCliente({
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
               <EmptyState
                 icon={<MailOpen size={32} />}
-                texto="Historial de emails próximamente"
-                sub="Aquí aparecerán los estados de cuenta y correos enviados a este cliente."
+                texto="Integración de correo próximamente"
+                sub="Aquí verás el historial de emails con este cliente y podrás responder directamente desde la app. Fase 2 — Junio 2026."
                 comingSoon
               />
             </div>
@@ -591,8 +600,8 @@ export default function FichaCliente({
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
               <EmptyState
                 icon={<Receipt size={32} />}
-                texto="Notas de crédito próximamente"
-                sub="Las solicitudes de notas de crédito aprobadas para este cliente aparecerán aquí."
+                texto="Notas de crédito y saldos a favor"
+                sub="Aquí aparecerán las notas de crédito pendientes de aplicar contra facturas de este cliente."
                 comingSoon
               />
             </div>
@@ -601,43 +610,16 @@ export default function FichaCliente({
 
         {/* ── TAB: SOLICITUDES ─────────────────────────────────── */}
         {tab === 'Solicitudes' && (
-          <div className="max-w-2xl">
-            {solicitudes.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                <EmptyState
-                  icon={<AlertTriangle size={32} />}
-                  texto="No hay solicitudes registradas para este cliente."
-                  sub="Las solicitudes de aumento de crédito, excepciones y notas de crédito aparecerán aquí."
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {solicitudes.map((s: any) => (
-                  <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[13px] font-bold text-gray-700">{s.tipo?.replace(/_/g, ' ')}</p>
-                        <p className="text-[12px] text-gray-500 mt-0.5">{s.justificacion}</p>
-                        <p className="text-[11px] text-gray-400 mt-1">{fmtFechaHora(s.created_at)}</p>
-                      </div>
-                      <span
-                        className="flex-shrink-0 text-[11px] font-bold rounded-full px-2.5 py-1"
-                        style={
-                          s.estado === 'APROBADA'    ? { backgroundColor: '#dcfce7', color: '#15803d' } :
-                          s.estado === 'RECHAZADA'   ? { backgroundColor: '#fee2e2', color: '#dc2626' } :
-                          s.estado === 'EN_REVISION' ? { backgroundColor: '#e0f2fe', color: '#0369a1' } :
-                          { backgroundColor: '#fef9c3', color: '#a16207' }
-                        }
-                      >
-                        {s.estado}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <TabSolicitudes
+            solicitudes   = {solicitudes}
+            clienteCod    = {cartera.cliente_cod}
+            clienteNombre = {cartera.cliente_nombre}
+            limiteActual  = {maestro?.limite_credito ?? 0}
+            esCoordinador = {esCoordinador}
+            userEmail     = {userEmail}
+            onToast       = {showToast}
+            onRefresh     = {() => router.refresh()}
+          />
         )}
 
       </div>
@@ -1282,7 +1264,7 @@ function Chip({ label, valor, bg, color }: { label: string; valor: string; bg?: 
   )
 }
 
-function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
+function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
   return (
     <th
       className="px-4 py-3 font-semibold text-gray-500 text-[11px] uppercase tracking-wider"
@@ -1726,7 +1708,7 @@ function ModalRecordatorio({ factura, clienteNombre, clienteCod, onClose, onSucc
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// TAB 4 — GESTIONES
+// SHARED — colores de tipo de gestión
 // ══════════════════════════════════════════════════════════════════════
 const TIPO_COLORES: Record<string, { bg: string; text: string }> = {
   'Llamada':  { bg: '#e0f2fe', text: '#0369a1' },
@@ -1734,6 +1716,7 @@ const TIPO_COLORES: Record<string, { bg: string; text: string }> = {
   'WhatsApp': { bg: '#dcfce7', text: '#15803d' },
   'Visita':   { bg: '#fef9c3', text: '#a16207' },
   'CORREO':   { bg: '#f3e8ff', text: '#7c3aed' },
+  'Otras':    { bg: '#f1f5f9', text: '#64748b' },
 }
 
 const TIPO_ICONOS: Record<string, React.ReactNode> = {
@@ -1744,36 +1727,161 @@ const TIPO_ICONOS: Record<string, React.ReactNode> = {
   'CORREO':   <Mail        size={13} />,
 }
 
+// ── Modal Editar Gestión ──────────────────────────────────────────────
+function ModalEditarGestion({ gestion, onClose, onSuccess }: {
+  gestion:   Gestion
+  onClose:   () => void
+  onSuccess: () => void
+}) {
+  const [tipo,      setTipo]      = useState(gestion.tipo)
+  const [resultado, setResultado] = useState(gestion.resultado)
+  const [nota,      setNota]      = useState(gestion.nota ?? '')
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
+
+  const TIPOS     = ['Llamada', 'Email', 'WhatsApp', 'Visita', 'Otras']
+  const RESULTADOS = ['Promesa OK', 'No contestó', 'No ubicado', 'Pagó', 'Email enviado', 'Pendiente', 'Aceptó convenio', 'Llamar más tarde']
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nota.trim()) { setError('La nota es obligatoria'); return }
+    setLoading(true); setError('')
+    const res = await fetch('/api/clientes/gestiones', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: gestion.id, tipo, resultado, nota }),
+    })
+    setLoading(false)
+    if (res.ok) onSuccess()
+    else { const d = await res.json(); setError(d.error ?? 'Error al guardar') }
+  }
+
+  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 className="text-[15px] font-bold text-gray-900">Editar gestión</h2>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={guardar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tipo</label>
+            <select value={tipo} onChange={e => setTipo(e.target.value)} className={inputCls}>
+              {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Resultado</label>
+            <select value={resultado} onChange={e => setResultado(e.target.value)} className={inputCls}>
+              {RESULTADOS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Nota</label>
+          <textarea value={nota} onChange={e => setNota(e.target.value)} rows={3}
+            className={inputCls + ' resize-none'} placeholder="Descripción de la gestión..." />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+            style={{ backgroundColor: '#009ee3' }}>
+            {loading ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB 4 — GESTIONES
+// ══════════════════════════════════════════════════════════════════════
 function TabGestiones({
   gestiones,
+  userEmail,
+  esCoordinador,
   onNuevaGestion,
+  onToast,
+  onRefresh,
 }: {
   gestiones:      Gestion[]
+  userEmail:      string
+  esCoordinador:  boolean
   onNuevaGestion: () => void
+  onToast:        (msg: string) => void
+  onRefresh:      () => void
 }) {
+  const hoy = hoyISO()
   const [filtroTipo,      setFiltroTipo]      = useState('Todos')
   const [filtroResultado, setFiltroResultado] = useState('Todos')
+  const [filtroPeriodo,   setFiltroPeriodo]   = useState('Todo')
   const [busqueda,        setBusqueda]        = useState('')
+  const [visibles,        setVisibles]        = useState(10)
+  const [editando,        setEditando]        = useState<Gestion | null>(null)
+  const [loadingDel,      setLoadingDel]      = useState<string | null>(null)
 
-  // KPIs
-  const total      = gestiones.length
-  const ultima     = gestiones[0]  // ya vienen ordenadas desc por fecha
-  const porResultado = useMemo(() => {
-    const m: Record<string, number> = {}
-    gestiones.forEach(g => { m[g.resultado] = (m[g.resultado] ?? 0) + 1 })
-    return m
-  }, [gestiones])
-  const resultadoTop = Object.entries(porResultado).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+  // Filtro de permisos: analista solo ve sus gestiones
+  const visiblesBase = useMemo(() =>
+    esCoordinador ? gestiones.filter(g => g.activo !== false)
+                  : gestiones.filter(g => g.activo !== false && g.analista_email === userEmail),
+    [gestiones, esCoordinador, userEmail]
+  )
 
-  const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(gestiones.map(g => g.tipo)))], [gestiones])
-  const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(gestiones.map(g => g.resultado)))], [gestiones])
+  // Filtro de período
+  function enPeriodo(fecha: string): boolean {
+    if (filtroPeriodo === 'Todo') return true
+    const diff = Math.floor((new Date(hoy).getTime() - new Date(fecha).getTime()) / 86400000)
+    if (filtroPeriodo === 'Hoy')         return diff === 0
+    if (filtroPeriodo === 'Esta semana') return diff >= 0 && diff <= 6
+    if (filtroPeriodo === 'Este mes')    return diff >= 0 && diff <= 30
+    return true
+  }
 
-  const filtradas = useMemo(() => gestiones.filter(g => {
-    if (filtroTipo !== 'Todos'      && g.tipo      !== filtroTipo)      return false
+  const filtradas = useMemo(() => visiblesBase.filter(g => {
+    if (filtroTipo      !== 'Todos' && g.tipo      !== filtroTipo)      return false
     if (filtroResultado !== 'Todos' && g.resultado !== filtroResultado) return false
+    if (!enPeriodo(g.fecha))                                            return false
     if (busqueda && !g.nota?.toLowerCase().includes(busqueda.toLowerCase())) return false
     return true
-  }), [gestiones, filtroTipo, filtroResultado, busqueda])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [visiblesBase, filtroTipo, filtroResultado, filtroPeriodo, busqueda, hoy])
+
+  const mostradas = filtradas.slice(0, visibles)
+
+  // KPIs del total visible (respeta permisos)
+  const total         = visiblesBase.length
+  const ultima        = visiblesBase[0]
+  const resultadoTop  = useMemo(() => {
+    const m: Record<string, number> = {}
+    visiblesBase.forEach(g => { m[g.resultado] = (m[g.resultado] ?? 0) + 1 })
+    return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+  }, [visiblesBase])
+
+  const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.tipo)))], [visiblesBase])
+  const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.resultado)))], [visiblesBase])
+
+  async function eliminar(id: string) {
+    if (!window.confirm('¿Eliminar esta gestión? Esta acción no se puede deshacer.')) return
+    setLoadingDel(id)
+    const res = await fetch('/api/clientes/gestiones', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setLoadingDel(null)
+    if (res.ok) { onToast('Gestión eliminada'); onRefresh() }
+    else { const d = await res.json(); onToast(d.error ?? 'Error al eliminar') }
+  }
+
+  const hayFiltros = filtroTipo !== 'Todos' || filtroResultado !== 'Todos' || filtroPeriodo !== 'Todo' || !!busqueda
 
   return (
     <div className="space-y-4">
@@ -1782,7 +1890,9 @@ function TabGestiones({
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex flex-wrap gap-6">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total gestiones</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              {esCoordinador ? 'Total gestiones' : 'Mis gestiones'}
+            </p>
             <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
           </div>
           <Divider />
@@ -1797,7 +1907,7 @@ function TabGestiones({
           </div>
           <Divider />
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resultado más frecuente</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resultado frecuente</p>
             {resultadoTop !== '—' ? (
               <span className="inline-block text-[12px] font-bold rounded-full px-2.5 py-0.5 mt-0.5"
                 style={{
@@ -1813,13 +1923,13 @@ function TabGestiones({
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Por tipo</p>
             <div className="flex gap-2 mt-0.5 flex-wrap">
               {Object.entries(
-                gestiones.reduce<Record<string, number>>((acc, g) => { acc[g.tipo] = (acc[g.tipo] ?? 0) + 1; return acc }, {})
-              ).map(([tipo, cnt]) => {
-                const sty = TIPO_COLORES[tipo] ?? { bg: '#f1f5f9', text: '#64748b' }
+                visiblesBase.reduce<Record<string, number>>((acc, g) => { acc[g.tipo] = (acc[g.tipo] ?? 0) + 1; return acc }, {})
+              ).map(([t, cnt]) => {
+                const sty = TIPO_COLORES[t] ?? { bg: '#f1f5f9', text: '#64748b' }
                 return (
-                  <span key={tipo} className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                  <span key={t} className="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2 py-0.5"
                     style={{ backgroundColor: sty.bg, color: sty.text }}>
-                    {TIPO_ICONOS[tipo] && <span className="inline-flex mr-1">{TIPO_ICONOS[tipo]}</span>}
+                    {TIPO_ICONOS[t]}
                     {cnt}
                   </span>
                 )
@@ -1839,37 +1949,33 @@ function TabGestiones({
 
       {/* ── Fila 2: Filtros ──────────────────────────────────── */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1" style={{ minWidth: '180px', maxWidth: '280px' }}>
+        <div className="relative" style={{ minWidth: '180px', maxWidth: '240px', flex: '1' }}>
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
+            onChange={e => { setBusqueda(e.target.value); setVisibles(10) }}
             placeholder="Buscar en notas..."
-            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition"
+            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:border-blue-300 transition"
           />
         </div>
-        <select
-          value={filtroTipo}
-          onChange={e => setFiltroTipo(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white"
-        >
+        <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setVisibles(10) }}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
           {tiposUnicos.map(t => <option key={t} value={t}>{t === 'Todos' ? 'Todos los tipos' : t}</option>)}
         </select>
-        <select
-          value={filtroResultado}
-          onChange={e => setFiltroResultado(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white"
-        >
+        <select value={filtroResultado} onChange={e => { setFiltroResultado(e.target.value); setVisibles(10) }}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
           {resultadosUnicos.map(r => <option key={r} value={r}>{r === 'Todos' ? 'Todos los resultados' : r}</option>)}
         </select>
-        {(filtroTipo !== 'Todos' || filtroResultado !== 'Todos' || busqueda) && (
-          <button
-            type="button"
-            onClick={() => { setFiltroTipo('Todos'); setFiltroResultado('Todos'); setBusqueda('') }}
-            className="text-[12px] font-semibold text-blue-500 hover:text-blue-700 transition"
-          >
-            Limpiar filtros
+        <select value={filtroPeriodo} onChange={e => { setFiltroPeriodo(e.target.value); setVisibles(10) }}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
+          {['Todo', 'Hoy', 'Esta semana', 'Este mes'].map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        {hayFiltros && (
+          <button type="button"
+            onClick={() => { setFiltroTipo('Todos'); setFiltroResultado('Todos'); setFiltroPeriodo('Todo'); setBusqueda(''); setVisibles(10) }}
+            className="text-[12px] font-semibold text-blue-500 hover:text-blue-700 transition">
+            Limpiar
           </button>
         )}
         {filtradas.length !== total && (
@@ -1880,69 +1986,113 @@ function TabGestiones({
       {/* ── Fila 3: Tabla ────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {filtradas.length === 0 ? (
-          <EmptyState icon={<ClipboardList size={32} />} texto={total === 0 ? 'Sin gestiones registradas para este cliente.' : 'No hay gestiones con esos filtros.'} />
+          <EmptyState icon={<ClipboardList size={32} />}
+            texto={total === 0 ? 'Sin gestiones registradas.' : 'No hay gestiones con esos filtros.'} />
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <Th>Fecha</Th>
-                <Th>Tipo</Th>
-                <Th>Resultado</Th>
-                <Th>Nota</Th>
-                <Th>Analista</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtradas.map((g, i) => {
-                const resSty  = RESULTADO_COLORS[g.resultado] ?? { bg: '#f1f5f9', text: '#64748b' }
-                const tipoSty = TIPO_COLORES[g.tipo]          ?? { bg: '#f1f5f9', text: '#64748b' }
-                return (
-                  <tr key={g.id}
-                    className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
-                    style={{ backgroundColor: i % 2 === 0 ? undefined : '#fafbfc' }}
-                  >
-                    {/* Fecha + hora */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(g.fecha)}</p>
-                      <p className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</p>
-                    </td>
-                    {/* Tipo */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
-                        {TIPO_ICONOS[g.tipo]}
-                        {g.tipo}
-                      </span>
-                    </td>
-                    {/* Resultado */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="inline-block text-[11px] font-bold rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: resSty.bg, color: resSty.text }}>
-                        {g.resultado}
-                      </span>
-                    </td>
-                    {/* Nota */}
-                    <td className="px-4 py-3" style={{ maxWidth: '340px' }}>
-                      <p className="text-[13px] text-gray-600 leading-snug line-clamp-2">
-                        {g.nota || <span className="text-gray-300 italic">Sin nota</span>}
-                      </p>
-                      {g.promesa_fecha && (
-                        <p className="text-[11px] font-semibold mt-0.5" style={{ color: '#0369a1' }}>
-                          Promesa: {fmtFecha(g.promesa_fecha)}
+          <>
+            <table className="w-full">
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <Th>Fecha</Th>
+                  <Th>Tipo</Th>
+                  <Th>Resultado</Th>
+                  <Th>Nota</Th>
+                  <Th>Analista</Th>
+                  <Th></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {mostradas.map((g, i) => {
+                  const resSty  = RESULTADO_COLORS[g.resultado] ?? { bg: '#f1f5f9', text: '#64748b' }
+                  const tipoSty = TIPO_COLORES[g.tipo]          ?? { bg: '#f1f5f9', text: '#64748b' }
+                  // Puede editar: propio analista o coordinador
+                  const puedeEditar  = esCoordinador || g.analista_email === userEmail
+                  const puedeEliminar = esCoordinador
+                  return (
+                    <tr key={g.id}
+                      className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
+                      style={{ backgroundColor: i % 2 === 0 ? undefined : '#fafbfc' }}
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(g.fecha)}</p>
+                        <p className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</p>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
+                          style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
+                          {TIPO_ICONOS[g.tipo]}
+                          {g.tipo}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-block text-[11px] font-bold rounded-full px-2.5 py-1"
+                          style={{ backgroundColor: resSty.bg, color: resSty.text }}>
+                          {g.resultado}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3" style={{ maxWidth: '300px' }}>
+                        <p className="text-[13px] text-gray-600 leading-snug line-clamp-2">
+                          {g.nota || <span className="text-gray-300 italic">Sin nota</span>}
                         </p>
-                      )}
-                    </td>
-                    {/* Analista */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="text-[12px] text-gray-500">{g.analista_email?.split('@')[0] ?? '—'}</p>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                        {g.promesa_fecha && (
+                          <p className="text-[11px] font-semibold mt-0.5" style={{ color: '#0369a1' }}>
+                            Promesa: {fmtFecha(g.promesa_fecha)}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <p className="text-[12px] text-gray-500">{g.analista_email?.split('@')[0] ?? '—'}</p>
+                      </td>
+                      {/* Acciones */}
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <div className="flex gap-1.5">
+                          {puedeEditar && (
+                            <button type="button" onClick={() => setEditando(g)}
+                              className="text-[11px] font-semibold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 transition">
+                              Editar
+                            </button>
+                          )}
+                          {puedeEliminar && (
+                            <button type="button"
+                              onClick={() => eliminar(g.id)}
+                              disabled={loadingDel === g.id}
+                              className="text-[11px] font-semibold px-2 py-1 rounded-md border border-red-100 text-red-400 hover:bg-red-50 transition disabled:opacity-50"
+                              title="Solo coordinador puede eliminar">
+                              {loadingDel === g.id ? '...' : 'Eliminar'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {/* Ver más */}
+            {filtradas.length > visibles && (
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
+                <span className="text-[12px] text-gray-400">
+                  Mostrando {mostradas.length} de {filtradas.length}
+                </span>
+                <button type="button" onClick={() => setVisibles(v => v + 10)}
+                  className="text-[12px] font-bold text-blue-500 hover:text-blue-700 transition">
+                  Ver más ↓
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* Modal editar */}
+      {editando && (
+        <ModalEditarGestion
+          gestion    = {editando}
+          onClose    = {() => setEditando(null)}
+          onSuccess  = {() => { setEditando(null); onToast('Gestión actualizada'); onRefresh() }}
+        />
+      )}
     </div>
   )
 }
@@ -1950,38 +2100,259 @@ function TabGestiones({
 // ══════════════════════════════════════════════════════════════════════
 // TAB 5 — PROMESAS
 // ══════════════════════════════════════════════════════════════════════
+
+// ── Modal Cambiar Estado Promesa ──────────────────────────────────────
+function ModalCambiarEstado({ promesa, onClose, onSuccess }: {
+  promesa:   Promesa
+  onClose:   () => void
+  onSuccess: () => void
+}) {
+  const [estado,     setEstado]     = useState(promesa.estado)
+  const [montoReal,  setMontoReal]  = useState('')
+  const [motivo,     setMotivo]     = useState('')
+  const [loading,    setLoading]    = useState(false)
+  const [error,      setError]      = useState('')
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setError('')
+    const res = await fetch('/api/clientes/promesas', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id:     promesa.id,
+        estado,
+        monto_real:  montoReal ? parseFloat(montoReal.replace(/\D/g, '')) : undefined,
+        motivo:      motivo || undefined,
+      }),
+    })
+    setLoading(false)
+    if (res.ok) onSuccess()
+    else { const d = await res.json(); setError(d.error ?? 'Error') }
+  }
+
+  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">Cambiar estado de promesa</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">{fmtCRC2(promesa.monto)} · Prometido: {fmtFecha(promesa.fecha_promesa)}</p>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={guardar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Nuevo estado</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['PENDIENTE', 'CUMPLIDA', 'INCUMPLIDA', 'ABONO_PARCIAL'] as const).map(est => {
+              const sty = PROMESA_COLORS[est] ?? { bg: '#f1f5f9', text: '#64748b', icon: null }
+              const active = estado === est
+              return (
+                <button key={est} type="button" onClick={() => setEstado(est)}
+                  className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[12px] font-bold transition"
+                  style={active
+                    ? { backgroundColor: sty.bg, color: sty.text, borderColor: sty.text }
+                    : { borderColor: '#e2e8f0', color: '#94a3b8' }
+                  }>
+                  {sty.icon}{est.replace(/_/g, ' ')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {estado === 'CUMPLIDA' && (
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Monto real pagado (₡)</label>
+            <input type="text" value={montoReal} onChange={e => setMontoReal(e.target.value)}
+              className={inputCls} placeholder="Ej: 50000000" />
+          </div>
+        )}
+        {(estado === 'INCUMPLIDA' || estado === 'ABONO_PARCIAL') && (
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
+              {estado === 'ABONO_PARCIAL' ? 'Nota del abono parcial' : 'Motivo (opcional)'}
+            </label>
+            <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)}
+              className={inputCls} placeholder={estado === 'ABONO_PARCIAL' ? 'Ej: Pagó ₡20.000.000 a cuenta' : 'Ej: No tenía fondos'} />
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+            style={{ backgroundColor: '#009ee3' }}>
+            {loading ? 'Guardando...' : 'Confirmar'}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
+// ── Modal Registrar Promesa ───────────────────────────────────────────
+function ModalRegistrarPromesa({ clienteCod, contribuyente, onClose, onSuccess }: {
+  clienteCod:    string
+  contribuyente: string
+  onClose:       () => void
+  onSuccess:     () => void
+}) {
+  const [monto,  setMonto]  = useState('')
+  const [fecha,  setFecha]  = useState('')
+  const [notas,  setNotas]  = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault()
+    const montoNum = parseFloat(monto.replace(/\D/g, ''))
+    if (!montoNum || montoNum <= 0) { setError('El monto es obligatorio'); return }
+    if (!fecha)                      { setError('La fecha es obligatoria');  return }
+    setLoading(true); setError('')
+    const res = await fetch('/api/clientes/promesas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cliente_cod: clienteCod, contribuyente, monto: montoNum, fecha_promesa: fecha, notas }),
+    })
+    setLoading(false)
+    if (res.ok) onSuccess()
+    else { const d = await res.json(); setError(d.error ?? 'Error') }
+  }
+
+  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 className="text-[15px] font-bold text-gray-900">Registrar promesa de pago</h2>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={guardar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Monto prometido (₡)</label>
+          <input type="text" value={monto} onChange={e => setMonto(e.target.value)}
+            className={inputCls} placeholder="Ej: 50000000" autoFocus />
+          {monto && !isNaN(parseFloat(monto.replace(/\D/g, ''))) && (
+            <p className="text-[11px] text-blue-500 mt-1">{fmtCRC2(parseFloat(monto.replace(/\D/g, '')))}</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Fecha de pago prometida</label>
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Nota (opcional)</label>
+          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2}
+            className={inputCls + ' resize-none'} placeholder="Acuerdo alcanzado, condiciones, etc." />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+            style={{ backgroundColor: '#009ee3' }}>
+            {loading ? 'Guardando...' : 'Guardar promesa'}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
 function TabPromesas({
   promesas,
+  clienteCod,
+  contribuyente,
+  esCoordinador,
   onNuevaGestion,
+  onToast,
+  onRefresh,
 }: {
   promesas:       Promesa[]
+  clienteCod:     string
+  contribuyente:  string
+  esCoordinador:  boolean
   onNuevaGestion: () => void
+  onToast:        (msg: string) => void
+  onRefresh:      () => void
 }) {
   const hoy = hoyISO()
-  const [filtroEstado, setFiltroEstado] = useState<string>('Todos')
+  const [filtroEstado,    setFiltroEstado]    = useState<string>('Todos')
+  const [modalEstado,     setModalEstado]     = useState<Promesa | null>(null)
+  const [modalPromesa,    setModalPromesa]    = useState(false)
+  const [loadingDel,      setLoadingDel]      = useState<string | null>(null)
+  const [autoRotaIds,     setAutoRotaIds]     = useState<Set<string>>(new Set())
 
-  // KPIs
-  const total      = promesas.length
-  const pendientes = promesas.filter(p => p.estado === 'PENDIENTE').length
-  const cumplidas  = promesas.filter(p => p.estado === 'CUMPLIDA').length
+  // ── Auto-ROTA client-side: promesas pendientes con fecha < hoy ────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => {
+    const vencidas = promesas.filter(
+      p => p.activo !== false && p.estado === 'PENDIENTE' && p.fecha_promesa && p.fecha_promesa < hoy
+    )
+    if (vencidas.length === 0) return
+    const ids = new Set(vencidas.map(p => p.id))
+    setAutoRotaIds(ids)
+    // Marcar como INCUMPLIDA en background (sin bloquear render)
+    vencidas.forEach(p => {
+      fetch('/api/clientes/promesas', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, estado: 'INCUMPLIDA', motivo: 'Vencida automáticamente' }),
+      }).catch(() => {/* silencioso */})
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])  // solo al montar
+
+  // KPIs (usa estado visual: si autoRota → cuenta como incumplida)
+  function estadoEfectivo(p: Promesa): string {
+    return autoRotaIds.has(p.id) ? 'INCUMPLIDA' : p.estado
+  }
+
+  const activas    = promesas.filter(p => p.activo !== false)
+  const total      = activas.length
+  const pendientes = activas.filter(p => estadoEfectivo(p) === 'PENDIENTE').length
+  const cumplidas  = activas.filter(p => estadoEfectivo(p) === 'CUMPLIDA').length
+  const incumplidas = activas.filter(p => estadoEfectivo(p) === 'INCUMPLIDA').length
   const pctCumplimiento = total > 0 ? Math.round((cumplidas / total) * 100) : 0
-  const montoPendiente  = promesas.filter(p => p.estado === 'PENDIENTE').reduce((s, p) => s + (p.monto || 0), 0)
+  const montoPendiente  = activas.filter(p => estadoEfectivo(p) === 'PENDIENTE').reduce((s, p) => s + (p.monto || 0), 0)
 
   const ESTADOS_FILTRO = ['Todos', 'PENDIENTE', 'CUMPLIDA', 'INCUMPLIDA', 'ABONO_PARCIAL']
 
-  const filtradas = promesas.filter(p => filtroEstado === 'Todos' || p.estado === filtroEstado)
+  const filtradas = activas.filter(p =>
+    filtroEstado === 'Todos' || estadoEfectivo(p) === filtroEstado
+  )
 
-  // Identificar promesas que vencen hoy o ya vencieron (pendientes)
-  function urgenciaPromesa(p: Promesa): 'vence_hoy' | 'vencida' | 'proxima' | 'normal' {
-    if (p.estado !== 'PENDIENTE') return 'normal'
-    if (!p.fecha_promesa) return 'normal'
-    const diff = Math.floor(
-      (new Date(hoy).getTime() - new Date(p.fecha_promesa).getTime()) / 86400000
-    )
-    if (diff === 0) return 'vence_hoy'
-    if (diff > 0)   return 'vencida'
-    if (diff >= -3) return 'proxima'
-    return 'normal'
+  // Días restantes o vencidos
+  function diasInfo(p: Promesa): { diff: number; label: string; color: string } {
+    if (!p.fecha_promesa) return { diff: 0, label: '—', color: '#94a3b8' }
+    const diff = Math.floor((new Date(p.fecha_promesa).getTime() - new Date(hoy).getTime()) / 86400000)
+    if (diff > 0)  return { diff, label: `en ${diff}d`,        color: diff <= 3 ? '#f59e0b' : '#22c55e' }
+    if (diff === 0) return { diff, label: 'hoy',               color: '#f97316' }
+    return              { diff, label: `vencida ${-diff}d`,    color: '#dc2626' }
+  }
+
+  async function eliminar(id: string) {
+    if (!window.confirm('¿Eliminar esta promesa?')) return
+    setLoadingDel(id)
+    const res = await fetch('/api/clientes/promesas', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    setLoadingDel(null)
+    if (res.ok) { onToast('Promesa eliminada'); onRefresh() }
+    else { const d = await res.json(); onToast(d.error ?? 'Error al eliminar') }
   }
 
   return (
@@ -1989,93 +2360,71 @@ function TabPromesas({
 
       {/* ── Fila 1: KPIs ────────────────────────────────────── */}
       <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
-
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total promesas</p>
           <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
         </div>
-
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pendientes</p>
           <p className="text-[22px] font-black tabular-nums leading-tight"
-            style={{ color: pendientes > 0 ? '#f59e0b' : '#94a3b8' }}>
-            {pendientes}
-          </p>
+            style={{ color: pendientes > 0 ? '#f59e0b' : '#94a3b8' }}>{pendientes}</p>
           {montoPendiente > 0 && (
-            <p className="text-[11px] font-semibold tabular-nums mt-0.5 text-gray-500">{fmtCRC(montoPendiente)}</p>
+            <p className="text-[11px] font-semibold tabular-nums mt-0.5 text-gray-500">{fmtCRC2(montoPendiente)}</p>
           )}
         </div>
-
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Cumplimiento</p>
           <p className="text-[22px] font-black tabular-nums leading-tight"
             style={{ color: pctCumplimiento >= 70 ? '#16a34a' : pctCumplimiento >= 40 ? '#f59e0b' : '#dc2626' }}>
             {total > 0 ? `${pctCumplimiento}%` : '—'}
           </p>
-          {total > 0 && (
-            <p className="text-[11px] text-gray-400 mt-0.5">{cumplidas} de {total} cumplidas</p>
-          )}
+          {total > 0 && <p className="text-[11px] text-gray-400 mt-0.5">{cumplidas} de {total} cumplidas</p>}
         </div>
-
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Incumplidas</p>
-          {(() => {
-            const inc = promesas.filter(p => p.estado === 'INCUMPLIDA').length
-            return (
-              <p className="text-[22px] font-black tabular-nums leading-tight"
-                style={{ color: inc > 0 ? '#dc2626' : '#94a3b8' }}>
-                {inc}
-              </p>
-            )
-          })()}
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: incumplidas > 0 ? '#dc2626' : '#94a3b8' }}>{incumplidas}</p>
         </div>
       </div>
 
-      {/* ── Fila 2: Filtro de estado + botón ────────────────── */}
+      {/* ── Fila 2: Filtros + botones ────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap flex-1">
           {ESTADOS_FILTRO.map(est => {
             const sty = est !== 'Todos' ? (PROMESA_COLORS[est] ?? { bg: '#f1f5f9', text: '#64748b', icon: null }) : null
             const active = filtroEstado === est
             return (
-              <button
-                key={est}
-                type="button"
-                onClick={() => setFiltroEstado(est)}
+              <button key={est} type="button" onClick={() => setFiltroEstado(est)}
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition"
                 style={active
                   ? { backgroundColor: sty?.bg ?? '#e0f2fe', color: sty?.text ?? '#0369a1', boxShadow: '0 0 0 2px ' + (sty?.text ?? '#0369a1') + '40' }
                   : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
-                }
-              >
+                }>
                 {sty?.icon}
                 {est === 'Todos' ? 'Todas' : est.replace(/_/g, ' ')}
-                {est !== 'Todos' && (
-                  <span className="text-[10px]">
-                    ({promesas.filter(p => p.estado === est).length})
-                  </span>
-                )}
+                {est !== 'Todos' && <span className="text-[10px]">({activas.filter(p => estadoEfectivo(p) === est).length})</span>}
               </button>
             )
           })}
         </div>
-        <button
-          type="button"
-          onClick={onNuevaGestion}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 ml-auto flex-shrink-0"
-          style={{ backgroundColor: '#009ee3' }}
-        >
-          <Plus size={14} /> Registrar gestión
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setModalPromesa(true)}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90 flex-shrink-0"
+            style={{ backgroundColor: '#003B5C', color: 'white' }}>
+            <Plus size={14} /> Nueva promesa
+          </button>
+          <button type="button" onClick={onNuevaGestion}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition flex-shrink-0">
+            <ClipboardList size={14} /> Registrar gestión
+          </button>
+        </div>
       </div>
 
-      {/* ── Fila 3: Lista de promesas ────────────────────────── */}
+      {/* ── Fila 3: Tabla ────────────────────────────────────── */}
       {filtradas.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <EmptyState
-            icon={<Handshake size={32} />}
-            texto={total === 0 ? 'Sin promesas de pago registradas.' : 'No hay promesas con ese estado.'}
-          />
+          <EmptyState icon={<Handshake size={32} />}
+            texto={total === 0 ? 'Sin promesas de pago registradas.' : 'No hay promesas con ese estado.'} />
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -2083,21 +2432,23 @@ function TabPromesas({
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <Th>Monto</Th>
-                <Th>Fecha promesa</Th>
+                <Th>Fecha prometida</Th>
                 <Th>Estado</Th>
-                <Th>Registrada</Th>
                 <Th>Notas</Th>
+                <Th>Registrada</Th>
+                <Th></Th>
               </tr>
             </thead>
             <tbody>
               {filtradas.map((p, i) => {
-                const sty  = PROMESA_COLORS[p.estado] ?? { bg: '#f1f5f9', text: '#64748b', icon: <Circle size={12} /> }
-                const urg  = urgenciaPromesa(p)
-                const rowBg =
-                  urg === 'vence_hoy' ? '#fffbeb' :
-                  urg === 'vencida'   ? '#fff5f5' :
-                  urg === 'proxima'   ? '#f0fdf4' :
-                  i % 2 === 1         ? '#fafbfc'  : undefined
+                const estEfect = estadoEfectivo(p)
+                const sty    = PROMESA_COLORS[estEfect] ?? { bg: '#f1f5f9', text: '#64748b', icon: <Circle size={12} /> }
+                const dias   = diasInfo(p)
+                const rowBg  =
+                  (estEfect === 'PENDIENTE' && dias.diff === 0)  ? '#fffbeb' :
+                  (estEfect === 'PENDIENTE' && dias.diff < 0)    ? '#fff5f5' :
+                  (estEfect === 'PENDIENTE' && dias.diff <= 3)   ? '#f0fdf4' :
+                  i % 2 === 1 ? '#fafbfc' : undefined
                 return (
                   <tr key={p.id}
                     className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
@@ -2105,39 +2456,54 @@ function TabPromesas({
                   >
                     {/* Monto */}
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="text-[14px] font-black tabular-nums text-gray-800">{fmtCRC(p.monto)}</p>
-                      {urg === 'vence_hoy' && (
-                        <p className="text-[10px] font-bold uppercase" style={{ color: '#c2410c' }}>Vence hoy</p>
-                      )}
-                      {urg === 'vencida' && (
-                        <p className="text-[10px] font-bold uppercase" style={{ color: '#dc2626' }}>Vencida</p>
-                      )}
-                      {urg === 'proxima' && (
-                        <p className="text-[10px] font-bold uppercase" style={{ color: '#16a34a' }}>Próxima</p>
-                      )}
+                      <p className="text-[14px] font-black tabular-nums text-gray-800">{fmtCRC2(p.monto)}</p>
                     </td>
-                    {/* Fecha promesa */}
+                    {/* Fecha + días */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(p.fecha_promesa)}</p>
+                      {estEfect === 'PENDIENTE' && (
+                        <p className="text-[11px] font-bold" style={{ color: dias.color }}>{dias.label}</p>
+                      )}
                     </td>
                     {/* Estado */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
                         style={{ backgroundColor: sty.bg, color: sty.text }}>
                         {sty.icon}
-                        {p.estado.replace(/_/g, ' ')}
+                        {estEfect.replace(/_/g, ' ')}
                       </span>
+                      {autoRotaIds.has(p.id) && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">Auto-marcada</p>
+                      )}
                     </td>
-                    {/* Fecha creación */}
+                    {/* Notas */}
+                    <td className="px-4 py-3" style={{ maxWidth: '220px' }}>
+                      <p className="text-[12px] text-gray-500 italic line-clamp-2">
+                        {p.notas || <span className="text-gray-300">Sin notas</span>}
+                      </p>
+                    </td>
+                    {/* Registrada */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-[12px] text-gray-400">{fmtFecha(p.fecha_creacion)}</p>
                       <p className="text-[11px] text-gray-400">{p.analista_email?.split('@')[0]}</p>
                     </td>
-                    {/* Notas */}
-                    <td className="px-4 py-3" style={{ maxWidth: '260px' }}>
-                      <p className="text-[12px] text-gray-500 italic line-clamp-2">
-                        {p.notas || <span className="text-gray-300">Sin notas</span>}
-                      </p>
+                    {/* Acciones */}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => setModalEstado(p)}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
+                          title="Cambiar estado">
+                          Estado
+                        </button>
+                        {esCoordinador && (
+                          <button type="button" onClick={() => eliminar(p.id)}
+                            disabled={loadingDel === p.id}
+                            className="text-[11px] font-semibold px-2 py-1 rounded-md border border-red-100 text-red-400 hover:bg-red-50 transition disabled:opacity-50"
+                            title="Solo coordinador puede eliminar">
+                            {loadingDel === p.id ? '...' : 'Eliminar'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -2145,6 +2511,379 @@ function TabPromesas({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Modales */}
+      {modalEstado && (
+        <ModalCambiarEstado
+          promesa   = {modalEstado}
+          onClose   = {() => setModalEstado(null)}
+          onSuccess = {() => { setModalEstado(null); onToast('Estado actualizado'); onRefresh() }}
+        />
+      )}
+      {modalPromesa && (
+        <ModalRegistrarPromesa
+          clienteCod    = {clienteCod}
+          contribuyente = {contribuyente}
+          onClose       = {() => setModalPromesa(false)}
+          onSuccess     = {() => { setModalPromesa(false); onToast('Promesa registrada'); onRefresh() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB 8 — SOLICITUDES
+// ══════════════════════════════════════════════════════════════════════
+
+const TIPO_SOL_LABELS: Record<string, string> = {
+  AUMENTO_LIMITE:   'Aumento de límite',
+  EXCEPCION_CREDITO:'Excepción de crédito',
+  NOTA_CREDITO:     'Nota de crédito',
+  OTRA:             'Otra',
+}
+const TIPO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
+  AUMENTO_LIMITE:    { bg: '#e0f2fe', text: '#0369a1' },
+  EXCEPCION_CREDITO: { bg: '#fef9c3', text: '#a16207' },
+  NOTA_CREDITO:      { bg: '#f3e8ff', text: '#7c3aed' },
+  OTRA:              { bg: '#f1f5f9', text: '#64748b' },
+}
+const ESTADO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
+  PENDIENTE:   { bg: '#fef9c3', text: '#a16207' },
+  EN_REVISION: { bg: '#e0f2fe', text: '#0369a1' },
+  APROBADA:    { bg: '#dcfce7', text: '#15803d' },
+  RECHAZADA:   { bg: '#fee2e2', text: '#dc2626' },
+}
+
+function ModalNuevaSolicitud({ clienteCod, clienteNombre, limiteActual, onClose, onSuccess }: {
+  clienteCod:    string
+  clienteNombre: string
+  limiteActual:  number
+  onClose:       () => void
+  onSuccess:     () => void
+}) {
+  const [tipo,            setTipo]            = useState('AUMENTO_LIMITE')
+  const [justificacion,   setJustificacion]   = useState('')
+  const [montoSolicitado, setMontoSolicitado] = useState('')
+  const [loading,         setLoading]         = useState(false)
+  const [error,           setError]           = useState('')
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!justificacion.trim()) { setError('La justificación es obligatoria'); return }
+    setLoading(true); setError('')
+    const body: Record<string, unknown> = {
+      tipo, cliente_cod: clienteCod, cliente_nombre: clienteNombre, justificacion,
+      monto_actual: limiteActual > 0 ? limiteActual : undefined,
+    }
+    if (tipo === 'AUMENTO_LIMITE' && montoSolicitado) {
+      body.monto_solicitado = parseFloat(montoSolicitado.replace(/\D/g, ''))
+    }
+    const res = await fetch('/api/solicitudes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    setLoading(false)
+    if (res.ok) onSuccess()
+    else { const d = await res.json(); setError(d.error ?? 'Error al enviar') }
+  }
+
+  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div>
+          <h2 className="text-[15px] font-bold text-gray-900">Nueva solicitud</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">{clienteNombre}</p>
+        </div>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={enviar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tipo de solicitud</label>
+          <select value={tipo} onChange={e => setTipo(e.target.value)} className={inputCls}>
+            {Object.entries(TIPO_SOL_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        {tipo === 'AUMENTO_LIMITE' && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Límite actual</label>
+              <input readOnly value={limiteActual > 0 ? fmtCRC2(limiteActual) : 'Sin límite'} className={inputCls + ' bg-gray-50 text-gray-400'} />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Límite solicitado (₡)</label>
+              <input type="text" value={montoSolicitado} onChange={e => setMontoSolicitado(e.target.value)}
+                className={inputCls} placeholder="Ej: 200000000" />
+              {montoSolicitado && !isNaN(parseFloat(montoSolicitado.replace(/\D/g, ''))) && (
+                <p className="text-[11px] text-blue-500 mt-1">{fmtCRC2(parseFloat(montoSolicitado.replace(/\D/g, '')))}</p>
+              )}
+            </div>
+          </div>
+        )}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Justificación *</label>
+          <textarea value={justificacion} onChange={e => setJustificacion(e.target.value)} rows={4}
+            className={inputCls + ' resize-none'} placeholder="Explicá el motivo de la solicitud..." />
+        </div>
+        <p className="text-[10px] text-gray-400">Se notificará al coordinador automáticamente.</p>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+            style={{ backgroundColor: '#009ee3' }}>
+            {loading ? 'Enviando...' : 'Enviar solicitud'}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
+function ModalAccionSolicitud({ solicitud, accion, onClose, onSuccess }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  solicitud: any
+  accion:    'APROBAR' | 'RECHAZAR' | 'CANCELAR'
+  onClose:   () => void
+  onSuccess: () => void
+}) {
+  const [comentario, setComentario] = useState('')
+  const [loading,    setLoading]    = useState(false)
+  const [error,      setError]      = useState('')
+
+  async function confirmar(e: React.FormEvent) {
+    e.preventDefault()
+    if (accion === 'RECHAZAR' && !comentario.trim()) { setError('El comentario es obligatorio al rechazar'); return }
+    setLoading(true); setError('')
+    const res = await fetch(`/api/solicitudes/${solicitud.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion, comentario }),
+    })
+    setLoading(false)
+    if (res.ok) onSuccess()
+    else { const d = await res.json(); setError(d.error ?? 'Error') }
+  }
+
+  const LABEL = { APROBAR: 'Aprobar', RECHAZAR: 'Rechazar', CANCELAR: 'Cancelar' } as const
+  const COLOR = { APROBAR: '#16a34a', RECHAZAR: '#dc2626', CANCELAR: '#64748b' } as const
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h2 className="text-[15px] font-bold text-gray-900">{LABEL[accion]} solicitud</h2>
+        <CloseBtn onClose={onClose} />
+      </div>
+      <form onSubmit={confirmar} className="p-5 space-y-3">
+        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
+        <p className="text-[13px] text-gray-600">
+          {TIPO_SOL_LABELS[solicitud.tipo] ?? solicitud.tipo} · {solicitud.justificacion}
+        </p>
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
+            Comentario {accion === 'RECHAZAR' ? '(obligatorio)' : '(opcional)'}
+          </label>
+          <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={3}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 resize-none transition"
+            placeholder={accion === 'RECHAZAR' ? 'Motivo del rechazo...' : 'Nota adicional...'} />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60"
+            style={{ backgroundColor: COLOR[accion] }}>
+            {loading ? '...' : `Confirmar ${LABEL[accion]}`}
+          </button>
+        </div>
+      </form>
+    </ModalOverlay>
+  )
+}
+
+function TabSolicitudes({
+  solicitudes,
+  clienteCod,
+  clienteNombre,
+  limiteActual,
+  esCoordinador,
+  onToast,
+  onRefresh,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  solicitudes:   any[]
+  clienteCod:    string
+  clienteNombre: string
+  limiteActual:  number
+  esCoordinador: boolean
+  userEmail:     string
+  onToast:       (msg: string) => void
+  onRefresh:     () => void
+}) {
+  const [filtroEstado, setFiltroEstado] = useState('Todos')
+  const [modalNueva,   setModalNueva]   = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [modalAccion,  setModalAccion]  = useState<{ sol: any; accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR' } | null>(null)
+
+  const total      = solicitudes.length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pendientes = solicitudes.filter((s: any) => s.estado === 'PENDIENTE').length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const aprobadas  = solicitudes.filter((s: any) => s.estado === 'APROBADA').length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rechazadas = solicitudes.filter((s: any) => s.estado === 'RECHAZADA').length
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filtradas  = solicitudes.filter((s: any) => filtroEstado === 'Todos' || s.estado === filtroEstado)
+
+  return (
+    <div className="space-y-4">
+
+      {/* KPIs */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pendientes</p>
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: pendientes > 0 ? '#f59e0b' : '#94a3b8' }}>{pendientes}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Aprobadas</p>
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: aprobadas > 0 ? '#16a34a' : '#94a3b8' }}>{aprobadas}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Rechazadas</p>
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: rechazadas > 0 ? '#dc2626' : '#94a3b8' }}>{rechazadas}</p>
+        </div>
+      </div>
+
+      {/* Filtros + botón */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1.5 flex-wrap flex-1">
+          {['Todos', 'PENDIENTE', 'EN_REVISION', 'APROBADA', 'RECHAZADA'].map(est => {
+            const sty    = ESTADO_SOL_COLORES[est] ?? { bg: '#f1f5f9', text: '#64748b' }
+            const active = filtroEstado === est
+            return (
+              <button key={est} type="button" onClick={() => setFiltroEstado(est)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition"
+                style={active
+                  ? { backgroundColor: sty.bg, color: sty.text, boxShadow: '0 0 0 2px ' + sty.text + '40' }
+                  : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
+                }>
+                {est === 'Todos' ? 'Todas' : est.replace(/_/g, ' ')}
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {est !== 'Todos' && <span className="text-[10px]">({solicitudes.filter((s: any) => s.estado === est).length})</span>}
+              </button>
+            )
+          })}
+        </div>
+        <button type="button" onClick={() => setModalNueva(true)}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 flex-shrink-0"
+          style={{ backgroundColor: '#009ee3' }}>
+          <Plus size={14} /> Nueva solicitud
+        </button>
+      </div>
+
+      {/* Lista */}
+      {filtradas.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <EmptyState icon={<AlertTriangle size={32} />}
+            texto={total === 0 ? 'No hay solicitudes para este cliente.' : 'No hay solicitudes con ese estado.'}
+            sub="Las solicitudes de aumento de crédito, excepciones y notas de crédito aparecerán aquí." />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {filtradas.map((s: any) => {
+            const tipoSty   = TIPO_SOL_COLORES[s.tipo]   ?? { bg: '#f1f5f9', text: '#64748b' }
+            const estadoSty = ESTADO_SOL_COLORES[s.estado] ?? { bg: '#f1f5f9', text: '#64748b' }
+            return (
+              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                        style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
+                        {TIPO_SOL_LABELS[s.tipo] ?? s.tipo}
+                      </span>
+                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                        style={{ backgroundColor: estadoSty.bg, color: estadoSty.text }}>
+                        {s.estado.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    {s.tipo === 'AUMENTO_LIMITE' && s.monto_actual != null && s.monto_solicitado != null && (
+                      <p className="text-[13px] font-bold text-gray-700 mb-1">
+                        {fmtCRC2(s.monto_actual)}
+                        <span className="text-gray-400 font-normal mx-1.5">→</span>
+                        {fmtCRC2(s.monto_solicitado)} solicitado
+                      </p>
+                    )}
+                    <p className="text-[13px] text-gray-600 mb-1">{s.justificacion}</p>
+                    {(s.estado === 'APROBADA' || s.estado === 'RECHAZADA') && s.comentario_revisor && (
+                      <p className="text-[12px] mt-1 italic"
+                        style={{ color: s.estado === 'APROBADA' ? '#15803d' : '#dc2626' }}>
+                        Nota revisor: {s.comentario_revisor}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-1.5">{fmtFechaHora(s.created_at)}</p>
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    {esCoordinador && s.estado === 'PENDIENTE' && (
+                      <>
+                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'APROBAR' })}
+                          className="rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
+                          style={{ backgroundColor: '#16a34a' }}>
+                          Aprobar
+                        </button>
+                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'RECHAZAR' })}
+                          className="rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
+                          style={{ backgroundColor: '#dc2626' }}>
+                          Rechazar
+                        </button>
+                      </>
+                    )}
+                    {!esCoordinador && s.estado === 'PENDIENTE' && (
+                      <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
+                        className="rounded-lg px-3 py-1.5 text-[12px] font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {modalNueva && (
+        <ModalNuevaSolicitud
+          clienteCod    = {clienteCod}
+          clienteNombre = {clienteNombre}
+          limiteActual  = {limiteActual}
+          onClose       = {() => setModalNueva(false)}
+          onSuccess     = {() => { setModalNueva(false); onToast('Solicitud enviada al coordinador'); onRefresh() }}
+        />
+      )}
+      {modalAccion && (
+        <ModalAccionSolicitud
+          solicitud = {modalAccion.sol}
+          accion    = {modalAccion.accion}
+          onClose   = {() => setModalAccion(null)}
+          onSuccess = {() => {
+            const msg = modalAccion.accion === 'APROBAR' ? 'Solicitud aprobada'
+                      : modalAccion.accion === 'RECHAZAR' ? 'Solicitud rechazada'
+                      : 'Solicitud cancelada'
+            setModalAccion(null); onToast(msg); onRefresh()
+          }}
+        />
       )}
     </div>
   )
