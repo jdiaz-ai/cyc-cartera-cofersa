@@ -3,10 +3,12 @@ import { fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
   AlertTriangle, TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
-  Package, AlertCircle,
 } from 'lucide-react'
-import GestionRapida from '@/components/dashboard/gestion-rapida'
 import type { ClienteOpt } from '@/components/dashboard/gestion-rapida'
+import DashboardResumen from '@/components/analista/DashboardResumen'
+import CalendarioNotas from '@/components/analista/CalendarioNotas'
+import { fetchCalendarEvents } from '@/lib/services/googleCalendarService'
+import type { CalendarEvent } from '@/lib/services/googleCalendarService'
 
 // ── Tipos compartidos ─────────────────────────────────────────────────
 interface CarteraRow {
@@ -419,148 +421,54 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
     })
     .slice(0, 15)
 
-  const urgCfg: Record<Urgencia, { dot: string; bg: string }> = {
-    ROJO:     { dot: '#dc2626', bg: '#FEF2F2' },
-    AMARILLO: { dot: '#f59e0b', bg: '#FFFBEB' },
-    VERDE:    { dot: '#16a34a', bg: '#F0FDF4' },
-  }
-  const tipoIcon: Record<string, string> = { LLAMADA: '📞', CORREO: '📧', VISITA: '🏢', WHATSAPP: '💬' }
+  // ── Google Calendar — degrada elegantemente si el token no está ───────
+  let calendarEvents: CalendarEvent[] = []
+  try {
+    // El provider_token contiene el access token de Google OAuth.
+    // Requiere scope calendar.readonly en Supabase → Auth → Google → Scopes.
+    const { data: { session } } = await supabase.auth.getSession()
+    const googleToken = session?.provider_token ?? null
+    if (googleToken) {
+      const fin30d = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]
+      calendarEvents = await fetchCalendarEvents(googleToken, hoyStr, fin30d)
+    }
+  } catch {}
 
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
-      <div className="px-6 pt-5 pb-6 space-y-5">
+      <div className="px-4 sm:px-6 pt-5 pb-6">
+        {/*
+          Layout 2 columnas:
+          - Desktop (>1024px): izquierda 60% / derecha 40%
+          - Tablet (768-1024px): izquierda 55% / derecha 45%
+          - Mobile (<768px): 1 columna, derecha debajo
+        */}
+        <div className="flex flex-col lg:flex-row gap-5">
 
-        {/* ── KPIs analista (4 tarjetas) ─────────────────────────── */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <KPICard label="Mi Cartera"         valor={fmtM(miCartera)} sub={`${misRows.length} clientes asignados`}                               gradient="linear-gradient(135deg,#003B5C,#005a8e)"   badge={null}                icon={<Package size={16}/>}      />
-          <KPICard label="En Mora"            valor={fmtM(miMora)}    sub={`${pMiMora}% de mi cartera`}                                          gradient={pMiMora>25?"linear-gradient(135deg,#991b1b,#dc2626)":"linear-gradient(135deg,#065f46,#059669)"} badge={`${pMiMora}%`} badgeGood={pMiMora<=25} icon={<TrendingDown size={16}/>} />
-          <KPICard label="Gestiones Hoy"      valor={String(gHoyCount)} sub={`de ${misRows.length} clientes`}                                     gradient="linear-gradient(135deg,#0369a1,#009ee3)"   badge={gHoyCount>0?'activo':null} badgeGood icon={<ClipboardCheck size={16}/>} />
-          <KPICard label="Promesas Activas"   valor={String(promCount)} sub={misPromesas.some(p=>p.fecha_promesa===hoyStr)?'⚠ vencen hoy':'al día'} gradient={misPromesas.some(p=>p.fecha_promesa===hoyStr)?"linear-gradient(135deg,#7c2d12,#ea580c)":"linear-gradient(135deg,#1e3a5f,#003B5C)"} badge={misPromesas.some(p=>p.fecha_promesa===hoyStr)?'urgente':null} badgeGood={false} icon={<Handshake size={16}/>} />
-        </div>
-
-        {/* ── Cola del día + Promesas ────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-
-          {/* Cola */}
-          <div className="xl:col-span-2" style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(220,38,38,0.08)'}}><AlertCircle size={15} style={{color:'#dc2626'}}/></div>
-                <div><h2 className="text-sm font-bold text-gray-900">Cola del Día</h2><p className="text-xs text-gray-400">Prioridad: rojo → amarillo → verde</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{background:'rgba(220,38,38,0.1)',color:'#dc2626'}}>{cola.filter(c=>c.urgencia==='ROJO').length} 🔴</span>
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{background:'rgba(245,158,11,0.1)',color:'#d97706'}}>{cola.filter(c=>c.urgencia==='AMARILLO').length} 🟡</span>
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{background:'rgba(22,163,74,0.1)',color:'#16a34a'}}>{cola.filter(c=>c.urgencia==='VERDE').length} 🟢</span>
-              </div>
-            </div>
-            {cola.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="text-4xl mb-3">🎉</div>
-                <p className="text-sm font-bold text-gray-500">Sin clientes asignados aún</p>
-                <p className="text-xs text-gray-300 mt-1">Pedile al coordinador que asigne tu cartera</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {cola.map(c => {
-                  const cfg = urgCfg[c.urgencia]
-                  const moraCrit = (c.mora_61_90 || 0) + (c.mora_91_120 || 0) + (c.mora_120_plus || 0)
-                  return (
-                    <div key={c.cliente_cod} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background:cfg.dot}}/>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-gray-800 truncate">{c.cliente_nombre || c.cliente_cod}</p>
-                        <p className="text-xs text-gray-400">{c.cliente_cod}</p>
-                      </div>
-                      {moraCrit > 0 && (
-                        <span className="text-xs font-black text-red-600 flex-shrink-0">{fmtM(moraCrit)}</span>
-                      )}
-                      {c.gestionadoHoy && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{background:'rgba(22,163,74,0.1)',color:'#16a34a'}}>✓ hoy</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+          {/* ── Columna izquierda (60%) ─────────────────────────── */}
+          <div className="flex-1 min-w-0">
+            <DashboardResumen
+              misRows={misRows}
+              misGestiones={misGestiones}
+              misPromesas={misPromesas}
+              cola={cola}
+              gHoyCount={gHoyCount}
+              promCount={promCount}
+              miCartera={miCartera}
+              miMora={miMora}
+              pMiMora={pMiMora}
+              hoyStr={hoyStr}
+              clientesOpts={clientesOpts}
+              userEmail={userEmail}
+            />
           </div>
 
-          {/* Promesas pendientes */}
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-5 py-4" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(0,158,227,0.1)'}}><Handshake size={15} style={{color:'#009ee3'}}/></div>
-                <div><h2 className="text-sm font-bold text-gray-900">Mis Promesas</h2><p className="text-xs text-gray-400">{promCount} pendientes</p></div>
-              </div>
-            </div>
-            {misPromesas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <CheckCircle2 size={28} className="text-green-300 mb-3"/>
-                <p className="text-sm font-semibold text-gray-400">Sin promesas pendientes</p>
-              </div>
-            ) : (
-              <div className="p-3 space-y-2">
-                {misPromesas.map(p => {
-                  const venceHoy = p.fecha_promesa === hoyStr
-                  const vencida  = p.fecha_promesa && p.fecha_promesa < hoyStr
-                  return (
-                    <div key={p.id} className="rounded-xl px-3.5 py-2.5" style={{background: vencida||venceHoy?'#FEF2F2':'#F8FAFC', border:`1px solid ${vencida||venceHoy?'#FECACA':'#F1F5F9'}`}}>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-gray-800 truncate flex-1">{p.cliente_cod}</p>
-                        <p className="text-xs font-black text-gray-700 flex-shrink-0 ml-2">{fmtM(p.monto)}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p className="text-xs text-gray-400">{p.fecha_promesa}</p>
-                        {(vencida || venceHoy) && <span className="text-xs font-bold text-red-500">{venceHoy ? 'vence hoy' : 'vencida'}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Mis gestiones de hoy + Gestión rápida ─────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-
-          {/* Mis gestiones hoy */}
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(0,158,227,0.1)'}}><Activity size={15} style={{color:'#009ee3'}}/></div>
-                <div><h2 className="text-sm font-bold text-gray-900">Mis Gestiones de Hoy</h2><p className="text-xs text-gray-400">{gHoyCount} registradas</p></div>
-              </div>
-            </div>
-            {misGestiones.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-3xl mb-3">📋</div>
-                <p className="text-sm font-semibold text-gray-400">Sin gestiones hoy</p>
-                <p className="text-xs text-gray-300 mt-1">Usá el formulario de la derecha para registrar</p>
-              </div>
-            ) : (
-              <div className="p-3 space-y-1.5">
-                {misGestiones.map(g => (
-                  <div key={g.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{background:'#F8FAFC'}}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{background:'rgba(0,59,92,0.07)'}}>{tipoIcon[g.tipo]??'📋'}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-800 truncate">{g.cliente_cod}</p>
-                      <p className="text-xs text-gray-500 truncate">{g.resultado}{g.nota ? ` · ${g.nota}` : ''}</p>
-                    </div>
-                    <span className="text-xs font-medium text-gray-400 flex-shrink-0">{g.hora?.slice(0,5)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Gestión rápida */}
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-6 py-4 flex items-center gap-3" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(0,158,227,0.1)'}}><ClipboardCheck size={15} style={{color:'#009ee3'}}/></div>
-              <div><h2 className="text-sm font-bold text-gray-900">Gestión Rápida</h2><p className="text-xs text-gray-400">Registrá una gestión en segundos</p></div>
-            </div>
-            <GestionRapida clientes={clientesOpts} analistaEmail={userEmail} hoyStr={hoyStr} />
+          {/* ── Columna derecha (40%) — Calendario + Notas ─────── */}
+          <div className="w-full lg:w-[42%] xl:w-[38%] flex-shrink-0">
+            <CalendarioNotas
+              eventos={calendarEvents}
+              hoyStr={hoyStr}
+            />
           </div>
 
         </div>

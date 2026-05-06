@@ -161,6 +161,16 @@ export interface Notificacion {
   created_at: string
 }
 
+export interface NotaRapida {
+  id: string
+  usuario_id: string
+  fecha: string        // YYYY-MM-DD
+  contenido: string | null
+  sincronizado_google: boolean
+  created_at: string
+  updated_at: string
+}
+
 // Tipo para la base de datos completa (para el cliente Supabase tipado)
 export type Database = {
   public: {
@@ -175,6 +185,7 @@ export type Database = {
       solicitudes:             { Row: Solicitud;            Insert: Partial<Solicitud>;            Update: Partial<Solicitud> }
       coordinaciones_vendedor: { Row: CoordinacionVendedor; Insert: Partial<CoordinacionVendedor>; Update: Partial<CoordinacionVendedor> }
       notificaciones:          { Row: Notificacion;         Insert: Partial<Notificacion>;         Update: Partial<Notificacion> }
+      notas_rapidas:           { Row: NotaRapida;           Insert: Partial<NotaRapida>;           Update: Partial<NotaRapida> }
     }
   }
 }
