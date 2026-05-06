@@ -219,10 +219,10 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
                   </button>
                 </th>
 
-                {/* Sin gestión */}
+                {/* Días sin gestión */}
                 <th className="px-3 py-3 text-center">
                   <button className={thBtnCls + ' mx-auto'} onClick={() => toggleSort('dias_sin_gestion')}>
-                    Sin gestión <SortIcon activo={sortCol === 'dias_sin_gestion'} dir={sortDir} />
+                    Días sin gestión <SortIcon activo={sortCol === 'dias_sin_gestion'} dir={sortDir} />
                   </button>
                 </th>
 
