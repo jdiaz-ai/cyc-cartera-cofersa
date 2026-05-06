@@ -742,9 +742,9 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
-      {/* ── SECCIÓN 1: Datos de contacto (editables) — Col 1 ── */}
+      {/* ── SECCIÓN 1: Datos de contacto (editables) — Fila 1 Col 1 ── */}
       <InfoCard titulo="Datos de contacto CxP">
 
         {/* Nombre CxP */}
@@ -827,57 +827,52 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         </p>
       </InfoCard>
 
-      {/* ── Col 2: Fiscal + Comercial apiladas ── */}
-      <div className="flex flex-col gap-3">
+      {/* ── SECCIÓN 2: Información fiscal — Fila 1 Col 2 ── */}
+      <InfoCard titulo="Información fiscal">
+        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
+        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
+        {maestro?.segmento && (
+          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
+        )}
+        {maestro?.zona && (
+          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
+        )}
+      </InfoCard>
 
-        {/* SECCIÓN 2: Información fiscal */}
-        <InfoCard titulo="Información fiscal">
-          <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
-          <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
-          {maestro?.segmento && (
-            <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
-          )}
-          {maestro?.zona && (
-            <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
-          )}
-        </InfoCard>
-
-        {/* SECCIÓN 3: Condiciones comerciales */}
-        <InfoCard titulo="Condiciones comerciales">
-          <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
-          <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
-            valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
-          {limite > 0 && disponible !== null && (
-            <div className="flex items-center gap-3">
-              <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
-              <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '110px' }}>Crédito disponible</span>
-              <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
-                {disponible >= 0
-                  ? fmtCRC(disponible)
-                  : `−${fmtCRC(Math.abs(disponible))}`}
-              </span>
-            </div>
-          )}
-          {/* Estado */}
+      {/* ── SECCIÓN 3: Condiciones comerciales — Fila 2 Col 1 ── */}
+      <InfoCard titulo="Condiciones comerciales">
+        <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
+        <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
+          valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
+        {limite > 0 && disponible !== null && (
           <div className="flex items-center gap-3">
-            <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
-            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '110px' }}>Estado</span>
-            <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
-              style={{
-                backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
-                color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
-              }}>
-              {maestro?.estado_manual || 'Normal'}
+            <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
+            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Crédito disponible</span>
+            <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
+              {disponible >= 0
+                ? fmtCRC(disponible)
+                : `−${fmtCRC(Math.abs(disponible))}`}
             </span>
-            {!esCoordinador && (
-              <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
-            )}
           </div>
-        </InfoCard>
+        )}
+        {/* Estado */}
+        <div className="flex items-center gap-3">
+          <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
+          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Estado</span>
+          <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
+            style={{
+              backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
+              color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
+            }}>
+            {maestro?.estado_manual || 'Normal'}
+          </span>
+          {!esCoordinador && (
+            <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
+          )}
+        </div>
+      </InfoCard>
 
-      </div>{/* fin col 2 */}
-
-      {/* ── SECCIÓN 4: Información interna — Col 3 ──────── */}
+      {/* ── SECCIÓN 4: Información interna — Fila 2 Col 2 ── */}
       <InfoCard titulo="Información interna">
         <InfoRowCopy label="Código cliente" valor={cartera.cliente_cod} onCopy={() => copiar(cartera.cliente_cod, 'Código')} mono />
         <InfoRow icon={<User     size={14} />} label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
