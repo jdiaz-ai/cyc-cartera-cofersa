@@ -444,10 +444,10 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
           - Tablet (768-1024px): izquierda 55% / derecha 45%
           - Mobile (<768px): 1 columna, derecha debajo
         */}
-        <div className="flex flex-col lg:flex-row gap-5">
+        <div className="flex flex-col lg:flex-row gap-5 lg:items-stretch">
 
           {/* ── Columna izquierda (60%) — KPIs + Cola + Promesas ── */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col">
             <DashboardResumen
               misRows={misRows}
               misPromesas={misPromesas}

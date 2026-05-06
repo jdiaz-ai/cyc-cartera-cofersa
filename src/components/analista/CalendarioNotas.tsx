@@ -154,7 +154,7 @@ export default function CalendarioNotas({ eventos, hoyStr }: Props) {
           >
             <ChevronLeft size={14} />
           </button>
-          <p style={{ fontSize: '11px', fontWeight: 500, color: '#1f2937', letterSpacing: '0.02em' }}>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: '#1f2937', letterSpacing: '-0.01em' }}>
             {MESES[viewMonth]} {viewYear}
           </p>
           <button

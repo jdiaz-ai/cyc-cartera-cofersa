@@ -46,7 +46,7 @@ export default function DashboardResumen({
   gHoyCount, promCount, miCartera, miMora, pMiMora, hoyStr,
 }: DashboardResumenProps) {
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5 h-full">
 
       {/* ── KPIs (4 tarjetas) ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -91,11 +91,11 @@ export default function DashboardResumen({
         />
       </div>
 
-      {/* ── Cola del día + Promesas ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      {/* ── Cola del día + Promesas — flex-1 para llenar la altura de la columna derecha ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 flex-1">
 
         {/* Cola */}
-        <div className="xl:col-span-2" style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div className="xl:col-span-2 flex flex-col" style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
           <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.08)' }}>
@@ -113,7 +113,7 @@ export default function DashboardResumen({
             </div>
           </div>
           {cola.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
               <div className="text-4xl mb-3">🎉</div>
               <p className="text-sm font-bold text-gray-500">Sin clientes asignados aún</p>
               <p className="text-xs text-gray-300 mt-1">Pedile al coordinador que asigne tu cartera</p>
@@ -144,7 +144,7 @@ export default function DashboardResumen({
         </div>
 
         {/* Promesas pendientes */}
-        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <div className="flex flex-col" style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
           <div className="px-5 py-4" style={{ borderBottom: '1px solid #F1F5F9' }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
@@ -157,7 +157,7 @@ export default function DashboardResumen({
             </div>
           </div>
           {misPromesas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
               <CheckCircle2 size={28} className="text-green-300 mb-3" />
               <p className="text-sm font-semibold text-gray-400">Sin promesas pendientes</p>
             </div>
