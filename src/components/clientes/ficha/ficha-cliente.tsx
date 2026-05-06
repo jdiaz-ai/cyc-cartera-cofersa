@@ -557,79 +557,18 @@ export default function FichaCliente({
 
         {/* ── TAB: GESTIONES ───────────────────────────────────── */}
         {tab === 'Gestiones' && (
-          <div className="space-y-2 max-w-3xl">
-            {gestiones.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                <EmptyState icon={<ClipboardList size={32} />} texto="Sin gestiones registradas para este cliente." />
-              </div>
-            ) : gestiones.map(g => {
-              const resSty = RESULTADO_COLORS[g.resultado] ?? { bg: '#f1f5f9', text: '#64748b' }
-              return (
-                <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[12px] font-bold text-gray-700">{fmtFecha(g.fecha)}</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{g.tipo}</span>
-                        <span className="text-[11px] text-gray-400">{g.analista_email?.split('@')[0]}</span>
-                      </div>
-                      {g.nota && (
-                        <p className="text-[13px] text-gray-600 leading-snug">{g.nota}</p>
-                      )}
-                    </div>
-                    <span
-                      className="flex-shrink-0 text-[11px] font-bold rounded-full px-2.5 py-1"
-                      style={{ backgroundColor: resSty.bg, color: resSty.text }}
-                    >
-                      {g.resultado}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <TabGestiones
+            gestiones    = {gestiones}
+            onNuevaGestion = {() => setModalGestion(true)}
+          />
         )}
 
         {/* ── TAB: PROMESAS ─────────────────────────────────────── */}
         {tab === 'Promesas' && (
-          <div className="space-y-2 max-w-2xl">
-            {promesas.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                <EmptyState icon={<Handshake size={32} />} texto="Sin promesas de pago registradas." />
-              </div>
-            ) : promesas.map(p => {
-              const sty = PROMESA_COLORS[p.estado] ?? { bg: '#f1f5f9', text: '#64748b', icon: <Circle size={12} /> }
-              return (
-                <div key={p.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[15px] font-bold text-gray-800 tabular-nums">{fmtCRC(p.monto)}</span>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-[12px] text-gray-500">
-                          Vence: <span className="font-semibold">{fmtFecha(p.fecha_promesa)}</span>
-                        </span>
-                      </div>
-                      {p.notas && (
-                        <p className="text-[12px] text-gray-500 italic">{p.notas}</p>
-                      )}
-                      <p className="text-[11px] text-gray-400 mt-1">Registrada: {fmtFecha(p.fecha_creacion)}</p>
-                    </div>
-                    <span
-                      className="flex-shrink-0 flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
-                      style={{ backgroundColor: sty.bg, color: sty.text }}
-                    >
-                      {sty.icon}
-                      {p.estado}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <TabPromesas
+            promesas     = {promesas}
+            onNuevaGestion = {() => setModalGestion(true)}
+          />
         )}
 
         {/* ── TAB: EMAILS ───────────────────────────────────────── */}
@@ -1783,5 +1722,430 @@ function ModalRecordatorio({ factura, clienteNombre, clienteCod, onClose, onSucc
         </div>
       </div>
     </ModalOverlay>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB 4 — GESTIONES
+// ══════════════════════════════════════════════════════════════════════
+const TIPO_COLORES: Record<string, { bg: string; text: string }> = {
+  'Llamada':  { bg: '#e0f2fe', text: '#0369a1' },
+  'Email':    { bg: '#f3e8ff', text: '#7c3aed' },
+  'WhatsApp': { bg: '#dcfce7', text: '#15803d' },
+  'Visita':   { bg: '#fef9c3', text: '#a16207' },
+  'CORREO':   { bg: '#f3e8ff', text: '#7c3aed' },
+}
+
+const TIPO_ICONOS: Record<string, React.ReactNode> = {
+  'Llamada':  <Phone       size={13} />,
+  'Email':    <Mail        size={13} />,
+  'WhatsApp': <MessageCircle size={13} />,
+  'Visita':   <Building2   size={13} />,
+  'CORREO':   <Mail        size={13} />,
+}
+
+function TabGestiones({
+  gestiones,
+  onNuevaGestion,
+}: {
+  gestiones:      Gestion[]
+  onNuevaGestion: () => void
+}) {
+  const [filtroTipo,      setFiltroTipo]      = useState('Todos')
+  const [filtroResultado, setFiltroResultado] = useState('Todos')
+  const [busqueda,        setBusqueda]        = useState('')
+
+  // KPIs
+  const total      = gestiones.length
+  const ultima     = gestiones[0]  // ya vienen ordenadas desc por fecha
+  const porResultado = useMemo(() => {
+    const m: Record<string, number> = {}
+    gestiones.forEach(g => { m[g.resultado] = (m[g.resultado] ?? 0) + 1 })
+    return m
+  }, [gestiones])
+  const resultadoTop = Object.entries(porResultado).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+
+  const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(gestiones.map(g => g.tipo)))], [gestiones])
+  const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(gestiones.map(g => g.resultado)))], [gestiones])
+
+  const filtradas = useMemo(() => gestiones.filter(g => {
+    if (filtroTipo !== 'Todos'      && g.tipo      !== filtroTipo)      return false
+    if (filtroResultado !== 'Todos' && g.resultado !== filtroResultado) return false
+    if (busqueda && !g.nota?.toLowerCase().includes(busqueda.toLowerCase())) return false
+    return true
+  }), [gestiones, filtroTipo, filtroResultado, busqueda])
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Fila 1: KPIs + botón ─────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap gap-6">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total gestiones</p>
+            <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
+          </div>
+          <Divider />
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Última gestión</p>
+            <p className="text-[15px] font-bold text-gray-700 leading-tight">
+              {ultima ? fmtFecha(ultima.fecha) : '—'}
+            </p>
+            {ultima && (
+              <p className="text-[11px] text-gray-400">{ultima.tipo} · {ultima.hora?.slice(0, 5)}</p>
+            )}
+          </div>
+          <Divider />
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resultado más frecuente</p>
+            {resultadoTop !== '—' ? (
+              <span className="inline-block text-[12px] font-bold rounded-full px-2.5 py-0.5 mt-0.5"
+                style={{
+                  backgroundColor: (RESULTADO_COLORS[resultadoTop] ?? { bg: '#f1f5f9' }).bg,
+                  color:            (RESULTADO_COLORS[resultadoTop] ?? { text: '#64748b' }).text,
+                }}>
+                {resultadoTop}
+              </span>
+            ) : <p className="text-[13px] text-gray-300 italic">—</p>}
+          </div>
+          <Divider />
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Por tipo</p>
+            <div className="flex gap-2 mt-0.5 flex-wrap">
+              {Object.entries(
+                gestiones.reduce<Record<string, number>>((acc, g) => { acc[g.tipo] = (acc[g.tipo] ?? 0) + 1; return acc }, {})
+              ).map(([tipo, cnt]) => {
+                const sty = TIPO_COLORES[tipo] ?? { bg: '#f1f5f9', text: '#64748b' }
+                return (
+                  <span key={tipo} className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: sty.bg, color: sty.text }}>
+                    {TIPO_ICONOS[tipo] && <span className="inline-flex mr-1">{TIPO_ICONOS[tipo]}</span>}
+                    {cnt}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onNuevaGestion}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 flex-shrink-0"
+          style={{ backgroundColor: '#009ee3' }}
+        >
+          <Plus size={14} /> Nueva gestión
+        </button>
+      </div>
+
+      {/* ── Fila 2: Filtros ──────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1" style={{ minWidth: '180px', maxWidth: '280px' }}>
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="Buscar en notas..."
+            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition"
+          />
+        </div>
+        <select
+          value={filtroTipo}
+          onChange={e => setFiltroTipo(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white"
+        >
+          {tiposUnicos.map(t => <option key={t} value={t}>{t === 'Todos' ? 'Todos los tipos' : t}</option>)}
+        </select>
+        <select
+          value={filtroResultado}
+          onChange={e => setFiltroResultado(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white"
+        >
+          {resultadosUnicos.map(r => <option key={r} value={r}>{r === 'Todos' ? 'Todos los resultados' : r}</option>)}
+        </select>
+        {(filtroTipo !== 'Todos' || filtroResultado !== 'Todos' || busqueda) && (
+          <button
+            type="button"
+            onClick={() => { setFiltroTipo('Todos'); setFiltroResultado('Todos'); setBusqueda('') }}
+            className="text-[12px] font-semibold text-blue-500 hover:text-blue-700 transition"
+          >
+            Limpiar filtros
+          </button>
+        )}
+        {filtradas.length !== total && (
+          <span className="text-[11px] text-gray-400 ml-auto">{filtradas.length} de {total}</span>
+        )}
+      </div>
+
+      {/* ── Fila 3: Tabla ────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {filtradas.length === 0 ? (
+          <EmptyState icon={<ClipboardList size={32} />} texto={total === 0 ? 'Sin gestiones registradas para este cliente.' : 'No hay gestiones con esos filtros.'} />
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <Th>Fecha</Th>
+                <Th>Tipo</Th>
+                <Th>Resultado</Th>
+                <Th>Nota</Th>
+                <Th>Analista</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtradas.map((g, i) => {
+                const resSty  = RESULTADO_COLORS[g.resultado] ?? { bg: '#f1f5f9', text: '#64748b' }
+                const tipoSty = TIPO_COLORES[g.tipo]          ?? { bg: '#f1f5f9', text: '#64748b' }
+                return (
+                  <tr key={g.id}
+                    className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
+                    style={{ backgroundColor: i % 2 === 0 ? undefined : '#fafbfc' }}
+                  >
+                    {/* Fecha + hora */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(g.fecha)}</p>
+                      <p className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</p>
+                    </td>
+                    {/* Tipo */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
+                        style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
+                        {TIPO_ICONOS[g.tipo]}
+                        {g.tipo}
+                      </span>
+                    </td>
+                    {/* Resultado */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="inline-block text-[11px] font-bold rounded-full px-2.5 py-1"
+                        style={{ backgroundColor: resSty.bg, color: resSty.text }}>
+                        {g.resultado}
+                      </span>
+                    </td>
+                    {/* Nota */}
+                    <td className="px-4 py-3" style={{ maxWidth: '340px' }}>
+                      <p className="text-[13px] text-gray-600 leading-snug line-clamp-2">
+                        {g.nota || <span className="text-gray-300 italic">Sin nota</span>}
+                      </p>
+                      {g.promesa_fecha && (
+                        <p className="text-[11px] font-semibold mt-0.5" style={{ color: '#0369a1' }}>
+                          Promesa: {fmtFecha(g.promesa_fecha)}
+                        </p>
+                      )}
+                    </td>
+                    {/* Analista */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-[12px] text-gray-500">{g.analista_email?.split('@')[0] ?? '—'}</p>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB 5 — PROMESAS
+// ══════════════════════════════════════════════════════════════════════
+function TabPromesas({
+  promesas,
+  onNuevaGestion,
+}: {
+  promesas:       Promesa[]
+  onNuevaGestion: () => void
+}) {
+  const hoy = hoyISO()
+  const [filtroEstado, setFiltroEstado] = useState<string>('Todos')
+
+  // KPIs
+  const total      = promesas.length
+  const pendientes = promesas.filter(p => p.estado === 'PENDIENTE').length
+  const cumplidas  = promesas.filter(p => p.estado === 'CUMPLIDA').length
+  const pctCumplimiento = total > 0 ? Math.round((cumplidas / total) * 100) : 0
+  const montoPendiente  = promesas.filter(p => p.estado === 'PENDIENTE').reduce((s, p) => s + (p.monto || 0), 0)
+
+  const ESTADOS_FILTRO = ['Todos', 'PENDIENTE', 'CUMPLIDA', 'INCUMPLIDA', 'ABONO_PARCIAL']
+
+  const filtradas = promesas.filter(p => filtroEstado === 'Todos' || p.estado === filtroEstado)
+
+  // Identificar promesas que vencen hoy o ya vencieron (pendientes)
+  function urgenciaPromesa(p: Promesa): 'vence_hoy' | 'vencida' | 'proxima' | 'normal' {
+    if (p.estado !== 'PENDIENTE') return 'normal'
+    if (!p.fecha_promesa) return 'normal'
+    const diff = Math.floor(
+      (new Date(hoy).getTime() - new Date(p.fecha_promesa).getTime()) / 86400000
+    )
+    if (diff === 0) return 'vence_hoy'
+    if (diff > 0)   return 'vencida'
+    if (diff >= -3) return 'proxima'
+    return 'normal'
+  }
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── Fila 1: KPIs ────────────────────────────────────── */}
+      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total promesas</p>
+          <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pendientes</p>
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: pendientes > 0 ? '#f59e0b' : '#94a3b8' }}>
+            {pendientes}
+          </p>
+          {montoPendiente > 0 && (
+            <p className="text-[11px] font-semibold tabular-nums mt-0.5 text-gray-500">{fmtCRC(montoPendiente)}</p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Cumplimiento</p>
+          <p className="text-[22px] font-black tabular-nums leading-tight"
+            style={{ color: pctCumplimiento >= 70 ? '#16a34a' : pctCumplimiento >= 40 ? '#f59e0b' : '#dc2626' }}>
+            {total > 0 ? `${pctCumplimiento}%` : '—'}
+          </p>
+          {total > 0 && (
+            <p className="text-[11px] text-gray-400 mt-0.5">{cumplidas} de {total} cumplidas</p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Incumplidas</p>
+          {(() => {
+            const inc = promesas.filter(p => p.estado === 'INCUMPLIDA').length
+            return (
+              <p className="text-[22px] font-black tabular-nums leading-tight"
+                style={{ color: inc > 0 ? '#dc2626' : '#94a3b8' }}>
+                {inc}
+              </p>
+            )
+          })()}
+        </div>
+      </div>
+
+      {/* ── Fila 2: Filtro de estado + botón ────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1.5 flex-wrap">
+          {ESTADOS_FILTRO.map(est => {
+            const sty = est !== 'Todos' ? (PROMESA_COLORS[est] ?? { bg: '#f1f5f9', text: '#64748b', icon: null }) : null
+            const active = filtroEstado === est
+            return (
+              <button
+                key={est}
+                type="button"
+                onClick={() => setFiltroEstado(est)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition"
+                style={active
+                  ? { backgroundColor: sty?.bg ?? '#e0f2fe', color: sty?.text ?? '#0369a1', boxShadow: '0 0 0 2px ' + (sty?.text ?? '#0369a1') + '40' }
+                  : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
+                }
+              >
+                {sty?.icon}
+                {est === 'Todos' ? 'Todas' : est.replace(/_/g, ' ')}
+                {est !== 'Todos' && (
+                  <span className="text-[10px]">
+                    ({promesas.filter(p => p.estado === est).length})
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={onNuevaGestion}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 ml-auto flex-shrink-0"
+          style={{ backgroundColor: '#009ee3' }}
+        >
+          <Plus size={14} /> Registrar gestión
+        </button>
+      </div>
+
+      {/* ── Fila 3: Lista de promesas ────────────────────────── */}
+      {filtradas.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <EmptyState
+            icon={<Handshake size={32} />}
+            texto={total === 0 ? 'Sin promesas de pago registradas.' : 'No hay promesas con ese estado.'}
+          />
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <Th>Monto</Th>
+                <Th>Fecha promesa</Th>
+                <Th>Estado</Th>
+                <Th>Registrada</Th>
+                <Th>Notas</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtradas.map((p, i) => {
+                const sty  = PROMESA_COLORS[p.estado] ?? { bg: '#f1f5f9', text: '#64748b', icon: <Circle size={12} /> }
+                const urg  = urgenciaPromesa(p)
+                const rowBg =
+                  urg === 'vence_hoy' ? '#fffbeb' :
+                  urg === 'vencida'   ? '#fff5f5' :
+                  urg === 'proxima'   ? '#f0fdf4' :
+                  i % 2 === 1         ? '#fafbfc'  : undefined
+                return (
+                  <tr key={p.id}
+                    className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
+                    style={{ backgroundColor: rowBg }}
+                  >
+                    {/* Monto */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-[14px] font-black tabular-nums text-gray-800">{fmtCRC(p.monto)}</p>
+                      {urg === 'vence_hoy' && (
+                        <p className="text-[10px] font-bold uppercase" style={{ color: '#c2410c' }}>Vence hoy</p>
+                      )}
+                      {urg === 'vencida' && (
+                        <p className="text-[10px] font-bold uppercase" style={{ color: '#dc2626' }}>Vencida</p>
+                      )}
+                      {urg === 'proxima' && (
+                        <p className="text-[10px] font-bold uppercase" style={{ color: '#16a34a' }}>Próxima</p>
+                      )}
+                    </td>
+                    {/* Fecha promesa */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(p.fecha_promesa)}</p>
+                    </td>
+                    {/* Estado */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
+                        style={{ backgroundColor: sty.bg, color: sty.text }}>
+                        {sty.icon}
+                        {p.estado.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    {/* Fecha creación */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <p className="text-[12px] text-gray-400">{fmtFecha(p.fecha_creacion)}</p>
+                      <p className="text-[11px] text-gray-400">{p.analista_email?.split('@')[0]}</p>
+                    </td>
+                    {/* Notas */}
+                    <td className="px-4 py-3" style={{ maxWidth: '260px' }}>
+                      <p className="text-[12px] text-gray-500 italic line-clamp-2">
+                        {p.notas || <span className="text-gray-300">Sin notas</span>}
+                      </p>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   )
 }
