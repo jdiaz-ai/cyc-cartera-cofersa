@@ -380,60 +380,15 @@ export default function FichaCliente({
 
         {/* ── TAB: INFORMACIÓN ─────────────────────────────────── */}
         {tab === 'Información' && (
-          <div className="max-w-2xl space-y-4">
-            <InfoCard titulo="Datos comerciales">
-              <InfoRow icon={<Building2 size={14} />} label="Nombre"         valor={cartera.cliente_nombre} />
-              <InfoRow icon={<Tag        size={14} />} label="Código"         valor={cartera.cliente_cod} mono />
-              <InfoRow icon={<Tag        size={14} />} label="Contribuyente"  valor={cartera.contribuyente} mono />
-              {maestro?.condicion_pago && (
-                <InfoRow icon={<Calendar size={14} />} label="Condición de pago" valor={maestro.condicion_pago} />
-              )}
-              {maestro?.estado_manual && (
-                <InfoRow icon={<Tag size={14} />} label="Estatus" valor={maestro.estado_manual}
-                  badge={maestro.estado_manual !== 'Normal'
-                    ? { bg: '#fee2e2', text: '#dc2626' }
-                    : { bg: '#dcfce7', text: '#15803d' }} />
-              )}
-            </InfoCard>
-
-            <InfoCard titulo="Crédito">
-              {maestro?.limite_credito && maestro.limite_credito > 0
-                ? <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito" valor={fmtCRC(maestro.limite_credito)} />
-                : <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito" valor="Sin límite configurado" muted />
-              }
-              <InfoRow icon={<CreditCard size={14} />} label="Mora total"
-                valor={mora_total > 0 ? `${fmtCRC(mora_total)} (${pct_mora}%)` : '—'}
-                color={mora_total > 0 ? '#dc2626' : undefined} />
-              {cartera.dias_mora > 0 && (
-                <InfoRow icon={<Calendar size={14} />} label="Días mora mayor" valor={`${cartera.dias_mora} días`} color="#dc2626" />
-              )}
-            </InfoCard>
-
-            <InfoCard titulo="Contacto">
-              <InfoRow icon={<User  size={14} />} label="Vendedor" valor={cartera.vendedor_nombre || '—'} />
-              {analistaNombre && (
-                <InfoRow icon={<User size={14} />} label="Analista" valor={analistaNombre} />
-              )}
-              {maestro?.telefono && (
-                <InfoRow icon={<Phone size={14} />} label="Teléfono" valor={maestro.telefono} />
-              )}
-              {maestro?.correo && (
-                <InfoRow icon={<Mail size={14} />} label="Email" valor={maestro.correo} />
-              )}
-            </InfoCard>
-
-            <InfoCard titulo="Scoring">
-              <div className="flex items-center gap-3 py-2">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100">
-                  <span className="text-[11px] font-bold text-gray-400">ICP</span>
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-gray-400 italic">Sin datos suficientes</p>
-                  <p className="text-[11px] text-gray-300">Se requieren al menos 3 meses de historial</p>
-                </div>
-              </div>
-            </InfoCard>
-          </div>
+          <TabInformacion
+            cartera        = {cartera}
+            maestro        = {maestro}
+            analistaNombre = {analistaNombre}
+            esCoordinador  = {esCoordinador}
+            mora_total     = {mora_total}
+            pct_mora       = {pct_mora}
+            onToast        = {showToast}
+          />
         )}
 
         {/* ── TAB: AGING ───────────────────────────────────────── */}
@@ -735,6 +690,248 @@ export default function FichaCliente({
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// TAB INFORMACIÓN
+// ══════════════════════════════════════════════════════════════════════
+function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_total, pct_mora, onToast }: {
+  cartera:        Cartera
+  maestro:        MaestroCliente | null
+  analistaNombre: string
+  esCoordinador:  boolean
+  mora_total:     number
+  pct_mora:       number
+  onToast:        (msg: string) => void
+}) {
+  // Estado de edición por campo
+  const [editando,  setEditando]  = useState<'telefono' | 'correo' | null>(null)
+  const [valTel,    setValTel]    = useState(maestro?.telefono ?? '')
+  const [valCorreo, setValCorreo] = useState(maestro?.correo   ?? '')
+  const [saving,    setSaving]    = useState(false)
+
+  async function guardar(campo: 'telefono' | 'correo') {
+    setSaving(true)
+    const body: Record<string, string> = {
+      cliente_cod: cartera.cliente_cod,
+      ...(campo === 'telefono' ? { telefono: valTel }   : {}),
+      ...(campo === 'correo'   ? { correo:   valCorreo } : {}),
+    }
+    const res = await fetch('/api/clientes/contacto', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    setSaving(false)
+    if (res.ok) {
+      setEditando(null)
+      onToast('Guardado correctamente')
+    } else {
+      onToast('Error al guardar')
+    }
+  }
+
+  function copiar(valor: string, label: string) {
+    navigator.clipboard.writeText(valor).then(
+      () => onToast(`${label} copiado`),
+      () => onToast('No se pudo copiar'),
+    )
+  }
+
+  const limite    = maestro?.limite_credito ?? 0
+  const disponible = limite > 0 ? limite - cartera.total : null
+
+  return (
+    <div className="max-w-2xl space-y-4">
+
+      {/* ── SECCIÓN 1: Datos de contacto (editables) ──────────── */}
+      <InfoCard titulo="Datos de contacto CxP">
+
+        {/* Teléfono CxP */}
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-gray-300 flex-shrink-0"><Phone size={14} /></span>
+          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Teléfono CxP</span>
+          {editando === 'telefono' ? (
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                autoFocus
+                type="tel"
+                value={valTel}
+                onChange={e => setValTel(e.target.value)}
+                className="flex-1 rounded-lg border border-blue-300 px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Ej: 2222-3333"
+              />
+              <button type="button" disabled={saving}
+                onClick={() => guardar('telefono')}
+                className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+                style={{ backgroundColor: '#009ee3' }}>
+                {saving ? '...' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => { setEditando(null); setValTel(maestro?.telefono ?? '') }}
+                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
+                {valTel || <span className="text-gray-300 italic">Sin teléfono</span>}
+              </span>
+              {valTel && (
+                <button type="button" onClick={() => copiar(valTel, 'Teléfono')}
+                  className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
+                  Copiar
+                </button>
+              )}
+              <button type="button" onClick={() => setEditando('telefono')}
+                className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
+                Editar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Email CxP */}
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-gray-300 flex-shrink-0"><Mail size={14} /></span>
+          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Email CxP</span>
+          {editando === 'correo' ? (
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                autoFocus
+                type="email"
+                value={valCorreo}
+                onChange={e => setValCorreo(e.target.value)}
+                className="flex-1 rounded-lg border border-blue-300 px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="correo@empresa.com"
+              />
+              <button type="button" disabled={saving}
+                onClick={() => guardar('correo')}
+                className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+                style={{ backgroundColor: '#009ee3' }}>
+                {saving ? '...' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => { setEditando(null); setValCorreo(maestro?.correo ?? '') }}
+                className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50">
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
+                {valCorreo || <span className="text-gray-300 italic">Sin email</span>}
+              </span>
+              {valCorreo && (
+                <button type="button" onClick={() => copiar(valCorreo, 'Email')}
+                  className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
+                  Copiar
+                </button>
+              )}
+              <button type="button" onClick={() => setEditando('correo')}
+                className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
+                Editar
+              </button>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[10px] text-gray-300 mt-1 pl-7">
+          {esCoordinador ? 'Coordinador puede editar todos los clientes.' : 'Podés editar los datos de contacto de tus clientes asignados.'}
+        </p>
+      </InfoCard>
+
+      {/* ── SECCIÓN 2: Información fiscal (read-only) ──────────── */}
+      <InfoCard titulo="Información fiscal">
+        <InfoRowCopy label="RUC / Cédula"  valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'RUC')} mono />
+        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
+        {maestro?.segmento && (
+          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
+        )}
+        {maestro?.zona && (
+          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
+        )}
+      </InfoCard>
+
+      {/* ── SECCIÓN 3: Condiciones comerciales ────────────────── */}
+      <InfoCard titulo="Condiciones comerciales">
+        <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
+        <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
+          valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
+        {limite > 0 && disponible !== null && (
+          <div className="flex items-center gap-3 py-1">
+            <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
+            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Crédito disponible</span>
+            <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
+              {disponible >= 0
+                ? `${fmtCRC(disponible)} disponible`
+                : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
+            </span>
+          </div>
+        )}
+        {/* Estado — coordinador editable, analista read-only */}
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
+          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Estado</span>
+          <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
+            style={{
+              backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
+              color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
+            }}>
+            {maestro?.estado_manual || 'Normal'}
+          </span>
+          {!esCoordinador && (
+            <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
+          )}
+        </div>
+      </InfoCard>
+
+      {/* ── SECCIÓN 4: Información interna (read-only) ─────────── */}
+      <InfoCard titulo="Información interna">
+        <InfoRowCopy label="Código cliente" valor={cartera.cliente_cod} onCopy={() => copiar(cartera.cliente_cod, 'Código')} mono />
+        <InfoRow icon={<User     size={14} />} label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
+        <InfoRow icon={<User     size={14} />} label="Analista asignado"  valor={analistaNombre || '—'} />
+        <InfoRow icon={<Calendar size={14} />} label="Corte Softland"     valor={fmtFecha(cartera.fecha_corte)} />
+        {maestro?.updated_at && (
+          <InfoRow icon={<Calendar size={14} />} label="Última actualización" valor={fmtFecha(maestro.updated_at)} />
+        )}
+        {/* Score ICP */}
+        <div className="flex items-center gap-3 py-1">
+          <span className="text-gray-300 flex-shrink-0">
+            <span className="inline-flex w-3.5 h-3.5 items-center justify-center rounded-full text-[8px] font-black" style={{ backgroundColor: '#e2e8f0', color: '#94a3b8' }}>ICP</span>
+          </span>
+          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Score ICP</span>
+          <span className="text-[13px] font-semibold text-gray-300 italic">Sin datos suficientes</span>
+        </div>
+        {(maestro?.promedio_dias_pago ?? 0) > 0 && (
+          <InfoRow icon={<Calendar size={14} />} label="Promedio días pago" valor={`${Math.round(maestro!.promedio_dias_pago)} días`} />
+        )}
+        {(maestro?.promesas_cumplidas_pct ?? 0) > 0 && (
+          <InfoRow icon={<Tag size={14} />} label="Promesas cumplidas"
+            valor={`${Math.round(maestro!.promesas_cumplidas_pct)}%`}
+            color={maestro!.promesas_cumplidas_pct >= 70 ? '#16a34a' : maestro!.promesas_cumplidas_pct >= 40 ? '#f59e0b' : '#dc2626'} />
+        )}
+      </InfoCard>
+    </div>
+  )
+}
+
+// ── InfoRowCopy: fila con botón copiar integrado ───────────────────────
+function InfoRowCopy({ label, valor, onCopy, mono }: {
+  label: string; valor: string; onCopy: () => void; mono?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
+      <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>{label}</span>
+      <span className={`text-[13px] font-semibold text-gray-700 flex-1 truncate ${mono ? 'font-mono' : ''}`}>{valor || '—'}</span>
+      {valor && (
+        <button type="button" onClick={onCopy}
+          className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
+          Copiar
+        </button>
+      )}
+    </div>
+  )
+}
+
 // SUB-COMPONENTES
 // ══════════════════════════════════════════════════════════════════════
 
