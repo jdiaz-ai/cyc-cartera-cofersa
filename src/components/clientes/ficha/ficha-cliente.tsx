@@ -248,21 +248,20 @@ export default function FichaCliente({
         {/* ── SECCIÓN B: 4 KPI cards ───────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           {/* Card 1: Total cartera */}
-          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50"
-            title={fmtCRC(cartera.total)}>
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total cartera</p>
-            <p className="text-[15px] font-bold tabular-nums text-gray-800">{fmtM(cartera.total)}</p>
+            <p className="text-[13px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(cartera.total)}</p>
           </div>
 
           {/* Card 2: En mora */}
           <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">En mora</p>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-[15px] font-bold tabular-nums" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
-                {mora_total > 0 ? fmtM(mora_total) : '—'}
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <p className="text-[13px] font-bold tabular-nums leading-tight" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
+                {mora_total > 0 ? fmtCRC(mora_total) : '—'}
               </p>
               {mora_total > 0 && (
-                <span className="text-[11px] font-bold rounded-full px-1.5 py-0.5"
+                <span className="text-[11px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0"
                   style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
                   {pct_mora}%
                 </span>
@@ -275,11 +274,11 @@ export default function FichaCliente({
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Límite crédito</p>
             {maestro?.limite_credito && maestro.limite_credito > 0 ? (
               <>
-                <p className="text-[15px] font-bold tabular-nums text-gray-800">{fmtM(maestro.limite_credito)}</p>
+                <p className="text-[13px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(maestro.limite_credito)}</p>
                 {(() => {
                   const disp = maestro.limite_credito - cartera.total
                   return disp >= 0
-                    ? <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#16a34a' }}>{fmtM(disp)} disponible</p>
+                    ? <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#16a34a' }}>{fmtCRC(disp)} disponible</p>
                     : <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
                 })()}
               </>
@@ -822,12 +821,9 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-4 items-start" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
-      {/* ── Columna izquierda: Contacto + Condiciones ─────────── */}
-      <div className="space-y-4">
-
-      {/* ── SECCIÓN 1: Datos de contacto (editables) ──────────── */}
+      {/* ── SECCIÓN 1: Datos de contacto (editables) — Fila 1 Col 1 ── */}
       <InfoCard titulo="Datos de contacto CxP">
 
         {/* Nombre CxP */}
@@ -910,7 +906,19 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         </p>
       </InfoCard>
 
-      {/* ── SECCIÓN 3: Condiciones comerciales ────────────────── */}
+      {/* ── SECCIÓN 2: Información fiscal — Fila 1 Col 2 ──────── */}
+      <InfoCard titulo="Información fiscal">
+        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
+        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
+        {maestro?.segmento && (
+          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
+        )}
+        {maestro?.zona && (
+          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
+        )}
+      </InfoCard>
+
+      {/* ── SECCIÓN 3: Condiciones comerciales — Fila 2 Col 1 ── */}
       <InfoCard titulo="Condiciones comerciales">
         <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
         <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
@@ -943,24 +951,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         </div>
       </InfoCard>
 
-      </div>
-
-      {/* ── Columna derecha: Fiscal + Interna ─────────────────── */}
-      <div className="space-y-4">
-
-      {/* ── SECCIÓN 2: Información fiscal (read-only) ──────────── */}
-      <InfoCard titulo="Información fiscal">
-        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
-        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
-        {maestro?.segmento && (
-          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
-        )}
-        {maestro?.zona && (
-          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
-        )}
-      </InfoCard>
-
-      {/* ── SECCIÓN 4: Información interna (read-only) ─────────── */}
+      {/* ── SECCIÓN 4: Información interna — Fila 2 Col 2 ──────── */}
       <InfoCard titulo="Información interna">
         <InfoRowCopy label="Código cliente" valor={cartera.cliente_cod} onCopy={() => copiar(cartera.cliente_cod, 'Código')} mono />
         <InfoRow icon={<User     size={14} />} label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
@@ -986,8 +977,6 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             color={maestro!.promesas_cumplidas_pct >= 70 ? '#16a34a' : maestro!.promesas_cumplidas_pct >= 40 ? '#f59e0b' : '#dc2626'} />
         )}
       </InfoCard>
-
-      </div>
 
     </div>
   )
