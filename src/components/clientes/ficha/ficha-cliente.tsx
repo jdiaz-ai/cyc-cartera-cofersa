@@ -742,9 +742,9 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
 
-      {/* ── SECCIÓN 1: Datos de contacto (editables) — Fila 1 Col 1 ── */}
+      {/* ── SECCIÓN 1: Datos de contacto (editables) — Col 1 ── */}
       <InfoCard titulo="Datos de contacto CxP">
 
         {/* Nombre CxP */}
@@ -827,52 +827,57 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         </p>
       </InfoCard>
 
-      {/* ── SECCIÓN 2: Información fiscal — Fila 1 Col 2 ──────── */}
-      <InfoCard titulo="Información fiscal">
-        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
-        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
-        {maestro?.segmento && (
-          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
-        )}
-        {maestro?.zona && (
-          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
-        )}
-      </InfoCard>
+      {/* ── Col 2: Fiscal + Comercial apiladas ── */}
+      <div className="flex flex-col gap-3">
 
-      {/* ── SECCIÓN 3: Condiciones comerciales — Fila 2 Col 1 ── */}
-      <InfoCard titulo="Condiciones comerciales">
-        <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
-        <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
-          valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
-        {limite > 0 && disponible !== null && (
-          <div className="flex items-center gap-3 py-1">
-            <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
-            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Crédito disponible</span>
-            <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
-              {disponible >= 0
-                ? fmtCRC(disponible)
-                : `−${fmtCRC(Math.abs(disponible))}`}
-            </span>
-          </div>
-        )}
-        {/* Estado */}
-        <div className="flex items-center gap-3 py-1">
-          <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
-          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Estado</span>
-          <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
-            style={{
-              backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
-              color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
-            }}>
-            {maestro?.estado_manual || 'Normal'}
-          </span>
-          {!esCoordinador && (
-            <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
+        {/* SECCIÓN 2: Información fiscal */}
+        <InfoCard titulo="Información fiscal">
+          <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
+          <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
+          {maestro?.segmento && (
+            <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
           )}
-        </div>
-      </InfoCard>
+          {maestro?.zona && (
+            <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
+          )}
+        </InfoCard>
 
-      {/* ── SECCIÓN 4: Información interna — Fila 2 Col 2 ──────── */}
+        {/* SECCIÓN 3: Condiciones comerciales */}
+        <InfoCard titulo="Condiciones comerciales">
+          <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
+          <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
+            valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
+          {limite > 0 && disponible !== null && (
+            <div className="flex items-center gap-3">
+              <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
+              <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '110px' }}>Crédito disponible</span>
+              <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
+                {disponible >= 0
+                  ? fmtCRC(disponible)
+                  : `−${fmtCRC(Math.abs(disponible))}`}
+              </span>
+            </div>
+          )}
+          {/* Estado */}
+          <div className="flex items-center gap-3">
+            <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
+            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '110px' }}>Estado</span>
+            <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
+              style={{
+                backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
+                color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
+              }}>
+              {maestro?.estado_manual || 'Normal'}
+            </span>
+            {!esCoordinador && (
+              <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
+            )}
+          </div>
+        </InfoCard>
+
+      </div>{/* fin col 2 */}
+
+      {/* ── SECCIÓN 4: Información interna — Col 3 ──────── */}
       <InfoCard titulo="Información interna">
         <InfoRowCopy label="Código cliente" valor={cartera.cliente_cod} onCopy={() => copiar(cartera.cliente_cod, 'Código')} mono />
         <InfoRow icon={<User     size={14} />} label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
@@ -882,7 +887,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
           <InfoRow icon={<Calendar size={14} />} label="Última actualización" valor={fmtFecha(maestro.updated_at)} />
         )}
         {/* Score ICP */}
-        <div className="flex items-center gap-3 py-1">
+        <div className="flex items-center gap-3">
           <span className="text-gray-300 flex-shrink-0">
             <span className="inline-flex w-3.5 h-3.5 items-center justify-center rounded-full text-[8px] font-black" style={{ backgroundColor: '#e2e8f0', color: '#94a3b8' }}>ICP</span>
           </span>
@@ -926,7 +931,7 @@ function CampoEditable({ icon, label, valor, valorInput, placeholder, type = 'te
 }) {
   const inputVal = valorInput !== undefined ? valorInput : valor
   return (
-    <div className="flex items-center gap-3 py-1">
+    <div className="flex items-center gap-3">
       <span className="text-gray-300 flex-shrink-0">{icon}</span>
       <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '100px' }}>{label}</span>
       {editando ? (
@@ -980,7 +985,7 @@ function InfoRowCopy({ label, valor, onCopy, mono }: {
   label: string; valor: string; onCopy: () => void; mono?: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 py-1">
+    <div className="flex items-center gap-3">
       <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
       <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>{label}</span>
       <span className={`text-[13px] font-semibold text-gray-700 flex-1 truncate ${mono ? 'font-mono' : ''}`}>{valor || '—'}</span>
@@ -1214,10 +1219,10 @@ function KpiChip({ label, valor, color, small, italic }: {
 function InfoCard({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-100">
-        <h3 className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">{titulo}</h3>
+      <div className="px-4 py-2 border-b border-gray-100">
+        <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{titulo}</h3>
       </div>
-      <div className="px-5 py-3 space-y-2.5">{children}</div>
+      <div className="px-4 py-2 space-y-1">{children}</div>
     </div>
   )
 }
