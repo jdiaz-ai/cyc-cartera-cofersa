@@ -108,12 +108,12 @@ export default function FichaCliente({
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full" style={{ backgroundColor: '#f0f4f8' }}>
+    <div style={{ backgroundColor: '#f0f4f8', minHeight: '100%' }}>
 
       {/* ═══════════════════════════════════════════════════════════
           HEADER
       ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white border-b border-gray-200 px-5 pt-4 pb-0">
+      <div className="bg-white border-b border-gray-200 px-5 pt-4 pb-0 sticky top-0 z-10">
 
         {/* Sección 1: back + identidad + acciones */}
         <div className="flex items-start justify-between gap-4 mb-3">
@@ -206,6 +206,7 @@ export default function FichaCliente({
             return (
               <button
                 key={t}
+                type="button"
                 onClick={() => setTab(t)}
                 className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap"
                 style={active
@@ -232,7 +233,7 @@ export default function FichaCliente({
       {/* ═══════════════════════════════════════════════════════════
           CONTENIDO DEL TAB
       ═══════════════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="p-5">
 
         {/* ── TAB: INFORMACIÓN ─────────────────────────────────── */}
         {tab === 'Información' && (
