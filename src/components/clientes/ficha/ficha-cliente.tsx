@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, ClipboardList, Handshake, FileText, AlertTriangle,
   CheckCircle2, XCircle, Clock, Circle, Plus,
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
-  MailOpen, Receipt, MessageCircle, ChevronDown, FileDown, Send,
+  MailOpen, Receipt, MessageCircle, ChevronDown, FileDown, Send, Search,
 } from 'lucide-react'
-import { fmtM, fmtCRC, fmtFecha, fmtFechaHora } from '@/lib/utils/formato'
+import { fmtM, fmtCRC, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
@@ -78,6 +78,35 @@ const ESTADO_CFG: Record<string, { bg: string; text: string }> = {
   Suspendido: { bg: '#ffedd5', text: '#c2410c' },
 }
 const ESTADOS_OPCIONES = ['Normal', 'Bloqueado', 'Convenio', 'Suspendido']
+
+// ── Helpers Tab Estado de Cuenta ──────────────────────────────────────
+function estadoFactura(f: Factura, hoy: string): { label: string; bg: string; color: string } {
+  if (!f.saldo || f.saldo <= 0)    return { label: 'Pagada',    bg: '#f1f5f9', color: '#94a3b8' }
+  if (!f.fecha_vencimiento)        return { label: 'Sin fecha', bg: '#f1f5f9', color: '#94a3b8' }
+  const diff = Math.floor(
+    (new Date(hoy).getTime() - new Date(f.fecha_vencimiento).getTime()) / 86400000
+  )
+  if (diff < 0)  return { label: `Vence en ${Math.abs(diff)}d`, bg: '#dcfce7', color: '#15803d' }
+  if (diff === 0) return { label: 'Vence hoy',                  bg: '#ffedd5', color: '#c2410c' }
+  return             { label: `Vencida ${diff}d`,               bg: '#fee2e2', color: '#dc2626' }
+}
+
+function facturaEnTramo(f: Factura, tramo: string, hoy: string): boolean {
+  if (tramo === 'Todos') return true
+  if (!f.fecha_vencimiento) return false
+  const diff = Math.floor(
+    (new Date(hoy).getTime() - new Date(f.fecha_vencimiento).getTime()) / 86400000
+  )
+  switch (tramo) {
+    case 'Al día':      return diff < 0
+    case '1-30 días':   return diff >= 1  && diff <= 30
+    case '31-60 días':  return diff >= 31 && diff <= 60
+    case '61-90 días':  return diff >= 61 && diff <= 90
+    case '91-120 días': return diff >= 91 && diff <= 120
+    case '+120 días':   return diff > 120
+    default: return true
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -394,94 +423,95 @@ export default function FichaCliente({
 
         {/* ── TAB: AGING ───────────────────────────────────────── */}
         {tab === 'Aging' && (
-          <div className="space-y-4 max-w-2xl">
+          <div className="space-y-4">
 
-            {/* ── Card 1: Barras visuales ─────────────────────── */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="text-[13px] font-bold text-gray-700">Distribución de saldo por antigüedad</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)}</p>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {AGING_TRAMOS.map(({ key, label, color }) => {
-                  const monto = (cartera[key as keyof Cartera] as number) || 0
-                  const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
-                  return (
-                    <div key={key} className="flex items-center gap-3">
-                      <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '80px', flexShrink: 0 }}>{label}</span>
-                      <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }} />
-                      </div>
-                      <span className="text-[12px] font-semibold tabular-nums text-right"
-                        style={{ width: '80px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
-                        {monto > 0 ? fmtM(monto) : '—'}
-                      </span>
-                      <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '34px', flexShrink: 0 }}>
-                        {pct > 0 ? `${pct}%` : ''}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            {/* ── Fila 1: Barras (izq) + Tabla numérica (der) ── */}
+            <div className="grid gap-4" style={{ gridTemplateColumns: '55fr 45fr' }}>
 
-            {/* ── Card 2: Tabla numérica detallada ───────────── */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100">
-                <h3 className="text-[12px] font-bold text-gray-600">Detalle por tramo</h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">Clic en un tramo para ver sus facturas</p>
-              </div>
-              <table className="w-full" style={{ fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tramo</th>
-                    <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
-                    <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">% Total</th>
-                  </tr>
-                </thead>
-                <tbody>
+              {/* Card 1: Barras visuales */}
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-[13px] font-bold text-gray-700">Distribución de saldo por antigüedad</h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)}</p>
+                </div>
+                <div className="px-5 py-4 space-y-3">
                   {AGING_TRAMOS.map(({ key, label, color }) => {
                     const monto = (cartera[key as keyof Cartera] as number) || 0
                     const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
                     return (
-                      <tr
-                        key={key}
-                        onClick={() => {
-                          setFiltroTramoEdoCta(label)
-                          setTab('Estado de Cuenta')
-                        }}
-                        className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors"
-                      >
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                            <span className="text-[13px] font-semibold text-gray-700">{label}</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums text-[13px] font-semibold"
-                          style={{ color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
-                          {monto > 0 ? fmtCRC(monto) : '—'}
-                        </td>
-                        <td className="px-5 py-2.5 text-right tabular-nums text-[12px] text-gray-400">
-                          {pct > 0 ? `${pct}%` : '—'}
-                        </td>
-                      </tr>
+                      <div key={key} className="flex items-center gap-3">
+                        <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '76px', flexShrink: 0 }}>{label}</span>
+                        <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
+                          <div className="h-full rounded-full transition-all"
+                            style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }} />
+                        </div>
+                        <span className="text-[12px] font-semibold tabular-nums text-right"
+                          style={{ width: '72px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                          {monto > 0 ? fmtM(monto) : '—'}
+                        </span>
+                        <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '30px', flexShrink: 0 }}>
+                          {pct > 0 ? `${pct}%` : ''}
+                        </span>
+                      </div>
                     )
                   })}
-                </tbody>
-                <tfoot>
-                  <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                    <td className="px-5 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
-                    <td className="px-5 py-2.5 text-right text-[14px] font-black text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</td>
-                    <td className="px-5 py-2.5 text-right text-[12px] font-bold text-gray-500">100%</td>
-                  </tr>
-                </tfoot>
-              </table>
+                </div>
+              </div>
+
+              {/* Card 2: Tabla numérica detallada */}
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <h3 className="text-[12px] font-bold text-gray-600">Detalle por tramo</h3>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Clic en un tramo para ver sus facturas</p>
+                </div>
+                <table className="w-full" style={{ fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tramo</th>
+                      <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
+                      <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">% Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {AGING_TRAMOS.map(({ key, label, color }) => {
+                      const monto = (cartera[key as keyof Cartera] as number) || 0
+                      const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
+                      return (
+                        <tr
+                          key={key}
+                          onClick={() => { setFiltroTramoEdoCta(label); setTab('Estado de Cuenta') }}
+                          className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors"
+                        >
+                          <td className="px-5 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                              <span className="text-[13px] font-semibold text-gray-700">{label}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-2.5 text-right tabular-nums text-[13px] font-semibold"
+                            style={{ color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                            {monto > 0 ? fmtCRC(monto) : '—'}
+                          </td>
+                          <td className="px-5 py-2.5 text-right tabular-nums text-[12px] text-gray-400">
+                            {pct > 0 ? `${pct}%` : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                      <td className="px-5 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
+                      <td className="px-5 py-2.5 text-right text-[14px] font-black text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</td>
+                      <td className="px-5 py-2.5 text-right text-[12px] font-bold text-gray-500">100%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
 
-            {/* ── Card 3: KPIs ───────────────────────────────── */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+            {/* ── Fila 2: KPIs + botón (full width) ─────────── */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
               <div className="flex flex-wrap gap-3">
                 <Chip
                   label="DSO"
@@ -494,12 +524,7 @@ export default function FichaCliente({
                   color={mora_total > 0 ? '#dc2626' : '#15803d'}
                 />
                 <Chip label="Mora total" valor={fmtM(mora_total)} />
-                <Chip
-                  label="Comparativa"
-                  valor="Sin historial"
-                  bg="#f1f5f9"
-                  color="#94a3b8"
-                />
+                <Chip label="Comparativa" valor="Sin historial" bg="#f1f5f9" color="#94a3b8" />
                 <Chip
                   label="Comportamiento"
                   valor={mora_total === 0 ? 'Al día' : pct_mora > 25 ? 'En riesgo' : 'En seguimiento'}
@@ -507,14 +532,10 @@ export default function FichaCliente({
                   color={mora_total === 0 ? '#15803d' : pct_mora > 25 ? '#dc2626' : '#a16207'}
                 />
               </div>
-            </div>
-
-            {/* ── Botón ver Estado de Cuenta ─────────────────── */}
-            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => { setFiltroTramoEdoCta('Todos'); setTab('Estado de Cuenta') }}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90"
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90 flex-shrink-0"
                 style={{ backgroundColor: '#009ee3', color: 'white' }}
               >
                 Ver Estado de Cuenta →
@@ -525,53 +546,14 @@ export default function FichaCliente({
 
         {/* ── TAB: ESTADO DE CUENTA ─────────────────────────────── */}
         {tab === 'Estado de Cuenta' && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            {facturas.length === 0 ? (
-              <EmptyState icon={<FileText size={32} />} texto="No hay facturas pendientes para este cliente." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full" style={{ fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <Th>Documento</Th>
-                      <Th>F. Documento</Th>
-                      <Th>F. Vencimiento</Th>
-                      <Th right>Monto</Th>
-                      <Th right>Saldo</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facturas.map((f, i) => (
-                      <tr
-                        key={f.id}
-                        className="border-t border-gray-50"
-                        style={i % 2 === 1 ? { backgroundColor: '#fafbfc' } : {}}
-                      >
-                        <td className="px-4 py-2.5 font-mono text-[12px] font-semibold text-gray-700">{f.documento}</td>
-                        <td className="px-4 py-2.5 text-[12px] text-gray-500">{fmtFecha(f.fecha_documento)}</td>
-                        <td className="px-4 py-2.5 text-[12px] text-gray-500">{fmtFecha(f.fecha_vencimiento)}</td>
-                        <td className="px-4 py-2.5 text-right text-[12px] tabular-nums font-semibold text-gray-700">{fmtCRC(f.monto)}</td>
-                        <td className="px-4 py-2.5 text-right text-[12px] tabular-nums font-semibold" style={{ color: f.saldo > 0 ? '#dc2626' : '#94a3b8' }}>
-                          {f.saldo > 0 ? fmtCRC(f.saldo) : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                      <td colSpan={3} className="px-4 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
-                      <td className="px-4 py-2.5 text-right text-[13px] font-bold text-gray-800 tabular-nums">
-                        {fmtCRC(facturas.reduce((s, f) => s + (f.monto || 0), 0))}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-[13px] font-bold tabular-nums" style={{ color: '#dc2626' }}>
-                        {fmtCRC(facturas.reduce((s, f) => s + (f.saldo || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
+          <TabEstadoCuenta
+            facturas           = {facturas}
+            clienteCod         = {cartera.cliente_cod}
+            clienteNombre      = {cartera.cliente_nombre}
+            filtroTramoEdoCta  = {filtroTramoEdoCta}
+            setFiltroTramoEdoCta = {setFiltroTramoEdoCta}
+            onRegistrarGestion = {() => setModalGestion(true)}
+          />
         )}
 
         {/* ── TAB: GESTIONES ───────────────────────────────────── */}
@@ -1311,5 +1293,420 @@ function EmptyState({ icon, texto, sub, comingSoon }: {
         </span>
       )}
     </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TAB 3 — ESTADO DE CUENTA
+// ══════════════════════════════════════════════════════════════════════
+const TRAMOS_OPTS = ['Todos', 'Al día', '1-30 días', '31-60 días', '61-90 días', '91-120 días', '+120 días']
+const ESTADO_OPTS = ['Todas', 'Vencidas', 'Por vencer', 'Vence hoy', 'Pagadas']
+const POR_PAGINA  = 25
+
+interface TabEstadoCuentaProps {
+  facturas:            Factura[]
+  clienteCod:          string
+  clienteNombre:       string
+  filtroTramoEdoCta:   string
+  setFiltroTramoEdoCta: (v: string) => void
+  onRegistrarGestion:  () => void
+}
+
+function TabEstadoCuenta({
+  facturas, clienteCod, clienteNombre,
+  filtroTramoEdoCta, setFiltroTramoEdoCta, onRegistrarGestion,
+}: TabEstadoCuentaProps) {
+  const hoy = hoyISO()
+
+  const [filtroEstado,      setFiltroEstado]      = useState('Todas')
+  const [busquedaDoc,       setBusquedaDoc]       = useState('')
+  const [pagina,            setPagina]            = useState(1)
+  const [seleccionadas,     setSeleccionadas]     = useState<Set<number>>(new Set())
+  const [modalRecordatorio, setModalRecordatorio] = useState<Factura | null>(null)
+
+  const selectCls = 'rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-700 bg-white ' +
+    'focus:outline-none focus:border-blue-400 transition'
+
+  // ── Filtrado ──────────────────────────────────────────────────
+  const filtradas = useMemo(() => {
+    let data = [...facturas]
+
+    // Filtro por tramo (viene del tab Aging o del select propio)
+    if (filtroTramoEdoCta !== 'Todos') {
+      data = data.filter(f => facturaEnTramo(f, filtroTramoEdoCta, hoy))
+    }
+
+    // Filtro por estado
+    if (filtroEstado !== 'Todas') {
+      data = data.filter(f => {
+        const st = estadoFactura(f, hoy)
+        if (filtroEstado === 'Vencidas')    return st.label.startsWith('Vencida')
+        if (filtroEstado === 'Por vencer')  return st.label.startsWith('Vence en')
+        if (filtroEstado === 'Vence hoy')   return st.label === 'Vence hoy'
+        if (filtroEstado === 'Pagadas')     return st.label === 'Pagada'
+        return true
+      })
+    }
+
+    // Búsqueda por documento
+    if (busquedaDoc.trim()) {
+      const q = busquedaDoc.toLowerCase()
+      data = data.filter(f => f.documento.toLowerCase().includes(q))
+    }
+
+    return data
+  }, [facturas, filtroTramoEdoCta, filtroEstado, busquedaDoc, hoy])
+
+  // ── Paginación ────────────────────────────────────────────────
+  const totalPaginas   = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA))
+  const paginaReal     = Math.min(pagina, totalPaginas)
+  const enPagina       = filtradas.slice((paginaReal - 1) * POR_PAGINA, paginaReal * POR_PAGINA)
+
+  // ── Totales ───────────────────────────────────────────────────
+  const totalMonto = filtradas.reduce((s, f) => s + (f.monto || 0), 0)
+  const totalSaldo = filtradas.reduce((s, f) => s + (f.saldo || 0), 0)
+  const saldoSel   = filtradas.filter(f => seleccionadas.has(f.id)).reduce((s, f) => s + (f.saldo || 0), 0)
+
+  // ── Selección ─────────────────────────────────────────────────
+  const toggleSel = (id: number) => setSeleccionadas(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
+  })
+  const toggleTodas = () => setSeleccionadas(
+    seleccionadas.size === enPagina.length && enPagina.length > 0
+      ? new Set()
+      : new Set(enPagina.map(f => f.id))
+  )
+
+  // ── Exportar Excel ────────────────────────────────────────────
+  function exportarExcel() {
+    import('xlsx').then(XLSX => {
+      const rows = filtradas.map(f => ({
+        'Documento':      f.documento,
+        'F. Emisión':     f.fecha_documento,
+        'F. Vencimiento': f.fecha_vencimiento,
+        'Monto':          f.monto,
+        'Saldo':          f.saldo,
+        'Estado':         estadoFactura(f, hoy).label,
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Estado de Cuenta')
+      XLSX.writeFile(wb, `estado-cuenta-${clienteCod}.xlsx`)
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+
+      {/* ── Barra de filtros ─────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+
+        <select
+          value={filtroTramoEdoCta}
+          onChange={e => { setFiltroTramoEdoCta(e.target.value); setPagina(1) }}
+          className={selectCls}
+        >
+          {TRAMOS_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <select
+          value={filtroEstado}
+          onChange={e => { setFiltroEstado(e.target.value); setPagina(1) }}
+          className={selectCls}
+        >
+          {ESTADO_OPTS.map(t => <option key={t}>{t}</option>)}
+        </select>
+
+        <div className="relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar documento..."
+            value={busquedaDoc}
+            onChange={e => { setBusquedaDoc(e.target.value); setPagina(1) }}
+            className={selectCls + ' pl-8 w-44'}
+          />
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[12px] text-gray-400">
+            {filtradas.length} facturas · Saldo:{' '}
+            <span className="font-semibold text-gray-600">{fmtM(totalSaldo)}</span>
+          </span>
+          <button
+            onClick={exportarExcel}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition"
+          >
+            <FileDown size={13} /> Excel
+          </button>
+        </div>
+      </div>
+
+      {/* ── Barra de selección múltiple ──────────────────────── */}
+      {seleccionadas.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] font-semibold flex-wrap"
+          style={{ backgroundColor: '#003B5C', color: 'white' }}>
+          <span className="text-[12px]">
+            {seleccionadas.size} {seleccionadas.size === 1 ? 'factura' : 'facturas'} · Saldo: {fmtM(saldoSel)}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              className="rounded-lg px-3 py-1 text-[12px] font-bold bg-white/20 hover:bg-white/30 transition"
+            >
+              Recordar pago
+            </button>
+            <button
+              onClick={() => { onRegistrarGestion(); setSeleccionadas(new Set()) }}
+              className="rounded-lg px-3 py-1 text-[12px] font-bold transition"
+              style={{ backgroundColor: '#009ee3' }}
+            >
+              Agregar gestión
+            </button>
+            <button
+              onClick={() => setSeleccionadas(new Set())}
+              className="text-white/60 hover:text-white transition text-[12px] ml-1"
+            >
+              ✕ Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tabla ────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {filtradas.length === 0 ? (
+          <EmptyState icon={<FileText size={32} />} texto="No hay facturas con los filtros aplicados." />
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th className="px-4 py-2.5 w-8">
+                      <input
+                        type="checkbox"
+                        checked={seleccionadas.size === enPagina.length && enPagina.length > 0}
+                        onChange={toggleTodas}
+                        className="rounded"
+                      />
+                    </th>
+                    <Th>Documento</Th>
+                    <Th>F. Emisión</Th>
+                    <Th>F. Vencimiento</Th>
+                    <Th right>Monto</Th>
+                    <Th right>Saldo</Th>
+                    <Th>Estado</Th>
+                    <Th>Acciones</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enPagina.map((f, i) => {
+                    const est  = estadoFactura(f, hoy)
+                    const selec = seleccionadas.has(f.id)
+                    return (
+                      <tr
+                        key={f.id}
+                        className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
+                        style={selec
+                          ? { backgroundColor: '#eff6ff' }
+                          : i % 2 === 1 ? { backgroundColor: '#fafbfc' } : {}}
+                      >
+                        <td className="px-4 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={selec}
+                            onChange={() => toggleSel(f.id)}
+                            className="rounded"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-[12px] font-semibold text-gray-700 whitespace-nowrap">
+                          {f.documento}
+                        </td>
+                        <td className="px-4 py-2.5 text-[12px] text-gray-500 whitespace-nowrap">
+                          {fmtFecha(f.fecha_documento)}
+                        </td>
+                        <td className="px-4 py-2.5 text-[12px] text-gray-500 whitespace-nowrap">
+                          {fmtFecha(f.fecha_vencimiento)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-[12px] tabular-nums font-semibold text-gray-700 whitespace-nowrap">
+                          {fmtCRC(f.monto)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-[12px] tabular-nums font-semibold whitespace-nowrap"
+                          style={{ color: f.saldo > 0 ? '#dc2626' : '#94a3b8' }}>
+                          {f.saldo > 0 ? fmtCRC(f.saldo) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span
+                            className="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold"
+                            style={{ backgroundColor: est.bg, color: est.color }}
+                          >
+                            {est.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setModalRecordatorio(f)}
+                              className="rounded-md px-2 py-0.5 text-[11px] font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition whitespace-nowrap"
+                            >
+                              Recordar
+                            </button>
+                            <button
+                              onClick={onRegistrarGestion}
+                              className="rounded-md px-2 py-0.5 text-[11px] font-bold border border-blue-100 transition whitespace-nowrap"
+                              style={{ color: '#009ee3' }}
+                            >
+                              Gestión
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                    <td colSpan={4} className="px-4 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">
+                      Total ({filtradas.length} facturas)
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[13px] font-bold text-gray-800 tabular-nums whitespace-nowrap">
+                      {fmtCRC(totalMonto)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-[13px] font-bold tabular-nums whitespace-nowrap"
+                      style={{ color: '#dc2626' }}>
+                      {fmtCRC(totalSaldo)}
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Paginación */}
+            {totalPaginas > 1 && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100"
+                style={{ backgroundColor: '#fafbfc' }}>
+                <span className="text-[11px] text-gray-400">
+                  Página {paginaReal} de {totalPaginas} · {filtradas.length} facturas
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    disabled={paginaReal === 1}
+                    onClick={() => setPagina(p => p - 1)}
+                    className="rounded-md px-2.5 py-1 text-[12px] font-semibold border border-gray-200 disabled:opacity-40 hover:bg-white transition"
+                  >
+                    ← Ant
+                  </button>
+                  <button
+                    disabled={paginaReal === totalPaginas}
+                    onClick={() => setPagina(p => p + 1)}
+                    className="rounded-md px-2.5 py-1 text-[12px] font-semibold border border-gray-200 disabled:opacity-40 hover:bg-white transition"
+                  >
+                    Sig →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Modal Recordatorio */}
+      {modalRecordatorio && (
+        <ModalRecordatorio
+          factura       = {modalRecordatorio}
+          clienteNombre = {clienteNombre}
+          clienteCod    = {clienteCod}
+          onClose       = {() => setModalRecordatorio(null)}
+          onSuccess     = {() => setModalRecordatorio(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Modal Recordatorio ────────────────────────────────────────────────
+function ModalRecordatorio({ factura, clienteNombre, clienteCod, onClose, onSuccess }: {
+  factura:       Factura
+  clienteNombre: string
+  clienteCod:    string
+  onClose:       () => void
+  onSuccess:     () => void
+}) {
+  const hoy = hoyISO()
+  const est = estadoFactura(factura, hoy)
+  const [nota,    setNota]    = useState(
+    `Estimado cliente ${clienteNombre}, le recordamos que la factura ` +
+    `${factura.documento} por ${fmtCRC(factura.saldo)} se encuentra ${est.label.toLowerCase()}. ` +
+    `Por favor regularice su situación a la brevedad.`
+  )
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
+
+  async function enviar() {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/clientes/recordatorio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliente_cod: clienteCod, documento: factura.documento, nota }),
+      })
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Error'); return }
+      onSuccess()
+    } catch { setError('Error de red') } finally { setLoading(false) }
+  }
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="space-y-4" style={{ minWidth: '360px', maxWidth: '460px' }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[15px] font-bold text-gray-800">Registrar recordatorio</h3>
+            <p className="text-[12px] text-gray-400 mt-0.5 flex items-center gap-1.5">
+              {factura.documento}
+              <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold"
+                style={{ backgroundColor: est.bg, color: est.color }}>
+                {est.label}
+              </span>
+              <span className="font-semibold text-gray-600">{fmtCRC(factura.saldo)}</span>
+            </p>
+          </div>
+          <CloseBtn onClose={onClose} />
+        </div>
+
+        <div>
+          <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 block">
+            Nota de gestión
+          </label>
+          <textarea
+            value={nota}
+            onChange={e => setNota(e.target.value)}
+            rows={4}
+            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:border-blue-400 resize-none"
+          />
+        </div>
+
+        {error && <p className="text-[12px] text-red-500">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-4 py-2 text-[13px] text-gray-500 hover:bg-gray-50 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={enviar}
+            disabled={loading || !nota.trim()}
+            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition disabled:opacity-60"
+            style={{ backgroundColor: '#009ee3' }}
+          >
+            {loading ? 'Guardando...' : 'Registrar gestión'}
+          </button>
+        </div>
+      </div>
+    </ModalOverlay>
   )
 }
