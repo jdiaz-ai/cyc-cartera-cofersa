@@ -3,27 +3,39 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Building2, User, Phone, Mail, CreditCard,
-  ClipboardList, Handshake, FileText, AlertTriangle, Plus,
-  Send, CheckCircle2, XCircle, Clock, Circle,
+  ArrowLeft, ClipboardList, Handshake, FileText, AlertTriangle,
+  CheckCircle2, XCircle, Clock, Circle, Send, Plus,
+  Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
+  MailOpen, Receipt,
 } from 'lucide-react'
 import { fmtM, fmtCRC, fmtFecha, fmtFechaHora } from '@/lib/utils/formato'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
 
-// ── Constantes ─────────────────────────────────────────────────────────
-const TABS = ['Aging', 'Facturas', 'Gestiones', 'Promesas', 'Solicitudes'] as const
+// ── Tabs ───────────────────────────────────────────────────────────────
+const TABS = [
+  'Información',
+  'Aging',
+  'Estado de Cuenta',
+  'Gestiones',
+  'Promesas',
+  'Emails',
+  'Notas de Crédito',
+  'Solicitudes',
+] as const
 type Tab = typeof TABS[number]
 
+// ── Aging tramos ───────────────────────────────────────────────────────
 const AGING_TRAMOS = [
-  { key: 'no_vencido',   label: 'Al día',       color: '#009ee3' },
-  { key: 'mora_1_30',    label: '1-30 días',    color: '#f59e0b' },
-  { key: 'mora_31_60',   label: '31-60 días',   color: '#f97316' },
-  { key: 'mora_61_90',   label: '61-90 días',   color: '#ef4444' },
-  { key: 'mora_91_120',  label: '91-120 días',  color: '#dc2626' },
-  { key: 'mora_120_plus',label: '+120 días',    color: '#991b1b' },
+  { key: 'no_vencido',    label: 'Al día',       color: '#009ee3' },
+  { key: 'mora_1_30',     label: '1-30 días',    color: '#f59e0b' },
+  { key: 'mora_31_60',    label: '31-60 días',   color: '#f97316' },
+  { key: 'mora_61_90',    label: '61-90 días',   color: '#ef4444' },
+  { key: 'mora_91_120',   label: '91-120 días',  color: '#dc2626' },
+  { key: 'mora_120_plus', label: '+120 días',    color: '#991b1b' },
 ] as const
 
+// ── Colores de resultado de gestión ────────────────────────────────────
 const RESULTADO_COLORS: Record<string, { bg: string; text: string }> = {
   'Promesa OK':       { bg: '#dcfce7', text: '#15803d' },
   'Pagó':             { bg: '#dcfce7', text: '#15803d' },
@@ -35,24 +47,25 @@ const RESULTADO_COLORS: Record<string, { bg: string; text: string }> = {
   'Llamar más tarde': { bg: '#f1f5f9', text: '#64748b' },
 }
 
+// ── Colores de estado de promesa ───────────────────────────────────────
 const PROMESA_COLORS: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-  PENDIENTE:      { bg: '#fef9c3', text: '#a16207', icon: <Clock    size={12} /> },
-  CUMPLIDA:       { bg: '#dcfce7', text: '#15803d', icon: <CheckCircle2 size={12} /> },
-  INCUMPLIDA:     { bg: '#fee2e2', text: '#dc2626', icon: <XCircle  size={12} /> },
-  ABONO_PARCIAL:  { bg: '#e0f2fe', text: '#0369a1', icon: <Circle   size={12} /> },
+  PENDIENTE:     { bg: '#fef9c3', text: '#a16207', icon: <Clock       size={12} /> },
+  CUMPLIDA:      { bg: '#dcfce7', text: '#15803d', icon: <CheckCircle2 size={12} /> },
+  INCUMPLIDA:    { bg: '#fee2e2', text: '#dc2626', icon: <XCircle     size={12} /> },
+  ABONO_PARCIAL: { bg: '#e0f2fe', text: '#0369a1', icon: <Circle      size={12} /> },
 }
 
 // ── Props ──────────────────────────────────────────────────────────────
 interface Props {
-  cartera:       Cartera
-  maestro:       MaestroCliente | null
-  facturas:      Factura[]
-  gestiones:     Gestion[]
-  promesas:      Promesa[]
+  cartera:        Cartera
+  maestro:        MaestroCliente | null
+  facturas:       Factura[]
+  gestiones:      Gestion[]
+  promesas:       Promesa[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  solicitudes:   any[]
-  analistaNombre:string
-  userEmail:     string
+  solicitudes:    any[]
+  analistaNombre: string
+  userEmail:      string
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -61,42 +74,50 @@ interface Props {
 export default function FichaCliente({
   cartera, maestro, facturas, gestiones, promesas, solicitudes, analistaNombre, userEmail,
 }: Props) {
-  const router   = useRouter()
-  const [tab, setTab]           = useState<Tab>('Aging')
+  const router = useRouter()
+  const [tab, setTab]               = useState<Tab>('Información')
   const [modalGestion, setModalGestion] = useState(false)
 
+  // ── Cálculos de mora ──────────────────────────────────────────────
   const mora_total =
-    (cartera.mora_1_30    || 0) + (cartera.mora_31_60 || 0) +
-    (cartera.mora_61_90   || 0) + (cartera.mora_91_120|| 0) +
-    (cartera.mora_120_plus|| 0)
+    (cartera.mora_1_30     || 0) + (cartera.mora_31_60 || 0) +
+    (cartera.mora_61_90    || 0) + (cartera.mora_91_120 || 0) +
+    (cartera.mora_120_plus || 0)
   const pct_mora = cartera.total > 0 ? Math.round((mora_total / cartera.total) * 100) : 0
   const tramo_peor =
-    (cartera.mora_120_plus|| 0) > 0 ? '+120 días'  :
-    (cartera.mora_91_120  || 0) > 0 ? '91-120 días':
-    (cartera.mora_61_90   || 0) > 0 ? '61-90 días' :
-    (cartera.mora_31_60   || 0) > 0 ? '31-60 días' :
-    (cartera.mora_1_30    || 0) > 0 ? '1-30 días'  : 'Al día'
+    (cartera.mora_120_plus || 0) > 0 ? '+120 días'   :
+    (cartera.mora_91_120   || 0) > 0 ? '91-120 días' :
+    (cartera.mora_61_90    || 0) > 0 ? '61-90 días'  :
+    (cartera.mora_31_60    || 0) > 0 ? '31-60 días'  :
+    (cartera.mora_1_30     || 0) > 0 ? '1-30 días'   : 'Al día'
 
   const urgColor =
-    mora_total > 0 && (cartera.mora_61_90||0)+(cartera.mora_91_120||0)+(cartera.mora_120_plus||0) > 0
+    mora_total > 0 && ((cartera.mora_61_90 || 0) + (cartera.mora_91_120 || 0) + (cartera.mora_120_plus || 0)) > 0
       ? '#dc2626'
-      : mora_total > 0 && (cartera.mora_31_60||0) > 0
+      : mora_total > 0 && (cartera.mora_31_60 || 0) > 0
         ? '#f59e0b'
         : '#22c55e'
+
+  // ── Conteos para badges de tabs ───────────────────────────────────
+  const tabCounts: Partial<Record<Tab, number>> = {
+    'Estado de Cuenta': facturas.length,
+    Gestiones:          gestiones.length,
+    Promesas:           promesas.length,
+    Solicitudes:        solicitudes.length,
+  }
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#f0f4f8' }}>
 
-      {/* ════════════════════════════════════════════════════════════
+      {/* ═══════════════════════════════════════════════════════════
           HEADER
-      ════════════════════════════════════════════════════════════ */}
+      ═══════════════════════════════════════════════════════════ */}
       <div className="bg-white border-b border-gray-200 px-5 pt-4 pb-0">
 
-        {/* Fila 1: back + nombre + estado + acciones */}
+        {/* Sección 1: back + identidad + acciones */}
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-start gap-3">
-            {/* Botón volver */}
             <button
               onClick={() => router.push('/clientes')}
               className="mt-0.5 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition flex-shrink-0"
@@ -104,16 +125,12 @@ export default function FichaCliente({
             >
               <ArrowLeft size={15} />
             </button>
-
-            {/* Nombre + código */}
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-bold text-gray-900" style={{ fontSize: '18px' }}>
                   {cartera.cliente_nombre}
                 </h1>
-                {/* Semáforo */}
                 <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: urgColor }} />
-                {/* Tramo badge */}
                 {mora_total > 0 && (
                   <span
                     className="text-[11px] font-bold rounded-full px-2 py-0.5"
@@ -122,12 +139,8 @@ export default function FichaCliente({
                     {tramo_peor}
                   </span>
                 )}
-                {/* Estatus manual */}
                 {maestro?.estado_manual && maestro.estado_manual !== 'Normal' && (
-                  <span
-                    className="text-[11px] font-bold rounded-full px-2 py-0.5"
-                    style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-                  >
+                  <span className="text-[11px] font-bold rounded-full px-2 py-0.5" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
                     {maestro.estado_manual}
                   </span>
                 )}
@@ -141,11 +154,9 @@ export default function FichaCliente({
             </div>
           </div>
 
-          {/* Acciones */}
+          {/* Botones de acción */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition"
-            >
+            <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition">
               <Send size={12} />
               Estado de cuenta
             </button>
@@ -160,100 +171,54 @@ export default function FichaCliente({
           </div>
         </div>
 
-        {/* Fila 2: KPI chips */}
+        {/* Sección 2: KPIs inline */}
         <div className="flex flex-wrap gap-4 mb-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total cartera</p>
-            <p className="text-[15px] font-bold text-gray-800 tabular-nums">{fmtM(cartera.total)}</p>
-          </div>
-          <div className="w-px self-stretch bg-gray-100" />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">En mora</p>
-            <p className="text-[15px] font-bold tabular-nums" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
-              {mora_total > 0 ? fmtM(mora_total) : '—'}
-              {mora_total > 0 && <span className="text-[11px] ml-1">({pct_mora}%)</span>}
-            </p>
-          </div>
+          <KpiChip label="Total cartera" valor={fmtM(cartera.total)} />
+          <Divider />
+          <KpiChip
+            label="En mora"
+            valor={mora_total > 0 ? `${fmtM(mora_total)} (${pct_mora}%)` : '—'}
+            color={mora_total > 0 ? '#dc2626' : '#22c55e'}
+          />
           {maestro?.limite_credito && maestro.limite_credito > 0 && (
-            <>
-              <div className="w-px self-stretch bg-gray-100" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Límite de crédito</p>
-                <p className="text-[15px] font-bold text-gray-800 tabular-nums">{fmtM(maestro.limite_credito)}</p>
-              </div>
-            </>
+            <><Divider /><KpiChip label="Límite crédito" valor={fmtM(maestro.limite_credito)} /></>
           )}
           {cartera.dias_mora > 0 && (
-            <>
-              <div className="w-px self-stretch bg-gray-100" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Días mora mayor</p>
-                <p className="text-[15px] font-bold tabular-nums" style={{ color: '#dc2626' }}>
-                  {cartera.dias_mora}d
-                </p>
-              </div>
-            </>
+            <><Divider /><KpiChip label="Días mora mayor" valor={`${cartera.dias_mora}d`} color="#dc2626" /></>
           )}
-          <div className="w-px self-stretch bg-gray-100" />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Vendedor</p>
-            <p className="text-[13px] font-semibold text-gray-700">{cartera.vendedor_nombre || '—'}</p>
-          </div>
+          <Divider />
+          <KpiChip label="Vendedor" valor={cartera.vendedor_nombre || '—'} small />
           {analistaNombre && (
-            <>
-              <div className="w-px self-stretch bg-gray-100" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Analista</p>
-                <p className="text-[13px] font-semibold text-gray-700">{analistaNombre}</p>
-              </div>
-            </>
+            <><Divider /><KpiChip label="Analista" valor={analistaNombre} small /></>
           )}
           {maestro?.telefono && (
-            <>
-              <div className="w-px self-stretch bg-gray-100" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Teléfono</p>
-                <p className="text-[13px] font-semibold text-gray-700">{maestro.telefono}</p>
-              </div>
-            </>
+            <><Divider /><KpiChip label="Teléfono" valor={maestro.telefono} small /></>
           )}
-          <div className="w-px self-stretch bg-gray-100" />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Score ICP</p>
-            <p className="text-[13px] font-semibold text-gray-400 italic">Sin datos</p>
-          </div>
+          <Divider />
+          <KpiChip label="Score ICP" valor="Sin datos" color="#94a3b8" small italic />
         </div>
 
-        {/* Fila 3: Tabs */}
-        <div className="flex gap-0 -mb-px">
+        {/* Sección 3: Tabs */}
+        <div className="flex gap-0 -mb-px overflow-x-auto">
           {TABS.map(t => {
-            const counts: Partial<Record<Tab, number>> = {
-              Gestiones:   gestiones.length,
-              Promesas:    promesas.length,
-              Facturas:    facturas.length,
-              Solicitudes: solicitudes.length,
-            }
-            const count = counts[t]
+            const count = tabCounts[t]
+            const active = tab === t
             return (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className="flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-                style={
-                  tab === t
-                    ? { borderColor: '#009ee3', color: '#009ee3' }
-                    : { borderColor: 'transparent', color: '#94a3b8' }
-                }
+                style={active
+                  ? { borderColor: '#009ee3', color: '#009ee3' }
+                  : { borderColor: 'transparent', color: '#94a3b8' }}
               >
                 {t}
                 {count !== undefined && count > 0 && (
                   <span
                     className="text-[10px] rounded-full px-1.5 py-0.5 font-bold"
-                    style={
-                      tab === t
-                        ? { backgroundColor: '#e0f2fe', color: '#009ee3' }
-                        : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
-                    }
+                    style={active
+                      ? { backgroundColor: '#e0f2fe', color: '#009ee3' }
+                      : { backgroundColor: '#f1f5f9', color: '#94a3b8' }}
                   >
                     {count}
                   </span>
@@ -264,12 +229,70 @@ export default function FichaCliente({
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════
+      {/* ═══════════════════════════════════════════════════════════
           CONTENIDO DEL TAB
-      ════════════════════════════════════════════════════════════ */}
+      ═══════════════════════════════════════════════════════════ */}
       <div className="flex-1 overflow-y-auto p-5">
 
-        {/* ── TAB: AGING ─────────────────────────────────────────── */}
+        {/* ── TAB: INFORMACIÓN ─────────────────────────────────── */}
+        {tab === 'Información' && (
+          <div className="max-w-2xl space-y-4">
+            <InfoCard titulo="Datos comerciales">
+              <InfoRow icon={<Building2 size={14} />} label="Nombre"         valor={cartera.cliente_nombre} />
+              <InfoRow icon={<Tag        size={14} />} label="Código"         valor={cartera.cliente_cod} mono />
+              <InfoRow icon={<Tag        size={14} />} label="Contribuyente"  valor={cartera.contribuyente} mono />
+              {maestro?.condicion_pago && (
+                <InfoRow icon={<Calendar size={14} />} label="Condición de pago" valor={maestro.condicion_pago} />
+              )}
+              {maestro?.estado_manual && (
+                <InfoRow icon={<Tag size={14} />} label="Estatus" valor={maestro.estado_manual}
+                  badge={maestro.estado_manual !== 'Normal'
+                    ? { bg: '#fee2e2', text: '#dc2626' }
+                    : { bg: '#dcfce7', text: '#15803d' }} />
+              )}
+            </InfoCard>
+
+            <InfoCard titulo="Crédito">
+              {maestro?.limite_credito && maestro.limite_credito > 0
+                ? <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito" valor={fmtCRC(maestro.limite_credito)} />
+                : <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito" valor="Sin límite configurado" muted />
+              }
+              <InfoRow icon={<CreditCard size={14} />} label="Mora total"
+                valor={mora_total > 0 ? `${fmtCRC(mora_total)} (${pct_mora}%)` : '—'}
+                color={mora_total > 0 ? '#dc2626' : undefined} />
+              {cartera.dias_mora > 0 && (
+                <InfoRow icon={<Calendar size={14} />} label="Días mora mayor" valor={`${cartera.dias_mora} días`} color="#dc2626" />
+              )}
+            </InfoCard>
+
+            <InfoCard titulo="Contacto">
+              <InfoRow icon={<User  size={14} />} label="Vendedor" valor={cartera.vendedor_nombre || '—'} />
+              {analistaNombre && (
+                <InfoRow icon={<User size={14} />} label="Analista" valor={analistaNombre} />
+              )}
+              {maestro?.telefono && (
+                <InfoRow icon={<Phone size={14} />} label="Teléfono" valor={maestro.telefono} />
+              )}
+              {maestro?.correo && (
+                <InfoRow icon={<Mail size={14} />} label="Email" valor={maestro.correo} />
+              )}
+            </InfoCard>
+
+            <InfoCard titulo="Scoring">
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100">
+                  <span className="text-[11px] font-bold text-gray-400">ICP</span>
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-gray-400 italic">Sin datos suficientes</p>
+                  <p className="text-[11px] text-gray-300">Se requieren al menos 3 meses de historial</p>
+                </div>
+              </div>
+            </InfoCard>
+          </div>
+        )}
+
+        {/* ── TAB: AGING ───────────────────────────────────────── */}
         {tab === 'Aging' && (
           <div className="space-y-4 max-w-2xl">
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -283,22 +306,18 @@ export default function FichaCliente({
                   const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
                   return (
                     <div key={key} className="flex items-center gap-3">
-                      {/* Label */}
                       <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '80px', flexShrink: 0 }}>
                         {label}
                       </span>
-                      {/* Barra */}
                       <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }}
                         />
                       </div>
-                      {/* Monto */}
                       <span className="text-[12px] font-semibold tabular-nums text-right" style={{ width: '80px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
                         {monto > 0 ? fmtM(monto) : '—'}
                       </span>
-                      {/* Porcentaje */}
                       <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '34px', flexShrink: 0 }}>
                         {pct > 0 ? `${pct}%` : ''}
                       </span>
@@ -306,34 +325,23 @@ export default function FichaCliente({
                   )
                 })}
               </div>
-
-              {/* Totales + chips */}
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
                   <span className="text-[15px] font-bold text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: '#f0f4f8', color: '#64748b' }}>
-                    <span>DSO</span>
-                    <span className="text-gray-700">{cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: mora_total > 0 ? '#fee2e2' : '#dcfce7', color: mora_total > 0 ? '#dc2626' : '#15803d' }}>
-                    <span>% Mora</span>
-                    <span>{pct_mora}%</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: '#f0f4f8', color: '#64748b' }}>
-                    <span>Mora total</span>
-                    <span className="text-gray-700">{fmtM(mora_total)}</span>
-                  </div>
+                  <Chip label="DSO" valor={`${cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d`} />
+                  <Chip label="% Mora" valor={`${pct_mora}%`} bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'} color={mora_total > 0 ? '#dc2626' : '#15803d'} />
+                  <Chip label="Mora total" valor={fmtM(mora_total)} />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── TAB: FACTURAS ──────────────────────────────────────── */}
-        {tab === 'Facturas' && (
+        {/* ── TAB: ESTADO DE CUENTA ─────────────────────────────── */}
+        {tab === 'Estado de Cuenta' && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             {facturas.length === 0 ? (
               <EmptyState icon={<FileText size={32} />} texto="No hay facturas pendientes para este cliente." />
@@ -383,7 +391,7 @@ export default function FichaCliente({
           </div>
         )}
 
-        {/* ── TAB: GESTIONES ─────────────────────────────────────── */}
+        {/* ── TAB: GESTIONES ───────────────────────────────────── */}
         {tab === 'Gestiones' && (
           <div className="space-y-2 max-w-3xl">
             {gestiones.length === 0 ? (
@@ -397,22 +405,17 @@ export default function FichaCliente({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        {/* Fecha */}
                         <span className="text-[12px] font-bold text-gray-700">{fmtFecha(g.fecha)}</span>
                         <span className="text-gray-300">·</span>
                         <span className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</span>
                         <span className="text-gray-300">·</span>
-                        {/* Tipo */}
                         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{g.tipo}</span>
-                        {/* Analista */}
                         <span className="text-[11px] text-gray-400">{g.analista_email?.split('@')[0]}</span>
                       </div>
-                      {/* Nota */}
                       {g.nota && (
                         <p className="text-[13px] text-gray-600 leading-snug">{g.nota}</p>
                       )}
                     </div>
-                    {/* Resultado */}
                     <span
                       className="flex-shrink-0 text-[11px] font-bold rounded-full px-2.5 py-1"
                       style={{ backgroundColor: resSty.bg, color: resSty.text }}
@@ -426,7 +429,7 @@ export default function FichaCliente({
           </div>
         )}
 
-        {/* ── TAB: PROMESAS ──────────────────────────────────────── */}
+        {/* ── TAB: PROMESAS ─────────────────────────────────────── */}
         {tab === 'Promesas' && (
           <div className="space-y-2 max-w-2xl">
             {promesas.length === 0 ? (
@@ -465,7 +468,35 @@ export default function FichaCliente({
           </div>
         )}
 
-        {/* ── TAB: SOLICITUDES ───────────────────────────────────── */}
+        {/* ── TAB: EMAILS ───────────────────────────────────────── */}
+        {tab === 'Emails' && (
+          <div className="max-w-2xl">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <EmptyState
+                icon={<MailOpen size={32} />}
+                texto="Historial de emails próximamente"
+                sub="Aquí aparecerán los estados de cuenta y correos enviados a este cliente."
+                comingSoon
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: NOTAS DE CRÉDITO ─────────────────────────────── */}
+        {tab === 'Notas de Crédito' && (
+          <div className="max-w-2xl">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <EmptyState
+                icon={<Receipt size={32} />}
+                texto="Notas de crédito próximamente"
+                sub="Las solicitudes de notas de crédito aprobadas para este cliente aparecerán aquí."
+                comingSoon
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: SOLICITUDES ─────────────────────────────────── */}
         {tab === 'Solicitudes' && (
           <div className="max-w-2xl">
             {solicitudes.length === 0 ? (
@@ -490,8 +521,8 @@ export default function FichaCliente({
                       <span
                         className="flex-shrink-0 text-[11px] font-bold rounded-full px-2.5 py-1"
                         style={
-                          s.estado === 'APROBADA'  ? { backgroundColor: '#dcfce7', color: '#15803d' } :
-                          s.estado === 'RECHAZADA' ? { backgroundColor: '#fee2e2', color: '#dc2626' } :
+                          s.estado === 'APROBADA'    ? { backgroundColor: '#dcfce7', color: '#15803d' } :
+                          s.estado === 'RECHAZADA'   ? { backgroundColor: '#fee2e2', color: '#dc2626' } :
                           s.estado === 'EN_REVISION' ? { backgroundColor: '#e0f2fe', color: '#0369a1' } :
                           { backgroundColor: '#fef9c3', color: '#a16207' }
                         }
@@ -526,6 +557,80 @@ export default function FichaCliente({
 // ══════════════════════════════════════════════════════════════════════
 // SUB-COMPONENTES
 // ══════════════════════════════════════════════════════════════════════
+
+function Divider() {
+  return <div className="w-px self-stretch bg-gray-100" />
+}
+
+function KpiChip({ label, valor, color, small, italic }: {
+  label: string; valor: string; color?: string; small?: boolean; italic?: boolean
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <p
+        className={`tabular-nums ${small ? 'text-[13px] font-semibold' : 'text-[15px] font-bold'} ${italic ? 'italic' : ''}`}
+        style={{ color: color ?? '#1e293b' }}
+      >
+        {valor}
+      </p>
+    </div>
+  )
+}
+
+function InfoCard({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100">
+        <h3 className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">{titulo}</h3>
+      </div>
+      <div className="px-5 py-3 space-y-2.5">{children}</div>
+    </div>
+  )
+}
+
+function InfoRow({ icon, label, valor, mono, muted, color, badge }: {
+  icon: React.ReactNode
+  label: string
+  valor: string
+  mono?:  boolean
+  muted?: boolean
+  color?: string
+  italic?: boolean
+  badge?: { bg: string; text: string }
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-gray-300 flex-shrink-0">{icon}</span>
+      <span className="text-[12px] text-gray-400 w-36 flex-shrink-0">{label}</span>
+      {badge ? (
+        <span className="text-[12px] font-bold rounded-full px-2 py-0.5" style={{ backgroundColor: badge.bg, color: badge.text }}>
+          {valor}
+        </span>
+      ) : (
+        <span
+          className={`text-[13px] font-semibold ${mono ? 'font-mono' : ''} ${muted ? 'text-gray-300 italic' : ''}`}
+          style={{ color: muted ? undefined : (color ?? '#374151') }}
+        >
+          {valor}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function Chip({ label, valor, bg, color }: { label: string; valor: string; bg?: string; color?: string }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold"
+      style={{ backgroundColor: bg ?? '#f0f4f8', color: color ?? '#64748b' }}
+    >
+      <span>{label}</span>
+      <span style={{ color: color ? undefined : '#374151' }}>{valor}</span>
+    </div>
+  )
+}
+
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th
@@ -537,12 +642,19 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
   )
 }
 
-function EmptyState({ icon, texto, sub }: { icon: React.ReactNode; texto: string; sub?: string }) {
+function EmptyState({ icon, texto, sub, comingSoon }: {
+  icon: React.ReactNode; texto: string; sub?: string; comingSoon?: boolean
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center px-6">
-      <div className="text-gray-200 mb-3">{icon}</div>
-      <p className="text-[13px] font-semibold text-gray-500">{texto}</p>
+      <div className="mb-3" style={{ color: comingSoon ? '#009ee3' : '#e2e8f0' }}>{icon}</div>
+      <p className="text-[13px] font-semibold" style={{ color: comingSoon ? '#0369a1' : '#6b7280' }}>{texto}</p>
       {sub && <p className="text-[11px] text-gray-400 mt-1 max-w-xs">{sub}</p>}
+      {comingSoon && (
+        <span className="mt-3 text-[10px] font-bold rounded-full px-3 py-1" style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+          PRÓXIMAMENTE
+        </span>
+      )}
     </div>
   )
 }

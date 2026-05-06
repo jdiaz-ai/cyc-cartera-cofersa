@@ -219,10 +219,10 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
                   </button>
                 </th>
 
-                {/* Última gestión */}
+                {/* Sin gestión */}
                 <th className="px-3 py-3 text-center">
                   <button className={thBtnCls + ' mx-auto'} onClick={() => toggleSort('dias_sin_gestion')}>
-                    Últ. gestión <SortIcon activo={sortCol === 'dias_sin_gestion'} dir={sortDir} />
+                    Sin gestión <SortIcon activo={sortCol === 'dias_sin_gestion'} dir={sortDir} />
                   </button>
                 </th>
 
@@ -247,8 +247,8 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
               {filtered.map((r, i) => {
                 const urgColor  = URGENCIA_COLOR[r.urgencia]
                 const tramoSty  = TRAMO_STYLES[r.tramo] ?? { bg: '#f1f5f9', text: '#64748b' }
-                const diasStr   = r.dias_sin_gestion >= 999 ? 'Sin gestión' : `${r.dias_sin_gestion}d`
-                const diasColor = r.dias_sin_gestion >= 7 ? '#dc2626' : r.dias_sin_gestion >= 3 ? '#f59e0b' : '#64748b'
+                const diasStr   = r.dias_sin_gestion >= 999 ? 'Sin gestión' : r.dias_sin_gestion === 0 ? 'Hoy' : `${r.dias_sin_gestion}d`
+                const diasColor = r.dias_sin_gestion >= 999 ? '#dc2626' : r.dias_sin_gestion >= 4 ? '#dc2626' : r.dias_sin_gestion >= 1 ? '#f59e0b' : '#16a34a'
                 const analNombre = analistaNombreMap[r.analista_email]
                   ?? (r.analista_email ? r.analista_email.split('@')[0] : '—')
 
