@@ -89,12 +89,13 @@ export default function FichaCliente({
   const router   = useRouter()
   const supabase = createClient()
 
-  const [tab,          setTab]          = useState<Tab>('Información')
-  const [modalGestion, setModalGestion] = useState(false)
-  const [modalEmail,   setModalEmail]   = useState(false)
-  const [modalEdoCta,  setModalEdoCta]  = useState(false)
-  const [toast,        setToast]        = useState('')
-  const [estadoLocal,  setEstadoLocal]  = useState(maestro?.estado_manual ?? 'Normal')
+  const [tab,               setTab]               = useState<Tab>('Información')
+  const [modalGestion,      setModalGestion]      = useState(false)
+  const [modalEmail,        setModalEmail]        = useState(false)
+  const [modalEdoCta,       setModalEdoCta]       = useState(false)
+  const [toast,             setToast]             = useState('')
+  const [estadoLocal,       setEstadoLocal]       = useState(maestro?.estado_manual ?? 'Normal')
+  const [filtroTramoEdoCta, setFiltroTramoEdoCta] = useState<string>('Todos')
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function showToast(msg: string) {
@@ -394,6 +395,8 @@ export default function FichaCliente({
         {/* ── TAB: AGING ───────────────────────────────────────── */}
         {tab === 'Aging' && (
           <div className="space-y-4 max-w-2xl">
+
+            {/* ── Card 1: Barras visuales ─────────────────────── */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-100">
                 <h3 className="text-[13px] font-bold text-gray-700">Distribución de saldo por antigüedad</h3>
@@ -405,16 +408,13 @@ export default function FichaCliente({
                   const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
                   return (
                     <div key={key} className="flex items-center gap-3">
-                      <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '80px', flexShrink: 0 }}>
-                        {label}
-                      </span>
+                      <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '80px', flexShrink: 0 }}>{label}</span>
                       <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }}
-                        />
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }} />
                       </div>
-                      <span className="text-[12px] font-semibold tabular-nums text-right" style={{ width: '80px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                      <span className="text-[12px] font-semibold tabular-nums text-right"
+                        style={{ width: '80px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
                         {monto > 0 ? fmtM(monto) : '—'}
                       </span>
                       <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '34px', flexShrink: 0 }}>
@@ -424,17 +424,101 @@ export default function FichaCliente({
                   )
                 })}
               </div>
-              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
-                  <span className="text-[15px] font-bold text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Chip label="DSO" valor={`${cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d`} />
-                  <Chip label="% Mora" valor={`${pct_mora}%`} bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'} color={mora_total > 0 ? '#dc2626' : '#15803d'} />
-                  <Chip label="Mora total" valor={fmtM(mora_total)} />
-                </div>
+            </div>
+
+            {/* ── Card 2: Tabla numérica detallada ───────────── */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <h3 className="text-[12px] font-bold text-gray-600">Detalle por tramo</h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">Clic en un tramo para ver sus facturas</p>
               </div>
+              <table className="w-full" style={{ fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tramo</th>
+                    <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
+                    <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">% Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {AGING_TRAMOS.map(({ key, label, color }) => {
+                    const monto = (cartera[key as keyof Cartera] as number) || 0
+                    const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
+                    return (
+                      <tr
+                        key={key}
+                        onClick={() => {
+                          setFiltroTramoEdoCta(label)
+                          setTab('Estado de Cuenta')
+                        }}
+                        className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors"
+                      >
+                        <td className="px-5 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-[13px] font-semibold text-gray-700">{label}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-2.5 text-right tabular-nums text-[13px] font-semibold"
+                          style={{ color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                          {monto > 0 ? fmtCRC(monto) : '—'}
+                        </td>
+                        <td className="px-5 py-2.5 text-right tabular-nums text-[12px] text-gray-400">
+                          {pct > 0 ? `${pct}%` : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                    <td className="px-5 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
+                    <td className="px-5 py-2.5 text-right text-[14px] font-black text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</td>
+                    <td className="px-5 py-2.5 text-right text-[12px] font-bold text-gray-500">100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* ── Card 3: KPIs ───────────────────────────────── */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
+              <div className="flex flex-wrap gap-3">
+                <Chip
+                  label="DSO"
+                  valor={`${cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d`}
+                />
+                <Chip
+                  label="% Mora"
+                  valor={`${pct_mora}%`}
+                  bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'}
+                  color={mora_total > 0 ? '#dc2626' : '#15803d'}
+                />
+                <Chip label="Mora total" valor={fmtM(mora_total)} />
+                <Chip
+                  label="Comparativa"
+                  valor="Sin historial"
+                  bg="#f1f5f9"
+                  color="#94a3b8"
+                />
+                <Chip
+                  label="Comportamiento"
+                  valor={mora_total === 0 ? 'Al día' : pct_mora > 25 ? 'En riesgo' : 'En seguimiento'}
+                  bg={mora_total === 0 ? '#dcfce7' : pct_mora > 25 ? '#fee2e2' : '#fef9c3'}
+                  color={mora_total === 0 ? '#15803d' : pct_mora > 25 ? '#dc2626' : '#a16207'}
+                />
+              </div>
+            </div>
+
+            {/* ── Botón ver Estado de Cuenta ─────────────────── */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setFiltroTramoEdoCta('Todos'); setTab('Estado de Cuenta') }}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90"
+                style={{ backgroundColor: '#009ee3', color: 'white' }}
+              >
+                Ver Estado de Cuenta →
+              </button>
             </div>
           </div>
         )}
