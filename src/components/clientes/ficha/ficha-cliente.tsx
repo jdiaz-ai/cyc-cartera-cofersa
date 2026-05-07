@@ -781,16 +781,16 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         <CampoReadOnly label="Límite de crédito" valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'}
           onCopiar={limite > 0 ? () => copiar(fmtCRC(limite), 'Límite de crédito') : undefined} />
         <div className="space-y-0.5">
-          <span className="block text-[10px] font-semibold text-gray-600">Crédito disponible</span>
+          <span className="block text-[12px] font-semibold text-gray-600">Crédito disponible</span>
           {limite > 0 && disponible !== null ? (
-            <span className="text-[10px] font-medium"
+            <span className="text-[12px] font-medium"
               style={{ color: disponible >= 0 ? '#22c55e' : '#dc2626' }}>
               {disponible >= 0
                 ? `${fmtCRC(disponible)} disponible`
                 : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
             </span>
           ) : (
-            <span className="text-[10px] text-gray-400">—</span>
+            <span className="text-[12px] text-gray-400">—</span>
           )}
         </div>
       </InfoCard2>
@@ -843,18 +843,18 @@ function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <span className="text-[10px] font-semibold text-gray-600 truncate">{label}</span>
+        <span className="text-[12px] font-semibold text-gray-600 truncate">{label}</span>
         {!editando && (
           <div className="flex gap-1 flex-shrink-0">
             {onCopiar && (
               <button type="button" onClick={onCopiar}
-                className="text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+                className="text-[10px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
                 style={{ borderWidth: '0.5px' }}>
                 Copiar
               </button>
             )}
             <button type="button" onClick={onEditar}
-              className="text-[9px] font-medium text-blue-400 hover:text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+              className="text-[10px] font-medium text-blue-400 hover:text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
               style={{ borderWidth: '0.5px' }}>
               Editar
             </button>
@@ -869,26 +869,26 @@ function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
             value={inputVal}
             maxLength={maxLength}
             onChange={e => onChange(e.target.value)}
-            className={`flex-1 min-w-0 rounded border px-2 py-1 text-[10px] text-gray-800 focus:outline-none focus:ring-1 transition ${
+            className={`flex-1 min-w-0 rounded border px-2 py-1 text-[12px] text-gray-800 focus:outline-none focus:ring-1 transition ${
               invalido ? 'border-red-300 focus:ring-red-200' : 'border-blue-300 focus:ring-blue-200'
             }`}
             style={{ backgroundColor: '#fff', borderWidth: '1px' }}
             placeholder={vacio}
           />
-          {hint && <span className="text-[9px] text-gray-400 whitespace-nowrap">{hint}</span>}
+          {hint && <span className="text-[10px] text-gray-400 whitespace-nowrap">{hint}</span>}
           <button type="button" disabled={saving || invalido} onClick={onGuardar}
-            className="text-[9px] font-bold text-white rounded px-2 py-1 leading-tight disabled:opacity-50 whitespace-nowrap transition"
+            className="text-[10px] font-bold text-white rounded px-2 py-1 leading-tight disabled:opacity-50 whitespace-nowrap transition"
             style={{ backgroundColor: '#009ee3' }}>
             {saving ? '...' : 'Guardar'}
           </button>
           <button type="button" onClick={onCancelar}
-            className="text-[9px] font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 leading-tight hover:bg-gray-50 transition whitespace-nowrap"
+            className="text-[10px] font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 leading-tight hover:bg-gray-50 transition whitespace-nowrap"
             style={{ borderWidth: '0.5px' }}>
             Cancelar
           </button>
         </div>
       ) : (
-        <span className="block text-[10px] text-gray-400 break-words">
+        <span className="block text-[12px] text-gray-500 break-words">
           {valor || <span className="italic text-gray-300">{vacio}</span>}
         </span>
       )}
@@ -907,16 +907,16 @@ function CampoReadOnly({ label, valor, onCopiar, mono, muted }: {
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <span className="text-[10px] font-semibold text-gray-600 truncate">{label}</span>
+        <span className="text-[12px] font-semibold text-gray-600 truncate">{label}</span>
         {onCopiar && (
           <button type="button" onClick={onCopiar}
-            className="flex-shrink-0 text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+            className="flex-shrink-0 text-[10px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
             style={{ borderWidth: '0.5px' }}>
             Copiar
           </button>
         )}
       </div>
-      <span className={`block text-[10px] break-words ${muted ? 'text-gray-300 italic' : 'text-gray-500'} ${mono ? 'font-mono' : ''}`}>
+      <span className={`block text-[12px] break-words ${muted ? 'text-gray-300 italic' : 'text-gray-500'} ${mono ? 'font-mono' : ''}`}>
         {valor || '—'}
       </span>
     </div>
