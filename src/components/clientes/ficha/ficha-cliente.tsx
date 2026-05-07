@@ -329,19 +329,19 @@ export default function FichaCliente({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           {/* Card 1: Total cartera */}
           <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Total cartera</p>
-            <p className="text-[13px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(cartera.total)}</p>
+            <p className="text-[11px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Total cartera</p>
+            <p className="text-[18px] font-semibold tabular-nums text-gray-800 leading-tight">{fmtCRC(cartera.total)}</p>
           </div>
 
           {/* Card 2: En mora */}
           <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">En mora</p>
+            <p className="text-[11px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">En mora</p>
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <p className="text-[13px] font-bold tabular-nums leading-tight" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
+              <p className="text-[18px] font-semibold tabular-nums leading-tight" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
                 {mora_total > 0 ? fmtCRC(mora_total) : '—'}
               </p>
               {mora_total > 0 && (
-                <span className="text-[11px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0"
+                <span className="text-[12px] font-semibold rounded-full px-1.5 py-0.5 flex-shrink-0"
                   style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
                   {pct_mora}%
                 </span>
@@ -351,27 +351,27 @@ export default function FichaCliente({
 
           {/* Card 3: Límite de crédito */}
           <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Límite crédito</p>
+            <p className="text-[11px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Límite crédito</p>
             {maestro?.limite_credito && maestro.limite_credito > 0 ? (
               <>
-                <p className="text-[13px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(maestro.limite_credito)}</p>
+                <p className="text-[18px] font-semibold tabular-nums text-gray-800 leading-tight">{fmtCRC(maestro.limite_credito)}</p>
                 {(() => {
                   const disp = maestro.limite_credito - cartera.total
                   return disp >= 0
-                    ? <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#16a34a' }}>{fmtCRC(disp)} disponible</p>
-                    : <p className="text-[10px] font-semibold mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
+                    ? <p className="text-[12px] font-medium mt-0.5" style={{ color: '#16a34a' }}>{fmtCRC(disp)} disponible</p>
+                    : <p className="text-[12px] font-medium mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
                 })()}
               </>
             ) : (
-              <p className="text-[13px] font-semibold text-gray-300 italic">Sin límite</p>
+              <p className="text-[18px] font-semibold text-gray-300 italic">Sin límite</p>
             )}
           </div>
 
           {/* Card 4: Vendedor / Analista */}
           <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Vendedor / Analista</p>
-            <p className="text-[12px] font-semibold text-gray-700 truncate">{cartera.vendedor_nombre || '—'}</p>
-            <p className="text-[11px] text-gray-400 truncate">{analistaNombre || '—'}</p>
+            <p className="text-[11px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Vendedor / Analista</p>
+            <p className="text-[18px] font-semibold text-gray-700 truncate leading-tight">{cartera.vendedor_nombre || '—'}</p>
+            <p className="text-[12px] text-gray-400 truncate mt-0.5">{analistaNombre || '—'}</p>
           </div>
         </div>
 
@@ -829,7 +829,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid gap-3.5" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
       {/* ── CARD 1: DATOS DE CONTACTO CxP ── */}
       <InfoCard2 titulo="DATOS DE CONTACTO CxP">
@@ -881,27 +881,26 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
         <CampoReadOnly label="Límite de crédito" valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'}
           onCopiar={limite > 0 ? () => copiar(fmtCRC(limite), 'Límite de crédito') : undefined} />
         <div className="space-y-0.5">
-          <span className="block text-[12px] font-semibold text-gray-600">Crédito disponible</span>
+          <span className="block text-[11px] font-semibold text-gray-600">Crédito disponible</span>
           {limite > 0 && disponible !== null ? (
-            <span className="text-[12px] font-medium"
+            <span className="text-[11px] font-medium"
               style={{ color: disponible >= 0 ? '#22c55e' : '#dc2626' }}>
               {disponible >= 0
                 ? `${fmtCRC(disponible)} disponible`
                 : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
             </span>
           ) : (
-            <span className="text-[12px] text-gray-400">—</span>
+            <span className="text-[11px] text-gray-400">—</span>
           )}
         </div>
       </InfoCard2>
 
       {/* ── CARD 4: INFORMACIÓN INTERNA ── */}
       <InfoCard2 titulo="INFORMACIÓN INTERNA">
-        <CampoReadOnly label="Código cliente"     valor={cartera.cliente_cod}
+        <CampoReadOnly label="Código cliente"    valor={cartera.cliente_cod}
           onCopiar={() => copiar(cartera.cliente_cod, 'Código')} mono />
-        <CampoReadOnly label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
-        <CampoReadOnly label="Analista asignado"  valor={analistaNombre || '—'} />
-        <CampoReadOnly label="Score ICP"          valor="Sin datos suficientes" muted />
+        <CampoReadOnly label="Vendedor asignado" valor={cartera.vendedor_nombre || '—'} />
+        <CampoReadOnly label="Analista asignado" valor={analistaNombre || '—'} />
       </InfoCard2>
 
     </div>
@@ -912,10 +911,10 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
 function InfoCard2({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden" style={{ borderWidth: '0.5px' }}>
-      <div className="px-3.5 pt-3 pb-2 border-b border-gray-100" style={{ borderBottomWidth: '0.5px' }}>
+      <div className="px-3 pt-2.5 pb-1.5 border-b border-gray-100" style={{ borderBottomWidth: '0.5px' }}>
         <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{titulo}</h3>
       </div>
-      <div className="px-3.5 py-3 space-y-2.5">{children}</div>
+      <div className="px-3 py-2.5 space-y-2">{children}</div>
     </div>
   )
 }
@@ -943,18 +942,18 @@ function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <span className="text-[12px] font-semibold text-gray-600 truncate">{label}</span>
+        <span className="text-[11px] font-semibold text-gray-600 truncate">{label}</span>
         {!editando && (
           <div className="flex gap-1 flex-shrink-0">
             {onCopiar && (
               <button type="button" onClick={onCopiar}
-                className="text-[10px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+                className="text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
                 style={{ borderWidth: '0.5px' }}>
                 Copiar
               </button>
             )}
             <button type="button" onClick={onEditar}
-              className="text-[10px] font-medium text-blue-400 hover:text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+              className="text-[9px] font-medium text-blue-400 hover:text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
               style={{ borderWidth: '0.5px' }}>
               Editar
             </button>
@@ -969,7 +968,7 @@ function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
             value={inputVal}
             maxLength={maxLength}
             onChange={e => onChange(e.target.value)}
-            className={`flex-1 min-w-0 rounded border px-2 py-1 text-[12px] text-gray-800 focus:outline-none focus:ring-1 transition ${
+            className={`flex-1 min-w-0 rounded border px-2 py-1 text-[11px] text-gray-800 focus:outline-none focus:ring-1 transition ${
               invalido ? 'border-red-300 focus:ring-red-200' : 'border-blue-300 focus:ring-blue-200'
             }`}
             style={{ backgroundColor: '#fff', borderWidth: '1px' }}
@@ -977,18 +976,18 @@ function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
           />
           {hint && <span className="text-[10px] text-gray-400 whitespace-nowrap">{hint}</span>}
           <button type="button" disabled={saving || invalido} onClick={onGuardar}
-            className="text-[10px] font-bold text-white rounded px-2 py-1 leading-tight disabled:opacity-50 whitespace-nowrap transition"
+            className="text-[9px] font-bold text-white rounded px-2 py-1 leading-tight disabled:opacity-50 whitespace-nowrap transition"
             style={{ backgroundColor: '#009ee3' }}>
             {saving ? '...' : 'Guardar'}
           </button>
           <button type="button" onClick={onCancelar}
-            className="text-[10px] font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 leading-tight hover:bg-gray-50 transition whitespace-nowrap"
+            className="text-[9px] font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 leading-tight hover:bg-gray-50 transition whitespace-nowrap"
             style={{ borderWidth: '0.5px' }}>
             Cancelar
           </button>
         </div>
       ) : (
-        <span className="block text-[12px] text-gray-500 break-words">
+        <span className="block text-[11px] text-gray-500 break-words">
           {valor || <span className="italic text-gray-300">{vacio}</span>}
         </span>
       )}
@@ -1007,16 +1006,16 @@ function CampoReadOnly({ label, valor, onCopiar, mono, muted }: {
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between gap-1 min-w-0">
-        <span className="text-[12px] font-semibold text-gray-600 truncate">{label}</span>
+        <span className="text-[11px] font-semibold text-gray-600 truncate">{label}</span>
         {onCopiar && (
           <button type="button" onClick={onCopiar}
-            className="flex-shrink-0 text-[10px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+            className="flex-shrink-0 text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
             style={{ borderWidth: '0.5px' }}>
             Copiar
           </button>
         )}
       </div>
-      <span className={`block text-[12px] break-words ${muted ? 'text-gray-300 italic' : 'text-gray-500'} ${mono ? 'font-mono' : ''}`}>
+      <span className={`block text-[11px] break-words ${muted ? 'text-gray-300 italic' : 'text-gray-500'} ${mono ? 'font-mono' : ''}`}>
         {valor || '—'}
       </span>
     </div>
