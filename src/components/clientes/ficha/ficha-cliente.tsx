@@ -225,16 +225,33 @@ export default function FichaCliente({
                   {tramo_peor}
                 </span>
               )}
-              {/* Badge estado del cliente */}
-              {(() => {
-                const cfg = ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal
-                return (
-                  <span className="text-[11px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
-                    style={{ backgroundColor: cfg.bg, color: cfg.text }}>
-                    {estadoLocal}
-                  </span>
-                )
-              })()}
+              {/* Badge estado del cliente — clickeable solo coordinador */}
+              {esCoordinador ? (
+                <div className="relative flex-shrink-0">
+                  <select
+                    value={estadoLocal}
+                    onChange={e => cambiarEstado(e.target.value)}
+                    className="appearance-none cursor-pointer text-[11px] font-bold rounded-full pl-2.5 pr-5 py-0.5 border-0 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                    style={{
+                      backgroundColor: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).bg,
+                      color:            (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text,
+                    }}
+                    title="Cambiar estado del cliente"
+                  >
+                    {ESTADOS_OPCIONES.map(e => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <ChevronDown size={9} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text }} />
+                </div>
+              ) : (
+                <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 flex-shrink-0"
+                  style={{
+                    backgroundColor: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).bg,
+                    color:            (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text,
+                  }}>
+                  {estadoLocal}
+                </span>
+              )}
             </div>
             <p className="text-[12px] mt-0.5" style={{ color: '#94a3b8' }}>
               <span className="font-mono font-semibold" style={{ color: '#64748b' }}>{cartera.cliente_cod}</span>
@@ -338,36 +355,6 @@ export default function FichaCliente({
             onClick={() => setModalEdoCta(true)}
           />
 
-          {/* Estado: solo coordinador editable */}
-          {esCoordinador ? (
-            <div className="relative">
-              <select
-                value={estadoLocal}
-                onChange={e => cambiarEstado(e.target.value)}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 pl-2.5 pr-6 py-1.5 text-[12px] font-semibold transition hover:bg-gray-50 appearance-none cursor-pointer"
-                style={{ color: ESTADO_CFG[estadoLocal]?.text ?? '#64748b' }}
-              >
-                {ESTADOS_OPCIONES.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-              <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
-            </div>
-          ) : (
-            <span className="flex items-center gap-1.5 rounded-lg border border-gray-100 px-3 py-1.5 text-[12px] font-semibold"
-              style={{ backgroundColor: ESTADO_CFG[estadoLocal]?.bg ?? '#f1f5f9', color: ESTADO_CFG[estadoLocal]?.text ?? '#64748b' }}>
-              {estadoLocal}
-            </span>
-          )}
-
-          {/* Registrar gestión — siempre último */}
-          <button
-            type="button"
-            onClick={() => setModalGestion(true)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90 ml-auto"
-            style={{ backgroundColor: '#009ee3' }}
-          >
-            <Plus size={12} />
-            Registrar gestión
-          </button>
         </div>
 
         {/* Sección 3: Tabs */}
@@ -855,21 +842,6 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             </span>
           </div>
         )}
-        {/* Estado */}
-        <div className="flex items-center gap-3">
-          <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
-          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Estado</span>
-          <span className="text-[11px] font-bold rounded-full px-2 py-0.5"
-            style={{
-              backgroundColor: (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).bg,
-              color:            (ESTADO_CFG[maestro?.estado_manual ?? 'Normal'] ?? ESTADO_CFG.Normal).text,
-            }}>
-            {maestro?.estado_manual || 'Normal'}
-          </span>
-          {!esCoordinador && (
-            <span className="text-[10px] text-gray-300 italic">Solo el coordinador puede cambiarlo</span>
-          )}
-        </div>
       </InfoCard>
 
       {/* ── SECCIÓN 4: Información interna — Fila 2 Col 2 ── */}
@@ -1937,14 +1909,6 @@ function TabGestiones({
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onNuevaGestion}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 flex-shrink-0"
-          style={{ backgroundColor: '#009ee3' }}
-        >
-          <Plus size={14} /> Nueva gestión
-        </button>
       </div>
 
       {/* ── Fila 2: Filtros ──────────────────────────────────── */}
@@ -2093,6 +2057,17 @@ function TabGestiones({
           onSuccess  = {() => { setEditando(null); onToast('Gestión actualizada'); onRefresh() }}
         />
       )}
+
+      {/* ── Botón flotante ────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={onNuevaGestion}
+        title="Registrar una nueva gestión (llamada, email, visita, etc.)"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        style={{ backgroundColor: '#009ee3' }}
+      >
+        <Plus size={16} /> Nueva gestión
+      </button>
     </div>
   )
 }
@@ -2407,17 +2382,6 @@ function TabPromesas({
             )
           })}
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setModalPromesa(true)}
-            className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90 flex-shrink-0"
-            style={{ backgroundColor: '#003B5C', color: 'white' }}>
-            <Plus size={14} /> Nueva promesa
-          </button>
-          <button type="button" onClick={onNuevaGestion}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition flex-shrink-0">
-            <ClipboardList size={14} /> Registrar gestión
-          </button>
-        </div>
       </div>
 
       {/* ── Fila 3: Tabla ────────────────────────────────────── */}
@@ -2489,11 +2453,16 @@ function TabPromesas({
                     </td>
                     {/* Acciones */}
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         <button type="button" onClick={() => setModalEstado(p)}
                           className="text-[11px] font-semibold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 transition"
-                          title="Cambiar estado">
+                          title="Cambiar estado de la promesa">
                           Estado
+                        </button>
+                        <button type="button" onClick={onNuevaGestion}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-md border border-blue-100 text-blue-500 hover:bg-blue-50 transition"
+                          title="Registrar gestión relacionada con esta promesa">
+                          <ClipboardList size={11} className="inline mr-0.5" />Gestión
                         </button>
                         {esCoordinador && (
                           <button type="button" onClick={() => eliminar(p.id)}
@@ -2529,6 +2498,17 @@ function TabPromesas({
           onSuccess     = {() => { setModalPromesa(false); onToast('Promesa registrada'); onRefresh() }}
         />
       )}
+
+      {/* ── Botón flotante Nueva promesa ─────────────────────── */}
+      <button
+        type="button"
+        onClick={() => setModalPromesa(true)}
+        title="Registrar una nueva promesa de pago"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        style={{ backgroundColor: '#003B5C' }}
+      >
+        <Plus size={16} /> Nueva promesa
+      </button>
     </div>
   )
 }
