@@ -70,14 +70,23 @@ interface Props {
   esCoordinador:  boolean
 }
 
-// ── Colores de estado del cliente ──────────────────────────────────────
+// ── Colores de estado del cliente (rgba 15% bg + sólido text) ──────────
 const ESTADO_CFG: Record<string, { bg: string; text: string }> = {
-  Normal:     { bg: '#f1f5f9', text: '#64748b' },
-  Bloqueado:  { bg: '#fee2e2', text: '#dc2626' },
-  Convenio:   { bg: '#fef9c3', text: '#a16207' },
-  Suspendido: { bg: '#ffedd5', text: '#c2410c' },
+  Normal:     { bg: 'rgba(107,114,128,0.15)', text: '#6b7280' },
+  Bloqueado:  { bg: 'rgba(220,38,38,0.15)',   text: '#dc2626' },
+  Convenio:   { bg: 'rgba(245,158,11,0.15)',  text: '#f59e0b' },
+  Suspendido: { bg: 'rgba(249,115,22,0.15)',  text: '#f97316' },
 }
 const ESTADOS_OPCIONES = ['Normal', 'Bloqueado', 'Convenio', 'Suspendido']
+
+// ── Colores de urgencia por tramo ──────────────────────────────────────
+const URGENCIA_CFG: Record<string, { bg: string; text: string }> = {
+  '1-30 días':   { bg: 'rgba(245,158,11,0.15)',  text: '#f59e0b' },
+  '31-60 días':  { bg: 'rgba(249,115,22,0.15)',  text: '#f97316' },
+  '61-90 días':  { bg: 'rgba(234,88,12,0.15)',   text: '#ea580c' },
+  '91-120 días': { bg: 'rgba(220,38,38,0.15)',   text: '#dc2626' },
+  '+120 días':   { bg: 'rgba(185,28,28,0.15)',   text: '#b91c1c' },
+}
 
 // ── Helpers Tab Estado de Cuenta ──────────────────────────────────────
 function estadoFactura(f: Factura, hoy: string): { label: string; bg: string; color: string } {
@@ -124,6 +133,8 @@ export default function FichaCliente({
   const [modalEdoCta,       setModalEdoCta]       = useState(false)
   const [toast,             setToast]             = useState('')
   const [estadoLocal,       setEstadoLocal]       = useState(maestro?.estado_manual ?? 'Normal')
+  const [estadoPendiente,   setEstadoPendiente]   = useState<string | null>(null)   // estado elegido pero sin confirmar
+  const [loadingEstado,     setLoadingEstado]     = useState(false)
   const [filtroTramoEdoCta, setFiltroTramoEdoCta] = useState<string>('Todos')
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -151,18 +162,33 @@ export default function FichaCliente({
     window.open(`https://wa.me/${numero}`, '_blank')
   }
 
-  async function cambiarEstado(nuevoEstado: string) {
-    if (!window.confirm(`¿Cambiar estado del cliente a "${nuevoEstado}"?`)) return
+  // Paso 1: el coordinador elige — se guarda como pendiente y abre modal
+  function elegirEstado(nuevoEstado: string) {
+    if (nuevoEstado === estadoLocal) return
+    setEstadoPendiente(nuevoEstado)
+  }
+
+  // Paso 2: confirmación en modal — llama a la API y notifica
+  async function confirmarCambioEstado() {
+    if (!estadoPendiente) return
+    setLoadingEstado(true)
     const res = await fetch('/api/clientes/estado', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cliente_cod: cartera.cliente_cod, estado: nuevoEstado }),
+      body: JSON.stringify({
+        cliente_cod:    cartera.cliente_cod,
+        estado:         estadoPendiente,
+        estado_anterior: estadoLocal,
+      }),
     })
+    setLoadingEstado(false)
     if (res.ok) {
-      setEstadoLocal(nuevoEstado)
-      showToast(`Estado actualizado a ${nuevoEstado}`)
+      setEstadoLocal(estadoPendiente)
+      setEstadoPendiente(null)
+      showToast(`Estado cambiado a ${estadoPendiente}`)
     } else {
       showToast('Error al actualizar estado')
+      setEstadoPendiente(null)
     }
   }
 
@@ -218,40 +244,77 @@ export default function FichaCliente({
               <h1 style={{ fontSize: '18px', fontWeight: 500, color: '#111827' }}>
                 {cartera.cliente_nombre}
               </h1>
-              {/* Badge tramo de mora */}
-              {mora_total > 0 && (
-                <span className="text-[11px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
-                  style={{ backgroundColor: urgColor + '20', color: urgColor }}>
-                  {tramo_peor}
-                </span>
-              )}
-              {/* Badge estado del cliente — clickeable solo coordinador */}
-              {esCoordinador ? (
-                <div className="relative flex-shrink-0">
-                  <select
-                    value={estadoLocal}
-                    onChange={e => cambiarEstado(e.target.value)}
-                    className="appearance-none cursor-pointer text-[11px] font-bold rounded-full pl-2.5 pr-5 py-0.5 border-0 focus:outline-none focus:ring-2 focus:ring-offset-1"
+              {/* Badge urgencia por tramo de mora */}
+              {mora_total > 0 && tramo_peor !== 'Al día' && (() => {
+                const urg = URGENCIA_CFG[tramo_peor] ?? { bg: 'rgba(245,158,11,0.15)', text: '#f59e0b' }
+                return (
+                  <span className="flex-shrink-0 whitespace-nowrap"
                     style={{
-                      backgroundColor: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).bg,
-                      color:            (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text,
+                      backgroundColor: urg.bg, color: urg.text,
+                      fontSize: '11px', fontWeight: 500,
+                      padding: '4px 8px', borderRadius: '4px',
+                    }}>
+                    {tramo_peor}
+                  </span>
+                )
+              })()}
+
+              {/* Badge estado — coordinador: clickeable con dropdown; analista: read-only */}
+              {(() => {
+                const cfg = ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal
+                return esCoordinador ? (
+                  <div className="relative flex-shrink-0" style={{ zIndex: 20 }}>
+                    <button
+                      type="button"
+                      onClick={() => setEstadoPendiente(estadoLocal === estadoLocal ? '__OPEN__' : null)}
+                      className="flex items-center gap-1 whitespace-nowrap transition hover:opacity-80"
+                      style={{
+                        backgroundColor: cfg.bg, color: cfg.text,
+                        fontSize: '11px', fontWeight: 500,
+                        padding: '4px 8px', borderRadius: '4px', cursor: 'pointer',
+                      }}
+                      title="Cambiar estado del cliente"
+                    >
+                      {estadoLocal}
+                      <ChevronDown size={10} />
+                    </button>
+                    {/* Dropdown de opciones */}
+                    {estadoPendiente === '__OPEN__' && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setEstadoPendiente(null)} />
+                        <div className="absolute left-0 top-full mt-1 z-20 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden min-w-[140px]">
+                          {ESTADOS_OPCIONES.filter(e => e !== estadoLocal).map(e => {
+                            const c = ESTADO_CFG[e] ?? ESTADO_CFG.Normal
+                            return (
+                              <button key={e} type="button"
+                                onClick={() => setEstadoPendiente(e)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-medium hover:bg-gray-50 transition text-left"
+                              >
+                                <span className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: c.text }} />
+                                {e}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <span
+                    className="flex-shrink-0 whitespace-nowrap"
+                    style={{
+                      backgroundColor: cfg.bg, color: cfg.text,
+                      fontSize: '11px', fontWeight: 500,
+                      padding: '4px 8px', borderRadius: '4px',
+                      opacity: 0.8, cursor: 'default',
                     }}
-                    title="Cambiar estado del cliente"
+                    title="Solo el coordinador puede cambiar el estado"
                   >
-                    {ESTADOS_OPCIONES.map(e => <option key={e} value={e}>{e}</option>)}
-                  </select>
-                  <ChevronDown size={9} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ color: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text }} />
-                </div>
-              ) : (
-                <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 flex-shrink-0"
-                  style={{
-                    backgroundColor: (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).bg,
-                    color:            (ESTADO_CFG[estadoLocal] ?? ESTADO_CFG.Normal).text,
-                  }}>
-                  {estadoLocal}
-                </span>
-              )}
+                    {estadoLocal}
+                  </span>
+                )
+              })()}
             </div>
             <p className="text-[12px] mt-0.5" style={{ color: '#94a3b8' }}>
               <span className="font-mono font-semibold" style={{ color: '#64748b' }}>{cartera.cliente_cod}</span>
@@ -629,6 +692,43 @@ export default function FichaCliente({
           onClose       = {() => setModalGestion(false)}
           onSuccess     = {() => { setModalGestion(false); router.refresh() }}
         />
+      )}
+
+      {/* ── Modal confirmación cambio de estado ──────────────────── */}
+      {estadoPendiente && estadoPendiente !== '__OPEN__' && (
+        <ModalOverlay onClose={() => setEstadoPendiente(null)}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h2 className="text-[15px] font-bold text-gray-900">Cambiar estado</h2>
+            <CloseBtn onClose={() => setEstadoPendiente(null)} />
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-[13px] text-gray-600">
+              ¿Confirmar cambio de estado a{' '}
+              <span className="font-bold rounded px-2 py-0.5"
+                style={{
+                  backgroundColor: (ESTADO_CFG[estadoPendiente] ?? ESTADO_CFG.Normal).bg,
+                  color:            (ESTADO_CFG[estadoPendiente] ?? ESTADO_CFG.Normal).text,
+                }}>
+                {estadoPendiente}
+              </span>
+              ?
+            </p>
+            <p className="text-[11px] text-gray-400">
+              Estado actual: <span className="font-semibold text-gray-500">{estadoLocal}</span>
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setEstadoPendiente(null)}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmarCambioEstado} disabled={loadingEstado}
+                className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+                style={{ backgroundColor: (ESTADO_CFG[estadoPendiente] ?? ESTADO_CFG.Normal).text }}>
+                {loadingEstado ? 'Guardando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
       )}
 
       {/* ── Modal Email de cobro ─────────────────────────────────── */}
