@@ -2,12 +2,16 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { fmtM } from '@/lib/utils/formato'
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, FileText } from 'lucide-react'
-import type { ClienteRow, AnalistaOpt } from '@/app/(app)/clientes/page'
+import { fmtCRC } from '@/lib/utils/formato'
+import {
+  Search, ChevronUp, ChevronDown, ChevronsUpDown, FileText,
+  Download, ChevronLeft, ChevronRight,
+} from 'lucide-react'
+import type { ClienteRow, AnalistaOpt, VendedorOpt } from '@/app/(app)/clientes/page'
 
 // ── Constantes ────────────────────────────────────────────────────────
 const TRAMOS = ['Todos', 'Al día', '1-30 días', '31-60 días', '61-90 días', '91-120 días', '+120 días']
+const PAGE_SIZE = 25
 
 const URGENCIA_COLOR: Record<string, string> = {
   ROJO:     '#dc2626',
@@ -45,9 +49,11 @@ type SortCol = 'mora_total' | 'total' | 'dias_sin_gestion' | 'cliente_nombre'
 type SortDir = 'asc' | 'desc'
 
 interface Props {
-  rows:           ClienteRow[]
-  esCoordinador:  boolean
-  analistas:      AnalistaOpt[]
+  rows:          ClienteRow[]
+  esCoordinador: boolean
+  analistas:     AnalistaOpt[]
+  vendedores:    VendedorOpt[]
+  userEmail:     string
 }
 
 // ── Icono de ordenamiento ─────────────────────────────────────────────
@@ -59,14 +65,22 @@ function SortIcon({ activo, dir }: { activo: boolean; dir: SortDir }) {
 }
 
 // ── Componente principal ──────────────────────────────────────────────
-export default function TablaClientes({ rows, esCoordinador, analistas }: Props) {
+export default function TablaClientes({ rows, esCoordinador, analistas, vendedores, userEmail }: Props) {
   const router = useRouter()
 
   const [busqueda,       setBusqueda]       = useState('')
   const [filtroTramo,    setFiltroTramo]    = useState('Todos')
   const [filtroAnalista, setFiltroAnalista] = useState('Todos')
+  const [filtroVendedor, setFiltroVendedor] = useState('Todos')
   const [sortCol,        setSortCol]        = useState<SortCol>('mora_total')
   const [sortDir,        setSortDir]        = useState<SortDir>('desc')
+  const [pagina,         setPagina]         = useState(1)
+  const [toast,          setToast]          = useState('')
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2500)
+  }
 
   // Mapa email → nombre para el coordinador
   const analistaNombreMap = useMemo(() =>
@@ -79,7 +93,13 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
     else { setSortCol(col); setSortDir('desc') }
   }
 
-  // ── Filtrado + ordenamiento ──────────────────────────────────────
+  // Resetear página al cambiar cualquier filtro
+  function cambiarBusqueda(v: string)       { setBusqueda(v);       setPagina(1) }
+  function cambiarTramo(v: string)          { setFiltroTramo(v);    setPagina(1) }
+  function cambiarAnalista(v: string)       { setFiltroAnalista(v); setPagina(1) }
+  function cambiarVendedor(v: string)       { setFiltroVendedor(v); setPagina(1) }
+
+  // ── Filtrado + ordenamiento (sobre TODOS los rows) ───────────────
   const filtered = useMemo(() => {
     let data = rows.map(r => ({
       ...r,
@@ -107,6 +127,11 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
       data = data.filter(r => r.analista_email === filtroAnalista)
     }
 
+    // Filtro por vendedor
+    if (filtroVendedor !== 'Todos') {
+      data = data.filter(r => r.vendedor_nombre === filtroVendedor)
+    }
+
     // Ordenamiento
     data.sort((a, b) => {
       if (sortCol === 'cliente_nombre') {
@@ -120,7 +145,86 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
     })
 
     return data
-  }, [rows, busqueda, filtroTramo, filtroAnalista, sortCol, sortDir, esCoordinador])
+  }, [rows, busqueda, filtroTramo, filtroAnalista, filtroVendedor, sortCol, sortDir, esCoordinador])
+
+  // ── Paginación ────────────────────────────────────────────────────
+  const totalPaginas = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginaReal   = Math.min(pagina, totalPaginas)
+  const desde        = (paginaReal - 1) * PAGE_SIZE           // índice 0-based
+  const hasta        = Math.min(desde + PAGE_SIZE, filtered.length)
+  const paginated    = filtered.slice(desde, hasta)
+
+  // Números de página visibles (máx 5 alrededor de la actual)
+  const paginasVisibles = useMemo(() => {
+    const pages: number[] = []
+    const start = Math.max(1, paginaReal - 2)
+    const end   = Math.min(totalPaginas, paginaReal + 2)
+    for (let p = start; p <= end; p++) pages.push(p)
+    return pages
+  }, [paginaReal, totalPaginas])
+
+  // ── Export Excel ─────────────────────────────────────────────────
+  async function exportarExcel() {
+    if (filtered.length === 0) {
+      showToast('No hay datos para exportar')
+      return
+    }
+
+    // Importar xlsx dinámicamente para no aumentar el bundle inicial
+    const XLSX = (await import('xlsx')).default
+
+    const hoy  = new Date()
+    const fecha = hoy.toISOString().split('T')[0]
+    const hora  = `${String(hoy.getHours()).padStart(2,'0')}:${String(hoy.getMinutes()).padStart(2,'0')}`
+    const usuarioLabel = userEmail.split('@')[0] ?? userEmail
+
+    // Filas de datos
+    const dataRows = filtered.map(r => ({
+      Cliente:           `${r.cliente_nombre} (${r.cliente_cod})`,
+      Vendedor:          r.vendedor_nombre || '—',
+      Analista:          r.analista_nombre ?? (analistaNombreMap[r.analista_email] ?? r.analista_email.split('@')[0] ?? '—'),
+      'Mora Mayor':      r.mora_total > 0 ? tramoPeor(r) : 'Al día',
+      'Mora Total':      r.mora_total,
+      'Total Cartera':   r.total,
+      'Días sin gestión': r.dias_sin_gestion >= 999 ? 'Sin gestión' : r.dias_sin_gestion,
+    }))
+
+    // Fila de footer (en blanco + totales)
+    const totalMora    = filtered.reduce((s, r) => s + r.mora_total, 0)
+    const totalCartera = filtered.reduce((s, r) => s + r.total, 0)
+    const footerRow = {
+      Cliente:           `Exportado por ${usuarioLabel} · ${fecha} ${hora}`,
+      Vendedor:          '',
+      Analista:          '',
+      'Mora Mayor':      '',
+      'Mora Total':      totalMora,
+      'Total Cartera':   totalCartera,
+      'Días sin gestión': `${filtered.length} clientes`,
+    }
+
+    const ws = XLSX.utils.json_to_sheet([...dataRows, {
+      Cliente: '', Vendedor: '', Analista: '', 'Mora Mayor': '',
+      'Mora Total': '', 'Total Cartera': '', 'Días sin gestión': '',
+    }, footerRow])
+
+    // Ancho de columnas
+    ws['!cols'] = [
+      { wch: 45 }, // Cliente
+      { wch: 22 }, // Vendedor
+      { wch: 20 }, // Analista
+      { wch: 14 }, // Mora Mayor
+      { wch: 16 }, // Mora Total
+      { wch: 16 }, // Total Cartera
+      { wch: 16 }, // Días sin gestión
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Cartera')
+
+    const nombreArchivo = `cartera-cofersa-${fecha}-${usuarioLabel}.xlsx`
+    XLSX.writeFile(wb, nombreArchivo)
+    showToast(`Cartera descargada ✓  (${filtered.length} clientes)`)
+  }
 
   // ── Clases compartidas ───────────────────────────────────────────
   const selectCls = 'rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 bg-white ' +
@@ -133,6 +237,16 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
   return (
     <div className="p-5 space-y-4">
 
+      {/* Toast */}
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-white text-sm font-semibold shadow-lg"
+          style={{ backgroundColor: '#009ee3' }}
+        >
+          {toast}
+        </div>
+      )}
+
       {/* ── Barra de filtros ─────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
 
@@ -143,25 +257,44 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
             type="text"
             placeholder="Buscar cliente o código..."
             value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
+            onChange={e => cambiarBusqueda(e.target.value)}
             className={selectCls + ' pl-8 w-60'}
           />
         </div>
 
         {/* Filtro por tramo */}
-        <select value={filtroTramo} onChange={e => setFiltroTramo(e.target.value)} className={selectCls}>
+        <select value={filtroTramo} onChange={e => cambiarTramo(e.target.value)} className={selectCls}>
           {TRAMOS.map(t => <option key={t}>{t}</option>)}
         </select>
 
         {/* Filtro por analista (solo coordinador) */}
         {esCoordinador && (
-          <select value={filtroAnalista} onChange={e => setFiltroAnalista(e.target.value)} className={selectCls}>
+          <select value={filtroAnalista} onChange={e => cambiarAnalista(e.target.value)} className={selectCls}>
             <option value="Todos">Todos los analistas</option>
             {analistas.map(a => (
               <option key={a.email} value={a.email}>{a.nombre}</option>
             ))}
           </select>
         )}
+
+        {/* Filtro por vendedor — todos los roles */}
+        <select value={filtroVendedor} onChange={e => cambiarVendedor(e.target.value)} className={selectCls}>
+          <option value="Todos">Todos los vendedores</option>
+          {vendedores.map(v => (
+            <option key={v.nombre} value={v.nombre}>{v.nombre}</option>
+          ))}
+        </select>
+
+        {/* Botón Descargar Excel */}
+        <button
+          type="button"
+          onClick={exportarExcel}
+          className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50 transition whitespace-nowrap"
+          title={`Exportar ${filtered.length} clientes a Excel`}
+        >
+          <Download size={13} />
+          Descargar Excel
+        </button>
 
         {/* Contador */}
         <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-400">
@@ -231,9 +364,9 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
               </tr>
             </thead>
 
-            {/* Filas */}
+            {/* Filas — solo la página actual */}
             <tbody>
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr>
                   <td
                     colSpan={esCoordinador ? 9 : 8}
@@ -244,12 +377,13 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
                 </tr>
               )}
 
-              {filtered.map((r, i) => {
-                const urgColor  = URGENCIA_COLOR[r.urgencia]
-                const tramoSty  = TRAMO_STYLES[r.tramo] ?? { bg: '#f1f5f9', text: '#64748b' }
-                const diasStr   = r.dias_sin_gestion >= 999 ? 'Sin gestión' : r.dias_sin_gestion === 0 ? 'Hoy' : `${r.dias_sin_gestion}d`
-                const diasColor = r.dias_sin_gestion >= 999 ? '#dc2626' : r.dias_sin_gestion >= 4 ? '#dc2626' : r.dias_sin_gestion >= 1 ? '#f59e0b' : '#16a34a'
-                const analNombre = analistaNombreMap[r.analista_email]
+              {paginated.map((r, i) => {
+                const urgColor   = URGENCIA_COLOR[r.urgencia]
+                const tramoSty   = TRAMO_STYLES[r.tramo] ?? { bg: '#f1f5f9', text: '#64748b' }
+                const diasStr    = r.dias_sin_gestion >= 999 ? 'Sin gestión' : r.dias_sin_gestion === 0 ? 'Hoy' : `${r.dias_sin_gestion}d`
+                const diasColor  = r.dias_sin_gestion >= 999 ? '#dc2626' : r.dias_sin_gestion >= 4 ? '#dc2626' : r.dias_sin_gestion >= 1 ? '#f59e0b' : '#16a34a'
+                const analNombre = r.analista_nombre
+                  ?? analistaNombreMap[r.analista_email]
                   ?? (r.analista_email ? r.analista_email.split('@')[0] : '—')
 
                 return (
@@ -290,7 +424,7 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
                       <span className="truncate block">{r.vendedor_nombre || '—'}</span>
                     </td>
 
-                    {/* Mora mayor */}
+                    {/* Mora mayor — badge de tramo */}
                     <td className="px-3 py-3">
                       <span
                         className="inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap"
@@ -300,20 +434,20 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
                       </span>
                     </td>
 
-                    {/* Mora total */}
+                    {/* Mora total — número completo */}
                     <td className="px-3 py-3 text-right whitespace-nowrap">
                       <span
                         className="text-[12px] font-semibold tabular-nums"
                         style={{ color: r.mora_total > 0 ? '#dc2626' : '#94a3b8' }}
                       >
-                        {r.mora_total > 0 ? fmtM(r.mora_total) : '—'}
+                        {r.mora_total > 0 ? fmtCRC(r.mora_total) : '—'}
                       </span>
                     </td>
 
-                    {/* Total cartera */}
+                    {/* Total cartera — número completo */}
                     <td className="px-3 py-3 text-right whitespace-nowrap">
                       <span className="text-[12px] font-semibold text-gray-700 tabular-nums">
-                        {fmtM(r.total)}
+                        {fmtCRC(r.total)}
                       </span>
                     </td>
 
@@ -338,20 +472,95 @@ export default function TablaClientes({ rows, esCoordinador, analistas }: Props)
           </table>
         </div>
 
-        {/* Footer de la tabla */}
-        {filtered.length > 0 && (
-          <div
-            className="px-4 py-2.5 border-t border-gray-100 flex items-center justify-between"
-            style={{ backgroundColor: '#fafbfc' }}
-          >
-            <span className="text-[11px] text-gray-400">
-              Click en un cliente para ver su Ficha 360°
-            </span>
-            <span className="text-[11px] text-gray-400">
-              Datos al corte de Softland · Sync 3× al día
-            </span>
-          </div>
-        )}
+        {/* ── Footer: paginación + info ───────────────────────────── */}
+        <div
+          className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3"
+          style={{ backgroundColor: '#fafbfc' }}
+        >
+          {/* Info de registros */}
+          <span className="text-[11px] text-gray-400">
+            {filtered.length === 0
+              ? 'Sin resultados'
+              : `Mostrando ${desde + 1}–${hasta} de ${filtered.length} clientes`}
+          </span>
+
+          {/* Controles de paginación */}
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-1">
+              {/* Anterior */}
+              <button
+                type="button"
+                disabled={paginaReal === 1}
+                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                className="flex items-center justify-center w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft size={13} />
+              </button>
+
+              {/* Primera página si no está visible */}
+              {paginasVisibles[0] > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setPagina(1)}
+                    className="w-7 h-7 rounded-lg border border-gray-200 text-[12px] text-gray-500 hover:bg-gray-100 transition"
+                  >
+                    1
+                  </button>
+                  {paginasVisibles[0] > 2 && (
+                    <span className="text-[12px] text-gray-300 px-1">…</span>
+                  )}
+                </>
+              )}
+
+              {/* Páginas visibles */}
+              {paginasVisibles.map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPagina(p)}
+                  className="w-7 h-7 rounded-lg border text-[12px] font-medium transition"
+                  style={p === paginaReal
+                    ? { backgroundColor: '#009ee3', borderColor: '#009ee3', color: '#fff' }
+                    : { borderColor: '#e5e7eb', color: '#6b7280' }}
+                >
+                  {p}
+                </button>
+              ))}
+
+              {/* Última página si no está visible */}
+              {paginasVisibles[paginasVisibles.length - 1] < totalPaginas && (
+                <>
+                  {paginasVisibles[paginasVisibles.length - 1] < totalPaginas - 1 && (
+                    <span className="text-[12px] text-gray-300 px-1">…</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPagina(totalPaginas)}
+                    className="w-7 h-7 rounded-lg border border-gray-200 text-[12px] text-gray-500 hover:bg-gray-100 transition"
+                  >
+                    {totalPaginas}
+                  </button>
+                </>
+              )}
+
+              {/* Siguiente */}
+              <button
+                type="button"
+                disabled={paginaReal === totalPaginas}
+                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                className="flex items-center justify-center w-7 h-7 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Dato de sync */}
+          <span className="text-[11px] text-gray-400 hidden md:block">
+            Datos al corte de Softland · Sync 3× al día
+          </span>
+        </div>
       </div>
     </div>
   )

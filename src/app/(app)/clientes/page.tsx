@@ -10,6 +10,7 @@ export interface ClienteRow {
   contribuyente: string
   vendedor_nombre: string
   analista_email: string
+  analista_nombre?: string
   no_vencido: number
   mora_1_30: number
   mora_31_60: number
@@ -24,6 +25,10 @@ export interface ClienteRow {
 
 export interface AnalistaOpt {
   email: string
+  nombre: string
+}
+
+export interface VendedorOpt {
   nombre: string
 }
 
@@ -52,7 +57,7 @@ export default async function ClientesPage() {
     const codigos = ((misClientes ?? []) as Pick<MaestroCliente, 'cliente_cod'>[])
       .map(c => c.cliente_cod)
     if (codigos.length === 0) {
-      return <TablaClientes rows={[]} esCoordinador={false} analistas={[]} />
+      return <TablaClientes rows={[]} esCoordinador={false} analistas={[]} vendedores={[]} userEmail={userEmail} />
     }
     codigosFiltro = codigos
   }
@@ -109,6 +114,9 @@ export default async function ClientesPage() {
   // ── 6. Armar rows finales ──────────────────────────────────────────
   const hoyMs = new Date(hoy).getTime()
 
+  // Mapa email → nombre para analistas (usar en rows)
+  const analistaNombreMap = Object.fromEntries(analistas.map(a => [a.email, a.nombre]))
+
   const rows: ClienteRow[] = cartera.map(c => {
     const mora_total =
       (c.mora_1_30 || 0) + (c.mora_31_60 || 0) + (c.mora_61_90 || 0) +
@@ -119,12 +127,15 @@ export default async function ClientesPage() {
       ? Math.max(0, Math.floor((hoyMs - new Date(ultima).getTime()) / 86_400_000))
       : 999
 
+    const analEmail = analistaMap[c.cliente_cod] ?? ''
+
     return {
       cliente_cod:          c.cliente_cod,
       cliente_nombre:       c.cliente_nombre,
       contribuyente:        c.contribuyente,
       vendedor_nombre:      c.vendedor_nombre,
-      analista_email:       analistaMap[c.cliente_cod] ?? '',
+      analista_email:       analEmail,
+      analista_nombre:      analistaNombreMap[analEmail] ?? analEmail.split('@')[0] ?? '—',
       no_vencido:           c.no_vencido     || 0,
       mora_1_30:            c.mora_1_30      || 0,
       mora_31_60:           c.mora_31_60     || 0,
@@ -141,11 +152,22 @@ export default async function ClientesPage() {
   // Ordenar por mora_total desc como default
   rows.sort((a, b) => b.mora_total - a.mora_total)
 
+  // ── 7. Lista de vendedores únicos (para dropdown) ──────────────────
+  // Analista: vendedores de sus propios clientes (ya filtrados por RLS)
+  // Coordinador: todos los vendedores de todos los clientes
+  const vendedores: VendedorOpt[] = Array.from(
+    new Set(rows.map(r => r.vendedor_nombre).filter(Boolean))
+  )
+    .sort()
+    .map(nombre => ({ nombre }))
+
   return (
     <TablaClientes
       rows={rows}
       esCoordinador={esCoordinador}
       analistas={analistas}
+      vendedores={vendedores}
+      userEmail={userEmail}
     />
   )
 }
