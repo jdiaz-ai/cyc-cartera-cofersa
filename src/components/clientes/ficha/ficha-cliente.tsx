@@ -729,239 +729,196 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   const disponible = limite > 0 ? limite - cartera.total : null
 
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
 
-      {/* ── SECCIÓN 1: Datos de contacto (editables) — Fila 1 Col 1 ── */}
-      <InfoCard titulo="Datos de contacto CxP">
-
-        {/* Nombre CxP */}
-        <CampoEditable
-          icon={<User size={14} />}
-          label="Nombre CxP"
-          valor={valNombre}
-          placeholder="Nombre del contacto"
-          editando={editando === 'nombre_cxp'}
-          saving={saving}
-          onEditar={() => setEditando('nombre_cxp')}
-          onGuardar={() => guardar('nombre_cxp')}
-          onCancelar={() => cancelar('nombre_cxp')}
-          onChange={v => setValNombre(v)}
+      {/* ── CARD 1: DATOS DE CONTACTO CxP ── */}
+      <InfoCard2 titulo="DATOS DE CONTACTO CxP">
+        <CampoEdit
+          label="Nombre CxP" valor={valNombre} vacio="Sin nombre"
+          editando={editando === 'nombre_cxp'} saving={saving}
+          onEditar={() => setEditando('nombre_cxp')} onGuardar={() => guardar('nombre_cxp')}
+          onCancelar={() => cancelar('nombre_cxp')} onChange={v => setValNombre(v)}
           onCopiar={valNombre ? () => copiar(valNombre, 'Nombre') : undefined}
-          vacio="Sin nombre"
         />
-
-        {/* Teléfono 1 */}
-        <CampoEditable
-          icon={<Phone size={14} />}
-          label="Teléfono 1"
-          valor={valTel ? fmtTel(valTel) : ''}
-          valorInput={valTel}
-          placeholder="12345678"
-          type="tel"
-          maxLength={9}
-          editando={editando === 'telefono'}
-          saving={saving}
-          invalido={!telValido(valTel)}
-          onEditar={() => setEditando('telefono')}
-          onGuardar={() => guardar('telefono')}
-          onCancelar={() => cancelar('telefono')}
-          onChange={v => setValTel(fmtTel(v))}
+        <CampoEdit
+          label="Teléfono 1" valor={valTel ? fmtTel(valTel) : ''} valorInput={valTel}
+          vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel)} hint="8 dígitos"
+          editando={editando === 'telefono'} saving={saving}
+          onEditar={() => setEditando('telefono')} onGuardar={() => guardar('telefono')}
+          onCancelar={() => cancelar('telefono')} onChange={v => setValTel(fmtTel(v))}
           onCopiar={valTel ? () => copiar(fmtTel(valTel), 'Teléfono 1') : undefined}
-          vacio="Sin teléfono"
-          hint="8 dígitos"
         />
-
-        {/* Teléfono 2 */}
-        <CampoEditable
-          icon={<Phone size={14} />}
-          label="Teléfono 2"
-          valor={valTel2 ? fmtTel(valTel2) : ''}
-          valorInput={valTel2}
-          placeholder="12345678"
-          type="tel"
-          maxLength={9}
-          editando={editando === 'telefono2'}
-          saving={saving}
-          invalido={!telValido(valTel2)}
-          onEditar={() => setEditando('telefono2')}
-          onGuardar={() => guardar('telefono2')}
-          onCancelar={() => cancelar('telefono2')}
-          onChange={v => setValTel2(fmtTel(v))}
+        <CampoEdit
+          label="Teléfono 2" valor={valTel2 ? fmtTel(valTel2) : ''} valorInput={valTel2}
+          vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel2)} hint="8 dígitos"
+          editando={editando === 'telefono2'} saving={saving}
+          onEditar={() => setEditando('telefono2')} onGuardar={() => guardar('telefono2')}
+          onCancelar={() => cancelar('telefono2')} onChange={v => setValTel2(fmtTel(v))}
           onCopiar={valTel2 ? () => copiar(fmtTel(valTel2), 'Teléfono 2') : undefined}
-          vacio="Sin teléfono"
-          hint="8 dígitos"
         />
-
-        {/* Email CxP */}
-        <CampoEditable
-          icon={<Mail size={14} />}
-          label="Email CxP"
-          valor={valCorreo}
-          placeholder="correo@empresa.com"
-          type="email"
-          editando={editando === 'correo'}
-          saving={saving}
-          onEditar={() => setEditando('correo')}
-          onGuardar={() => guardar('correo')}
-          onCancelar={() => cancelar('correo')}
-          onChange={v => setValCorreo(v)}
+        <CampoEdit
+          label="Email CxP" valor={valCorreo} vacio="Sin email" type="email"
+          editando={editando === 'correo'} saving={saving}
+          onEditar={() => setEditando('correo')} onGuardar={() => guardar('correo')}
+          onCancelar={() => cancelar('correo')} onChange={v => setValCorreo(v)}
           onCopiar={valCorreo ? () => copiar(valCorreo, 'Email') : undefined}
-          vacio="Sin email"
         />
+      </InfoCard2>
 
-        <p className="text-[10px] text-gray-300 mt-1 pl-7">
-          {esCoordinador ? 'Coordinador puede editar todos los clientes.' : 'Podés editar los datos de contacto de tus clientes asignados.'}
-        </p>
-      </InfoCard>
+      {/* ── CARD 2: INFORMACIÓN FISCAL ── */}
+      <InfoCard2 titulo="INFORMACIÓN FISCAL">
+        <CampoReadOnly label="Contribuyente"   valor={cartera.contribuyente}
+          onCopiar={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
+        <CampoReadOnly label="Razón social"    valor={cartera.cliente_nombre}
+          onCopiar={() => copiar(cartera.cliente_nombre, 'Razón social')} />
+        <CampoReadOnly label="Tipo de cliente" valor={maestro?.segmento || '—'} />
+      </InfoCard2>
 
-      {/* ── SECCIÓN 2: Información fiscal — Fila 1 Col 2 ── */}
-      <InfoCard titulo="Información fiscal">
-        <InfoRowCopy label="Contribuyente" valor={cartera.contribuyente} onCopy={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
-        <InfoRow icon={<Building2 size={14} />} label="Razón social"   valor={cartera.cliente_nombre} />
-        {maestro?.segmento && (
-          <InfoRow icon={<Tag size={14} />} label="Segmento" valor={maestro.segmento} />
-        )}
-        {maestro?.zona && (
-          <InfoRow icon={<Tag size={14} />} label="Zona" valor={maestro.zona} />
-        )}
-      </InfoCard>
-
-      {/* ── SECCIÓN 3: Condiciones comerciales — Fila 2 Col 1 ── */}
-      <InfoCard titulo="Condiciones comerciales">
-        <InfoRow icon={<Calendar   size={14} />} label="Condición de pago" valor={maestro?.condicion_pago || '—'} />
-        <InfoRow icon={<CreditCard size={14} />} label="Límite de crédito"
-          valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'} />
-        {limite > 0 && disponible !== null && (
-          <div className="flex items-center gap-3">
-            <span className="text-gray-300 flex-shrink-0"><CreditCard size={14} /></span>
-            <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Crédito disponible</span>
-            <span className="text-[13px] font-semibold" style={{ color: disponible >= 0 ? '#16a34a' : '#dc2626' }}>
+      {/* ── CARD 3: CONDICIONES COMERCIALES ── */}
+      <InfoCard2 titulo="CONDICIONES COMERCIALES">
+        <CampoReadOnly label="Condición de pago" valor={String(maestro?.condicion_pago || '—')}
+          onCopiar={maestro?.condicion_pago ? () => copiar(String(maestro!.condicion_pago), 'Condición de pago') : undefined} />
+        <CampoReadOnly label="Límite de crédito" valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'}
+          onCopiar={limite > 0 ? () => copiar(fmtCRC(limite), 'Límite de crédito') : undefined} />
+        <div className="space-y-0.5">
+          <span className="block text-[10px] font-semibold text-gray-600">Crédito disponible</span>
+          {limite > 0 && disponible !== null ? (
+            <span className="text-[10px] font-medium"
+              style={{ color: disponible >= 0 ? '#22c55e' : '#dc2626' }}>
               {disponible >= 0
-                ? fmtCRC(disponible)
-                : `−${fmtCRC(Math.abs(disponible))}`}
+                ? `${fmtCRC(disponible)} disponible`
+                : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
             </span>
-          </div>
-        )}
-      </InfoCard>
-
-      {/* ── SECCIÓN 4: Información interna — Fila 2 Col 2 ── */}
-      <InfoCard titulo="Información interna">
-        <InfoRowCopy label="Código cliente" valor={cartera.cliente_cod} onCopy={() => copiar(cartera.cliente_cod, 'Código')} mono />
-        <InfoRow icon={<User     size={14} />} label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
-        <InfoRow icon={<User     size={14} />} label="Analista asignado"  valor={analistaNombre || '—'} />
-        <InfoRow icon={<Calendar size={14} />} label="Corte Softland"     valor={fmtFecha(cartera.fecha_corte)} />
-        {maestro?.updated_at && (
-          <InfoRow icon={<Calendar size={14} />} label="Última actualización" valor={fmtFecha(maestro.updated_at)} />
-        )}
-        {/* Score ICP */}
-        <div className="flex items-center gap-3">
-          <span className="text-gray-300 flex-shrink-0">
-            <span className="inline-flex w-3.5 h-3.5 items-center justify-center rounded-full text-[8px] font-black" style={{ backgroundColor: '#e2e8f0', color: '#94a3b8' }}>ICP</span>
-          </span>
-          <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>Score ICP</span>
-          <span className="text-[13px] font-semibold text-gray-300 italic">Sin datos suficientes</span>
+          ) : (
+            <span className="text-[10px] text-gray-400">—</span>
+          )}
         </div>
-        {(maestro?.promedio_dias_pago ?? 0) > 0 && (
-          <InfoRow icon={<Calendar size={14} />} label="Promedio días pago" valor={`${Math.round(maestro!.promedio_dias_pago)} días`} />
-        )}
-        {(maestro?.promesas_cumplidas_pct ?? 0) > 0 && (
-          <InfoRow icon={<Tag size={14} />} label="Promesas cumplidas"
-            valor={`${Math.round(maestro!.promesas_cumplidas_pct)}%`}
-            color={maestro!.promesas_cumplidas_pct >= 70 ? '#16a34a' : maestro!.promesas_cumplidas_pct >= 40 ? '#f59e0b' : '#dc2626'} />
-        )}
-      </InfoCard>
+      </InfoCard2>
+
+      {/* ── CARD 4: INFORMACIÓN INTERNA ── */}
+      <InfoCard2 titulo="INFORMACIÓN INTERNA">
+        <CampoReadOnly label="Código cliente"     valor={cartera.cliente_cod}
+          onCopiar={() => copiar(cartera.cliente_cod, 'Código')} mono />
+        <CampoReadOnly label="Vendedor asignado"  valor={cartera.vendedor_nombre || '—'} />
+        <CampoReadOnly label="Analista asignado"  valor={analistaNombre || '—'} />
+        <CampoReadOnly label="Score ICP"          valor="Sin datos suficientes" muted />
+      </InfoCard2>
 
     </div>
   )
 }
 
-// ── CampoEditable: fila editable reutilizable ─────────────────────────
-function CampoEditable({ icon, label, valor, valorInput, placeholder, type = 'text', maxLength,
-  editando, saving, invalido, onEditar, onGuardar, onCancelar, onChange, onCopiar, vacio, hint }: {
-  icon:        React.ReactNode
+// ── InfoCard2: card compacta para tab Información ─────────────────────
+function InfoCard2({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden" style={{ borderWidth: '0.5px' }}>
+      <div className="px-3.5 pt-3 pb-2 border-b border-gray-100" style={{ borderBottomWidth: '0.5px' }}>
+        <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">{titulo}</h3>
+      </div>
+      <div className="px-3.5 py-3 space-y-2.5">{children}</div>
+    </div>
+  )
+}
+
+// ── CampoEdit: campo editable compacto (label arriba + valor abajo) ────
+function CampoEdit({ label, valor, valorInput, vacio, type = 'text', maxLength,
+  editando, saving, invalido, hint, onEditar, onGuardar, onCancelar, onChange, onCopiar }: {
   label:       string
   valor:       string
   valorInput?: string
-  placeholder: string
+  vacio:       string
   type?:       string
   maxLength?:  number
   editando:    boolean
   saving:      boolean
   invalido?:   boolean
+  hint?:       string
   onEditar:    () => void
   onGuardar:   () => void
   onCancelar:  () => void
   onChange:    (v: string) => void
   onCopiar?:   () => void
-  vacio:       string
-  hint?:       string
 }) {
   const inputVal = valorInput !== undefined ? valorInput : valor
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-gray-300 flex-shrink-0">{icon}</span>
-      <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '100px' }}>{label}</span>
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between gap-1 min-w-0">
+        <span className="text-[10px] font-semibold text-gray-600 truncate">{label}</span>
+        {!editando && (
+          <div className="flex gap-1 flex-shrink-0">
+            {onCopiar && (
+              <button type="button" onClick={onCopiar}
+                className="text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+                style={{ borderWidth: '0.5px' }}>
+                Copiar
+              </button>
+            )}
+            <button type="button" onClick={onEditar}
+              className="text-[9px] font-medium text-blue-400 hover:text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+              style={{ borderWidth: '0.5px' }}>
+              Editar
+            </button>
+          </div>
+        )}
+      </div>
       {editando ? (
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-1 flex-wrap">
           <input
             autoFocus
             type={type}
             value={inputVal}
             maxLength={maxLength}
             onChange={e => onChange(e.target.value)}
-            className={`flex-1 min-w-0 rounded-lg border px-2.5 py-1 text-[13px] text-gray-800 focus:outline-none focus:ring-2 transition ${
-              invalido ? 'border-red-300 focus:ring-red-100' : 'border-blue-300 focus:ring-blue-100'
+            className={`flex-1 min-w-0 rounded border px-2 py-1 text-[10px] text-gray-800 focus:outline-none focus:ring-1 transition ${
+              invalido ? 'border-red-300 focus:ring-red-200' : 'border-blue-300 focus:ring-blue-200'
             }`}
-            placeholder={placeholder}
+            style={{ backgroundColor: '#fff', borderWidth: '1px' }}
+            placeholder={vacio}
           />
-          {hint && <span className="text-[10px] text-gray-400 flex-shrink-0">{hint}</span>}
-          <button type="button" disabled={saving || invalido}
-            onClick={onGuardar}
-            className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-50 transition"
+          {hint && <span className="text-[9px] text-gray-400 whitespace-nowrap">{hint}</span>}
+          <button type="button" disabled={saving || invalido} onClick={onGuardar}
+            className="text-[9px] font-bold text-white rounded px-2 py-1 leading-tight disabled:opacity-50 whitespace-nowrap transition"
             style={{ backgroundColor: '#009ee3' }}>
             {saving ? '...' : 'Guardar'}
           </button>
           <button type="button" onClick={onCancelar}
-            className="flex-shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-gray-500 border border-gray-200 hover:bg-gray-50 transition">
+            className="text-[9px] font-medium text-gray-500 border border-gray-200 rounded px-2 py-1 leading-tight hover:bg-gray-50 transition whitespace-nowrap"
+            style={{ borderWidth: '0.5px' }}>
             Cancelar
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="text-[13px] font-semibold text-gray-700 flex-1 truncate">
-            {valor || <span className="text-gray-300 italic">{vacio}</span>}
-          </span>
-          {onCopiar && (
-            <button type="button" onClick={onCopiar}
-              className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
-              Copiar
-            </button>
-          )}
-          <button type="button" onClick={onEditar}
-            className="flex-shrink-0 text-[10px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 transition">
-            Editar
-          </button>
-        </div>
+        <span className="block text-[10px] text-gray-400 break-words">
+          {valor || <span className="italic text-gray-300">{vacio}</span>}
+        </span>
       )}
     </div>
   )
 }
 
-// ── InfoRowCopy: fila con botón copiar integrado ───────────────────────
-function InfoRowCopy({ label, valor, onCopy, mono }: {
-  label: string; valor: string; onCopy: () => void; mono?: boolean
+// ── CampoReadOnly: campo solo lectura compacto ────────────────────────
+function CampoReadOnly({ label, valor, onCopiar, mono, muted }: {
+  label:     string
+  valor:     string
+  onCopiar?: () => void
+  mono?:     boolean
+  muted?:    boolean
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-gray-300 flex-shrink-0"><Tag size={14} /></span>
-      <span className="text-[12px] text-gray-400 flex-shrink-0" style={{ width: '120px' }}>{label}</span>
-      <span className={`text-[13px] font-semibold text-gray-700 flex-1 truncate ${mono ? 'font-mono' : ''}`}>{valor || '—'}</span>
-      {valor && (
-        <button type="button" onClick={onCopy}
-          className="flex-shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 transition">
-          Copiar
-        </button>
-      )}
+    <div className="space-y-0.5">
+      <div className="flex items-center justify-between gap-1 min-w-0">
+        <span className="text-[10px] font-semibold text-gray-600 truncate">{label}</span>
+        {onCopiar && (
+          <button type="button" onClick={onCopiar}
+            className="flex-shrink-0 text-[9px] font-medium text-gray-400 hover:text-gray-600 border border-gray-200 rounded px-1.5 py-0.5 leading-tight transition whitespace-nowrap"
+            style={{ borderWidth: '0.5px' }}>
+            Copiar
+          </button>
+        )}
+      </div>
+      <span className={`block text-[10px] break-words ${muted ? 'text-gray-300 italic' : 'text-gray-500'} ${mono ? 'font-mono' : ''}`}>
+        {valor || '—'}
+      </span>
     </div>
   )
 }
