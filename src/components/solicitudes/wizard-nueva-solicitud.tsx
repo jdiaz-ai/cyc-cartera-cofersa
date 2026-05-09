@@ -11,10 +11,13 @@
  * Paso 3: Formulario específico + correos
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   UserCheck, Building2, Truck, MoreHorizontal,
   Upload, Mail, Plus, ChevronRight, X,
+  TrendingUp, ShieldOff, RefreshCw, PauseCircle, PlayCircle, AlertTriangle,
+  Percent, ArrowLeftRight, Gift, Tag, Package, RotateCcw, Shield, FileEdit,
+  CheckCircle2,
 } from 'lucide-react'
 import { fmtCRC } from '@/lib/utils/formato'
 import type { Factura } from '@/types/database'
@@ -49,31 +52,36 @@ export interface WizardProps extends WizardClienteData {
 // CONFIGURACIÓN: TIPOS POR DESTINATARIO
 // ═══════════════════════════════════════════════════════════════
 
-interface TipoOpt { value: string; label: string }
+interface TipoOpt {
+  value: string
+  label: string
+  desc:  string
+  icon:  React.ReactNode
+}
 
 export const TIPOS_POR_DEST: Record<Destinatario, TipoOpt[]> = {
   coordinador: [
-    { value: 'aumento_limite',       label: 'Aumento de límite de crédito'  },
-    { value: 'excepcion_credito',    label: 'Excepción de crédito'          },
-    { value: 'cambio_condicion',     label: 'Cambio de condición de pago'   },
-    { value: 'suspension_temporal',  label: 'Suspensión temporal'           },
-    { value: 'reactivacion_cliente', label: 'Reactivación de cliente'       },
-    { value: 'caso_especial',        label: 'Casos especiales'              },
+    { value: 'aumento_limite',       label: 'Aumento de límite',        desc: 'Incrementar el límite de crédito asignado',              icon: <TrendingUp  size={16} /> },
+    { value: 'excepcion_credito',    label: 'Excepción de crédito',     desc: 'Autorizar despacho fuera de los parámetros de crédito', icon: <ShieldOff   size={16} /> },
+    { value: 'cambio_condicion',     label: 'Cambio de condición',      desc: 'Modificar días o forma de pago acordada',               icon: <RefreshCw   size={16} /> },
+    { value: 'suspension_temporal',  label: 'Suspensión temporal',      desc: 'Bloquear crédito del cliente temporalmente',            icon: <PauseCircle size={16} /> },
+    { value: 'reactivacion_cliente', label: 'Reactivación de cliente',  desc: 'Habilitar crédito de un cliente suspendido',            icon: <PlayCircle  size={16} /> },
+    { value: 'caso_especial',        label: 'Caso especial',            desc: 'Mora crítica o situación fuera de lo ordinario',        icon: <AlertTriangle size={16} /> },
   ],
   comercial: [
-    { value: 'descuento_no_aplicado', label: 'Descuento no aplicado'                  },
-    { value: 'diferencia_precio',     label: 'Diferencia de precio'                   },
-    { value: 'regalia_bonificacion',  label: 'Regalía / Bonificación'                 },
-    { value: 'beneficio_mercadeo',    label: 'Beneficio de mercadeo / Apoyo de marca' },
+    { value: 'descuento_no_aplicado', label: 'Descuento no aplicado',    desc: 'Descuento acordado no reflejado en factura',     icon: <Percent       size={16} /> },
+    { value: 'diferencia_precio',     label: 'Diferencia de precio',     desc: 'Precio incorrecto en factura emitida',           icon: <ArrowLeftRight size={16} /> },
+    { value: 'regalia_bonificacion',  label: 'Regalía / Bonificación',   desc: 'Producto o beneficio entregado al cliente',      icon: <Gift          size={16} /> },
+    { value: 'beneficio_mercadeo',    label: 'Beneficio de mercadeo',    desc: 'Apoyo de marca o campaña comercial',             icon: <Tag           size={16} /> },
   ],
   logistica: [
-    { value: 'mercaderia_faltante',   label: 'Mercadería faltante'      },
-    { value: 'devolucion_mercaderia', label: 'Devolución de mercadería' },
-    { value: 'garantias',             label: 'Garantías'                },
-    { value: 'refacturacion',         label: 'Refacturación'            },
+    { value: 'mercaderia_faltante',   label: 'Mercadería faltante',      desc: 'Producto no entregado incluido en factura',  icon: <Package    size={16} /> },
+    { value: 'devolucion_mercaderia', label: 'Devolución de mercadería', desc: 'Retorno de mercadería al almacén',            icon: <RotateCcw  size={16} /> },
+    { value: 'garantias',             label: 'Garantías',                desc: 'Producto con defecto de fábrica o daño',     icon: <Shield     size={16} /> },
+    { value: 'refacturacion',         label: 'Refacturación',            desc: 'Corrección de datos o condición en factura', icon: <FileEdit   size={16} /> },
   ],
   otro: [
-    { value: 'otra_solicitud', label: 'Otra solicitud' },
+    { value: 'otra_solicitud', label: 'Otra solicitud', desc: 'Solicitud no contemplada en las opciones', icon: <MoreHorizontal size={16} /> },
   ],
 }
 
@@ -293,22 +301,111 @@ function FieldSelect({ label, name, options, datos, onDato, required }: {
   )
 }
 
-function FieldFactura({ label, name, facturas, incluirNinguna, datos, onDato, required }: {
+function getMoraColor(fechaVenc: string | null): string {
+  if (!fechaVenc) return '#94a3b8'
+  const dias = Math.floor((Date.now() - new Date(fechaVenc).getTime()) / 86400000)
+  if (dias > 120) return '#991b1b'
+  if (dias > 90)  return '#dc2626'
+  if (dias > 60)  return '#ef4444'
+  if (dias > 30)  return '#f97316'
+  if (dias > 0)   return '#f59e0b'
+  return '#16a34a'
+}
+
+function getDiasLabel(fechaVenc: string | null): string {
+  if (!fechaVenc) return '—'
+  const dias = Math.floor((Date.now() - new Date(fechaVenc).getTime()) / 86400000)
+  if (dias <= 0) return 'Al día'
+  return `+${dias}d`
+}
+
+function FieldFacturaSearch({ label, name, facturas, incluirNinguna, datos, onDato, required }: {
   label: string; name: string; facturas: Factura[]; incluirNinguna?: boolean
   datos: Record<string, string>; onDato: (k: string, v: string) => void; required?: boolean
 }) {
+  const [query, setQuery] = useState('')
+  const [open,  setOpen]  = useState(false)
+
+  const selected     = datos[name] ?? ''
+  const selectedFact = useMemo(() => facturas.find(f => String(f.documento) === selected), [facturas, selected])
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim()
+    if (!q) return facturas.slice(0, 60)
+    return facturas.filter(f =>
+      String(f.documento).toLowerCase().includes(q) ||
+      String(f.saldo).includes(q)
+    ).slice(0, 60)
+  }, [facturas, query])
+
   return (
     <div>
       <label className={labelCls}>{label}{required && <span className="text-red-400 ml-0.5">*</span>}</label>
-      <select value={datos[name] ?? ''} onChange={e => onDato(name, e.target.value)} className={inputCls}>
-        <option value="">— Seleccionar factura —</option>
-        {incluirNinguna && <option value="ninguna">Ninguna</option>}
-        {facturas.slice(0, 80).map(f => (
-          <option key={f.id} value={String(f.documento)}>
-            {f.documento} | {fmtCRC(f.saldo)} | vence {f.fecha_vencimiento ?? '—'}
-          </option>
-        ))}
-      </select>
+
+      {/* Factura seleccionada */}
+      {selected === 'ninguna' ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 flex items-center justify-between">
+          <span className="text-[12px] font-medium text-gray-500 italic">Sin factura relacionada</span>
+          <button type="button" onClick={() => onDato(name, '')} className="text-gray-400 hover:text-gray-600 transition"><X size={14} /></button>
+        </div>
+      ) : selected && selectedFact ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[12px] font-bold text-blue-800">{selectedFact.documento}</p>
+            <p className="text-[11px] text-blue-500">{selectedFact.fecha_vencimiento ? `Vence ${selectedFact.fecha_vencimiento}` : '—'}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-[13px] font-bold tabular-nums text-blue-900">{fmtCRC(selectedFact.saldo)}</p>
+            <button type="button" onClick={() => onDato(name, '')} className="text-blue-400 hover:text-blue-700 transition"><X size={14} /></button>
+          </div>
+        </div>
+      ) : (
+        /* Buscador */
+        <div className="relative">
+          <input
+            type="text" value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 160)}
+            placeholder={facturas.length === 0 ? 'Sin facturas pendientes' : 'Buscar por nº de factura…'}
+            disabled={facturas.length === 0}
+            className={inputCls + (facturas.length === 0 ? ' opacity-50 cursor-default' : '')}
+          />
+          {open && facturas.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-200 shadow-lg z-30 max-h-52 overflow-y-auto">
+              {incluirNinguna && (
+                <button type="button"
+                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 text-[12px] text-gray-500 italic transition"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { onDato(name, 'ninguna'); setOpen(false); setQuery('') }}>
+                  Sin factura relacionada
+                </button>
+              )}
+              {filtered.length === 0 ? (
+                <p className="px-3 py-4 text-[12px] text-gray-400 text-center">Sin resultados</p>
+              ) : filtered.map(f => {
+                const moraColor = getMoraColor(f.fecha_vencimiento)
+                const diasLabel = getDiasLabel(f.fecha_vencimiento)
+                return (
+                  <button key={f.id} type="button"
+                    className="w-full text-left px-3 py-2.5 hover:bg-blue-50 border-b border-gray-50 last:border-0 flex items-center justify-between gap-3 transition"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { onDato(name, String(f.documento)); setOpen(false); setQuery('') }}>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-gray-800 truncate">{f.documento}</p>
+                      <p className="text-[11px] text-gray-400">{f.fecha_vencimiento ?? '—'}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-[12px] font-bold tabular-nums text-gray-800">{fmtCRC(f.saldo)}</p>
+                      <p className="text-[10px] font-bold" style={{ color: moraColor }}>{diasLabel}</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -370,27 +467,37 @@ export function SelectorTipo({ destinatario, onSelect }: {
   onSelect: (tipo: string) => void
 }) {
   const tipos = TIPOS_POR_DEST[destinatario]
-  const COLOR: Record<Destinatario, { bg: string; text: string; border: string }> = {
-    coordinador: { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
-    comercial:   { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
-    logistica:   { bg: '#fef9c3', text: '#a16207', border: '#fde68a' },
-    otro:        { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
+  const COLOR: Record<Destinatario, { bg: string; bgHover: string; text: string; border: string; iconBg: string }> = {
+    coordinador: { bg: '#f0f9ff', bgHover: '#e0f2fe', text: '#0369a1', border: '#bae6fd', iconBg: '#dbeafe' },
+    comercial:   { bg: '#f0fdf4', bgHover: '#dcfce7', text: '#15803d', border: '#bbf7d0', iconBg: '#dcfce7' },
+    logistica:   { bg: '#fefce8', bgHover: '#fef9c3', text: '#a16207', border: '#fde68a', iconBg: '#fef9c3' },
+    otro:        { bg: '#f8fafc', bgHover: '#f1f5f9', text: '#475569', border: '#e2e8f0', iconBg: '#f1f5f9' },
   }
   const sty = COLOR[destinatario]
   return (
-    <div className="space-y-2">
-      <p className="text-[12px] text-gray-400 mb-4">
+    <div>
+      <p className="text-[12px] text-gray-400 mb-3">
         Tipo de solicitud para{' '}
         <span className="font-semibold" style={{ color: sty.text }}>{DEST_LABEL[destinatario]}</span>
       </p>
-      {tipos.map(t => (
-        <button key={t.value} type="button" onClick={() => onSelect(t.value)}
-          className="w-full flex items-center justify-between rounded-xl px-4 py-3.5 text-left transition hover:opacity-90 active:scale-[0.99]"
-          style={{ backgroundColor: sty.bg, border: `1px solid ${sty.border}` }}>
-          <span className="text-[13px] font-semibold" style={{ color: sty.text }}>{t.label}</span>
-          <ChevronRight size={14} style={{ color: sty.text, opacity: 0.5 }} />
-        </button>
-      ))}
+      <div className={`grid gap-2.5 ${tipos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        {tipos.map(t => (
+          <button key={t.value} type="button" onClick={() => onSelect(t.value)}
+            className="flex flex-col items-start gap-2 rounded-xl p-4 text-left transition hover:scale-[1.01] active:scale-[0.99]"
+            style={{ backgroundColor: sty.bg, border: `1.5px solid ${sty.border}` }}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = sty.bgHover)}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = sty.bg)}>
+            <div className="flex items-center gap-2.5 w-full">
+              <div className="rounded-lg p-1.5 flex-shrink-0" style={{ backgroundColor: sty.iconBg, color: sty.text }}>
+                {t.icon}
+              </div>
+              <span className="text-[13px] font-bold leading-tight flex-1" style={{ color: sty.text }}>{t.label}</span>
+              <ChevronRight size={13} style={{ color: sty.text, opacity: 0.4 }} className="flex-shrink-0" />
+            </div>
+            <p className="text-[11px] leading-snug pl-0.5" style={{ color: sty.text, opacity: 0.7 }}>{t.desc}</p>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -492,7 +599,7 @@ function FormularioDetalle({
 
     case 'descuento_no_aplicado': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <div className={col2}>
           <FieldNumber label="Monto descuento no aplicado" name="monto" placeholder="₡0" datos={datos} onDato={onDato} required />
           <FieldSelect label="Tipo de descuento" name="tipo_descuento"
@@ -507,7 +614,7 @@ function FormularioDetalle({
 
     case 'diferencia_precio': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <div className={col2}>
           <FieldNumber label="Precio facturado" name="precio_facturado" placeholder="₡0" datos={datos} onDato={onDato} required />
           <FieldNumber label="Precio correcto"  name="precio_correcto"  placeholder="₡0" datos={datos} onDato={onDato} required />
@@ -527,7 +634,7 @@ function FormularioDetalle({
 
     case 'regalia_bonificacion': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} incluirNinguna datos={datos} onDato={onDato} />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} incluirNinguna datos={datos} onDato={onDato} />
         <div className={col2}>
           <FieldSelect label="Tipo" name="tipo_regalia" options={['Regalía', 'Bonificación', 'Cortesía']} datos={datos} onDato={onDato} required />
           <FieldNumber label="Monto" name="monto" placeholder="₡0" datos={datos} onDato={onDato} required />
@@ -539,7 +646,7 @@ function FormularioDetalle({
 
     case 'beneficio_mercadeo': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} incluirNinguna datos={datos} onDato={onDato} />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} incluirNinguna datos={datos} onDato={onDato} />
         <div className={col2}>
           <FieldText label="Marca" name="marca" datos={datos} onDato={onDato} required />
           <FieldText label="Vigencia" name="vigencia" placeholder="Ej: Mayo 2026" datos={datos} onDato={onDato} />
@@ -555,7 +662,7 @@ function FormularioDetalle({
 
     case 'mercaderia_faltante': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <FieldTextarea label="Descripción de mercadería faltante" name="descripcion" datos={datos} onDato={onDato} required />
         <div className={col2}>
           <FieldNumber label="Cantidad" name="cantidad" placeholder="0" datos={datos} onDato={onDato} required />
@@ -568,7 +675,7 @@ function FormularioDetalle({
 
     case 'devolucion_mercaderia': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <FieldSelect label="Motivo de devolución" name="motivo"
           options={['Mercadería defectuosa', 'Mercadería equivocada', 'Mercadería en mal estado', 'Otra']}
           datos={datos} onDato={onDato} required />
@@ -583,7 +690,7 @@ function FormularioDetalle({
 
     case 'garantias': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <FieldTextarea label="Descripción del producto" name="descripcion" datos={datos} onDato={onDato} required />
         <div className={col2}>
           <FieldSelect label="Motivo de garantía" name="motivo"
@@ -598,7 +705,7 @@ function FormularioDetalle({
 
     case 'refacturacion': return (
       <div className="space-y-3">
-        <FieldFactura label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
+        <FieldFacturaSearch label="Factura relacionada" name="factura" facturas={facturas} datos={datos} onDato={onDato} required />
         <FieldSelect label="Motivo de refacturación" name="motivo"
           options={['Cliente no acepta nota de crédito', 'Plazo incorrecto', 'Fecha incorrecta (entrega mes siguiente)', 'Error en datos del cliente', 'Otro']}
           datos={datos} onDato={onDato} required />
@@ -646,6 +753,7 @@ export default function WizardNuevaSolicitud({
   const [datos,        setDatos]        = useState<Record<string, string>>({})
   const [loading,      setLoading]      = useState(false)
   const [error,        setError]        = useState('')
+  const [successInfo,  setSuccessInfo]  = useState<{ emailSent: boolean; emailTo: string | null } | null>(null)
 
   const onDato    = useCallback((k: string, v: string) => setDatos(p => ({ ...p, [k]: v })), [])
   const addCc     = useCallback((v: string) => setCc(p => [...p, v]), [])
@@ -691,10 +799,52 @@ export default function WizardNuevaSolicitud({
           monto_solicitado: datos['limite_solicitado'] ? parseFloat(datos['limite_solicitado']) : undefined,
         }),
       })
-      if (res.ok) { onSuccess() }
-      else { const d = await res.json(); setError(d.error ?? 'Error al enviar la solicitud') }
+      if (res.ok) {
+        const d = await res.json()
+        setSuccessInfo({ emailSent: d.email_sent ?? false, emailTo: d.email_to ?? null })
+      } else {
+        const d = await res.json(); setError(d.error ?? 'Error al enviar la solicitud')
+      }
     } catch { setError('Error de conexión. Intentá de nuevo.') }
     finally { setLoading(false) }
+  }
+
+  // ── Pantalla de éxito ────────────────────────────────────────────────
+  if (successInfo) {
+    const tipoLabel = destinatario && tipoSlug
+      ? TIPOS_POR_DEST[destinatario].find(t => t.value === tipoSlug)?.label ?? tipoSlug
+      : ''
+    return (
+      <div className="flex flex-col items-center text-center py-6 gap-4">
+        <div className="rounded-full p-4" style={{ backgroundColor: '#dcfce7' }}>
+          <CheckCircle2 size={36} style={{ color: '#16a34a' }} />
+        </div>
+        <div>
+          <p className="text-[16px] font-bold text-gray-800 mb-1">¡Solicitud enviada!</p>
+          <p className="text-[13px] text-gray-500">
+            <span className="font-semibold">{tipoLabel}</span> para{' '}
+            <span className="font-semibold">{clienteNombre}</span>
+          </p>
+        </div>
+        {successInfo.emailSent && successInfo.emailTo && (
+          <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-2">
+            <Mail size={14} className="text-green-600 flex-shrink-0" />
+            <p className="text-[12px] text-green-700">
+              Correo enviado a <span className="font-bold">{successInfo.emailTo}</span>
+            </p>
+          </div>
+        )}
+        {!successInfo.emailSent && (
+          <p className="text-[11px] text-gray-400">El coordinador recibirá la notificación en la app.</p>
+        )}
+        <button
+          type="button" onClick={onSuccess}
+          className="mt-2 rounded-xl px-6 py-2.5 text-[13px] font-bold text-white transition hover:opacity-90"
+          style={{ backgroundColor: '#009ee3' }}>
+          Ir a solicitudes
+        </button>
+      </div>
+    )
   }
 
   return (

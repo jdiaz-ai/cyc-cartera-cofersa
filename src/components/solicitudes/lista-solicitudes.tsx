@@ -6,16 +6,47 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Plus, CheckCircle2, XCircle, Clock, ChevronRight,
   TrendingUp, Shield, FileText, X,
+  ShieldOff, RefreshCw, PauseCircle, PlayCircle, AlertTriangle,
+  Percent, ArrowLeftRight, Gift, Tag, Package, RotateCcw, FileEdit, MoreHorizontal,
 } from 'lucide-react'
 import { fmtFecha, fmtM } from '@/lib/utils/formato'
-import type { Solicitud, TipoSolicitud, EstadoSolicitud } from '@/types/database'
+import type { Solicitud, EstadoSolicitud } from '@/types/database'
 
-// ── Configuración visual ───────────────────────────────────────────────
-const TIPO_CFG: Record<TipoSolicitud, { label: string; icon: React.ReactNode; color: string }> = {
-  AUMENTO_LIMITE:   { label: 'Aumento de límite',    icon: <TrendingUp size={14} />, color: '#009ee3' },
-  EXCEPCION_CREDITO:{ label: 'Excepción de crédito', icon: <Shield     size={14} />, color: '#f59e0b' },
-  NOTA_CREDITO:     { label: 'Nota de crédito',      icon: <FileText   size={14} />, color: '#8b5cf6' },
+// ── Configuración visual por tipo (cubre slugs nuevos + legacy uppercase) ─
+type TipoCfgEntry = { label: string; icon: React.ReactNode; color: string; area: string }
+
+const TIPO_CFG: Record<string, TipoCfgEntry> = {
+  // ── slugs nuevos ────────────────────────────────────────
+  aumento_limite:       { label: 'Aumento de límite',        icon: <TrendingUp    size={13} />, color: '#009ee3', area: 'Coordinador' },
+  excepcion_credito:    { label: 'Excepción de crédito',     icon: <ShieldOff     size={13} />, color: '#f59e0b', area: 'Coordinador' },
+  cambio_condicion:     { label: 'Cambio de condición',      icon: <RefreshCw     size={13} />, color: '#0ea5e9', area: 'Coordinador' },
+  suspension_temporal:  { label: 'Suspensión temporal',      icon: <PauseCircle   size={13} />, color: '#dc2626', area: 'Coordinador' },
+  reactivacion_cliente: { label: 'Reactivación de cliente',  icon: <PlayCircle    size={13} />, color: '#16a34a', area: 'Coordinador' },
+  caso_especial:        { label: 'Caso especial',            icon: <AlertTriangle size={13} />, color: '#dc2626', area: 'Coordinador' },
+  descuento_no_aplicado:{ label: 'Descuento no aplicado',    icon: <Percent       size={13} />, color: '#16a34a', area: 'Comercial'   },
+  diferencia_precio:    { label: 'Diferencia de precio',     icon: <ArrowLeftRight size={13}/>, color: '#16a34a', area: 'Comercial'   },
+  regalia_bonificacion: { label: 'Regalía / Bonificación',   icon: <Gift          size={13} />, color: '#16a34a', area: 'Comercial'   },
+  beneficio_mercadeo:   { label: 'Beneficio de mercadeo',    icon: <Tag           size={13} />, color: '#16a34a', area: 'Comercial'   },
+  mercaderia_faltante:  { label: 'Mercadería faltante',      icon: <Package       size={13} />, color: '#f59e0b', area: 'Logística'   },
+  devolucion_mercaderia:{ label: 'Devolución de mercadería', icon: <RotateCcw     size={13} />, color: '#f59e0b', area: 'Logística'   },
+  garantias:            { label: 'Garantías',                icon: <Shield        size={13} />, color: '#f59e0b', area: 'Logística'   },
+  refacturacion:        { label: 'Refacturación',            icon: <FileEdit      size={13} />, color: '#f59e0b', area: 'Logística'   },
+  otra_solicitud:       { label: 'Otra solicitud',           icon: <MoreHorizontal size={13}/>, color: '#9ca3af', area: 'Otro'        },
+  // ── legacy uppercase (compatibilidad con registros viejos) ──────────
+  AUMENTO_LIMITE:       { label: 'Aumento de límite',        icon: <TrendingUp size={13} />, color: '#009ee3', area: 'Coordinador' },
+  EXCEPCION_CREDITO:    { label: 'Excepción de crédito',     icon: <Shield     size={13} />, color: '#f59e0b', area: 'Coordinador' },
+  NOTA_CREDITO:         { label: 'Nota de crédito',          icon: <FileText   size={13} />, color: '#8b5cf6', area: 'Coordinador' },
 }
+
+// Color del área
+const AREA_CFG: Record<string, { bg: string; text: string }> = {
+  Coordinador: { bg: '#dbeafe', text: '#1d4ed8' },
+  Comercial:   { bg: '#dcfce7', text: '#15803d' },
+  Logística:   { bg: '#fef9c3', text: '#a16207' },
+  Otro:        { bg: '#f1f5f9', text: '#475569' },
+}
+
+const TIPO_FALLBACK: TipoCfgEntry = { label: 'Solicitud', icon: <MoreHorizontal size={13} />, color: '#9ca3af', area: 'Otro' }
 
 const ESTADO_CFG: Record<EstadoSolicitud, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
   PENDIENTE:   { label: 'Pendiente',   bg: '#fef9c3', text: '#a16207', icon: <Clock       size={11} /> },
@@ -141,93 +172,114 @@ export default function ListaSolicitudes({ solicitudes: init, rol, coordId }: Pr
       ) : (
         <div className="space-y-3">
           {filtradas.map(s => {
-            const tipCfg  = TIPO_CFG[s.tipo]
+            const tipCfg  = TIPO_CFG[s.tipo] ?? TIPO_FALLBACK
             const estCfg  = ESTADO_CFG[s.estado]
+            const areaCfg = AREA_CFG[tipCfg.area] ?? AREA_CFG['Otro']
             return (
-              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    {/* Tipo + Cliente */}
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                {/* Franja superior de color por tipo */}
+                <div className="h-0.5 w-full" style={{ backgroundColor: tipCfg.color }} />
+                <div className="p-4">
+                  <div className="flex items-start gap-4">
+
+                    {/* ── Columna izquierda ────────────────── */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      {/* Tipo + Área */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className="flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
+                          style={{ backgroundColor: tipCfg.color + '18', color: tipCfg.color }}
+                        >
+                          {tipCfg.icon} {tipCfg.label}
+                        </span>
+                        <span
+                          className="text-[10px] font-bold rounded-full px-2 py-0.5 uppercase tracking-wide"
+                          style={{ backgroundColor: areaCfg.bg, color: areaCfg.text }}
+                        >
+                          {tipCfg.area}
+                        </span>
+                      </div>
+
+                      {/* Cliente */}
+                      {(s.cliente_nombre || s.cliente_cod) && (
+                        <div className="flex items-baseline gap-2">
+                          {s.cliente_nombre && (
+                            <p className="text-[13px] font-bold text-gray-800 truncate">{s.cliente_nombre}</p>
+                          )}
+                          {s.cliente_cod && (
+                            <span className="text-[11px] text-gray-400 font-mono flex-shrink-0">{s.cliente_cod}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Justificación */}
+                      <p className="text-[12px] text-gray-500 leading-snug line-clamp-2">{s.justificacion}</p>
+
+                      {/* Montos inline */}
+                      {(s.monto_actual || s.monto_solicitado || s.monto) && (
+                        <div className="flex flex-wrap gap-3">
+                          {s.monto_actual != null && s.monto_actual > 0 && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Actual</p>
+                              <p className="text-[12px] font-bold text-gray-700 tabular-nums">{fmtM(s.monto_actual)}</p>
+                            </div>
+                          )}
+                          {s.monto_solicitado != null && s.monto_solicitado > 0 && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Solicitado</p>
+                              <p className="text-[12px] font-bold tabular-nums" style={{ color: tipCfg.color }}>{fmtM(s.monto_solicitado)}</p>
+                            </div>
+                          )}
+                          {s.monto != null && s.monto > 0 && !s.monto_solicitado && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide">Monto</p>
+                              <p className="text-[12px] font-bold text-gray-700 tabular-nums">{fmtM(s.monto)}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Comentario revisor */}
+                      {s.comentario_revisor && (
+                        <div className="rounded-lg px-3 py-2 text-[12px]" style={{ backgroundColor: '#f0f9ff', borderLeft: '3px solid #009ee3' }}>
+                          <p className="font-bold text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Respuesta del coordinador</p>
+                          <p className="text-gray-600">{s.comentario_revisor}</p>
+                        </div>
+                      )}
+
+                      {/* Fecha */}
+                      <p className="text-[11px] text-gray-400">{fmtFecha(s.created_at)}</p>
+                    </div>
+
+                    {/* ── Columna derecha ──────────────────── */}
+                    <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
                       <span
-                        className="flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
-                        style={{ backgroundColor: tipCfg.color + '15', color: tipCfg.color }}
+                        className="flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 whitespace-nowrap"
+                        style={{ backgroundColor: estCfg.bg, color: estCfg.text }}
                       >
-                        {tipCfg.icon} {tipCfg.label}
+                        {estCfg.icon} {estCfg.label}
                       </span>
-                      {s.cliente_nombre && (
-                        <span className="text-[12px] font-semibold text-gray-700">{s.cliente_nombre}</span>
-                      )}
-                      {s.cliente_cod && (
-                        <span className="text-[11px] text-gray-400 font-mono">{s.cliente_cod}</span>
-                      )}
-                    </div>
 
-                    {/* Montos */}
-                    <div className="flex flex-wrap gap-4 mb-2">
-                      {s.monto_actual !== null && s.monto_actual > 0 && (
-                        <div>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">Límite actual</p>
-                          <p className="text-[13px] font-bold text-gray-700 tabular-nums">{fmtM(s.monto_actual)}</p>
-                        </div>
-                      )}
-                      {s.monto_solicitado !== null && s.monto_solicitado > 0 && (
-                        <div>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">Solicitado</p>
-                          <p className="text-[13px] font-bold tabular-nums" style={{ color: '#009ee3' }}>{fmtM(s.monto_solicitado)}</p>
-                        </div>
-                      )}
-                      {s.monto !== null && s.monto > 0 && !s.monto_solicitado && (
-                        <div>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">Monto</p>
-                          <p className="text-[13px] font-bold text-gray-700 tabular-nums">{fmtM(s.monto)}</p>
+                      {/* Botones COORDINADOR */}
+                      {rol === 'COORDINADOR' && (s.estado === 'PENDIENTE' || s.estado === 'EN_REVISION') && (
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <button
+                            onClick={() => { setModal(s); setAccion('APROBADA') }}
+                            className="flex items-center justify-center gap-1 text-[11px] font-bold rounded-lg px-3 py-1.5 transition hover:opacity-80 whitespace-nowrap"
+                            style={{ backgroundColor: '#dcfce7', color: '#15803d' }}
+                          >
+                            <CheckCircle2 size={12} /> Aprobar
+                          </button>
+                          <button
+                            onClick={() => { setModal(s); setAccion('RECHAZADA') }}
+                            className="flex items-center justify-center gap-1 text-[11px] font-bold rounded-lg px-3 py-1.5 transition hover:opacity-80 whitespace-nowrap"
+                            style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
+                          >
+                            <XCircle size={12} /> Rechazar
+                          </button>
                         </div>
                       )}
                     </div>
-
-                    {/* Justificación */}
-                    <p className="text-[12px] text-gray-600 leading-snug mb-1">{s.justificacion}</p>
-
-                    {/* Comentario revisor */}
-                    {s.comentario_revisor && (
-                      <div className="mt-2 rounded-lg px-3 py-2 text-[12px]" style={{ backgroundColor: '#f8fafc', borderLeft: '3px solid #009ee3' }}>
-                        <p className="font-bold text-gray-500 text-[10px] uppercase mb-0.5">Comentario del coordinador</p>
-                        <p className="text-gray-600">{s.comentario_revisor}</p>
-                      </div>
-                    )}
-
-                    {/* Fecha */}
-                    <p className="text-[11px] text-gray-400 mt-2">{fmtFecha(s.created_at)}</p>
-                  </div>
-
-                  {/* Derecha: estado + acciones */}
-                  <div className="flex flex-col items-end gap-3 flex-shrink-0">
-                    <span
-                      className="flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1"
-                      style={{ backgroundColor: estCfg.bg, color: estCfg.text }}
-                    >
-                      {estCfg.icon} {estCfg.label}
-                    </span>
-
-                    {/* Botones COORDINADOR solo para pendientes/en revisión */}
-                    {rol === 'COORDINADOR' && (s.estado === 'PENDIENTE' || s.estado === 'EN_REVISION') && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => { setModal(s); setAccion('APROBADA') }}
-                          className="flex items-center gap-1 text-[11px] font-bold rounded-lg px-3 py-1.5 transition hover:opacity-80"
-                          style={{ backgroundColor: '#dcfce7', color: '#15803d' }}
-                        >
-                          <CheckCircle2 size={12} /> Aprobar
-                        </button>
-                        <button
-                          onClick={() => { setModal(s); setAccion('RECHAZADA') }}
-                          className="flex items-center gap-1 text-[11px] font-bold rounded-lg px-3 py-1.5 transition hover:opacity-80"
-                          style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
-                        >
-                          <XCircle size={12} /> Rechazar
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -271,7 +323,7 @@ export default function ListaSolicitudes({ solicitudes: init, rol, coordId }: Pr
             <div className="p-5 space-y-4">
               {/* Resumen de la solicitud */}
               <div className="rounded-xl p-3 space-y-1" style={{ backgroundColor: '#f8fafc' }}>
-                <p className="text-[11px] font-bold text-gray-400 uppercase">{TIPO_CFG[modal.tipo]?.label}</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase">{(TIPO_CFG[modal.tipo] ?? TIPO_FALLBACK).label}</p>
                 <p className="text-[13px] font-bold text-gray-800">{modal.cliente_nombre ?? modal.cliente_cod}</p>
                 <p className="text-[12px] text-gray-500">{modal.justificacion}</p>
               </div>

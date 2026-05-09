@@ -2602,16 +2602,85 @@ function TabPromesas({
 // ══════════════════════════════════════════════════════════════════════
 
 const TIPO_SOL_LABELS: Record<string, string> = {
-  AUMENTO_LIMITE:   'Aumento de límite',
-  EXCEPCION_CREDITO:'Excepción de crédito',
-  NOTA_CREDITO:     'Nota de crédito',
-  OTRA:             'Otra',
+  // nuevos slugs
+  aumento_limite:        'Aumento de límite',
+  excepcion_credito:     'Excepción de crédito',
+  cambio_condicion:      'Cambio de condición',
+  suspension_temporal:   'Suspensión temporal',
+  reactivacion_cliente:  'Reactivación de cliente',
+  caso_especial:         'Caso especial',
+  descuento_no_aplicado: 'Descuento no aplicado',
+  diferencia_precio:     'Diferencia de precio',
+  regalia_bonificacion:  'Regalía / Bonificación',
+  beneficio_mercadeo:    'Beneficio de mercadeo',
+  mercaderia_faltante:   'Mercadería faltante',
+  devolucion_mercaderia: 'Devolución de mercadería',
+  garantias:             'Garantías',
+  refacturacion:         'Refacturación',
+  otra_solicitud:        'Otra solicitud',
+  // legacy uppercase
+  AUMENTO_LIMITE:        'Aumento de límite',
+  EXCEPCION_CREDITO:     'Excepción de crédito',
+  NOTA_CREDITO:          'Nota de crédito',
+  OTRA:                  'Otra',
 }
+// color del borde/acento por tipo
+const TIPO_SOL_COLOR: Record<string, string> = {
+  aumento_limite:        '#009ee3',
+  excepcion_credito:     '#f59e0b',
+  cambio_condicion:      '#0ea5e9',
+  suspension_temporal:   '#dc2626',
+  reactivacion_cliente:  '#16a34a',
+  caso_especial:         '#dc2626',
+  descuento_no_aplicado: '#16a34a',
+  diferencia_precio:     '#16a34a',
+  regalia_bonificacion:  '#16a34a',
+  beneficio_mercadeo:    '#16a34a',
+  mercaderia_faltante:   '#f59e0b',
+  devolucion_mercaderia: '#f59e0b',
+  garantias:             '#f59e0b',
+  refacturacion:         '#f59e0b',
+  otra_solicitud:        '#9ca3af',
+  AUMENTO_LIMITE:        '#009ee3',
+  EXCEPCION_CREDITO:     '#f59e0b',
+  NOTA_CREDITO:          '#8b5cf6',
+  OTRA:                  '#9ca3af',
+}
+const TIPO_SOL_AREA: Record<string, string> = {
+  aumento_limite:        'Coordinador',
+  excepcion_credito:     'Coordinador',
+  cambio_condicion:      'Coordinador',
+  suspension_temporal:   'Coordinador',
+  reactivacion_cliente:  'Coordinador',
+  caso_especial:         'Coordinador',
+  descuento_no_aplicado: 'Comercial',
+  diferencia_precio:     'Comercial',
+  regalia_bonificacion:  'Comercial',
+  beneficio_mercadeo:    'Comercial',
+  mercaderia_faltante:   'Logística',
+  devolucion_mercaderia: 'Logística',
+  garantias:             'Logística',
+  refacturacion:         'Logística',
+  otra_solicitud:        'Otro',
+  AUMENTO_LIMITE:        'Coordinador',
+  EXCEPCION_CREDITO:     'Coordinador',
+  NOTA_CREDITO:          'Coordinador',
+  OTRA:                  'Otro',
+}
+const AREA_SOL_CFG: Record<string, { bg: string; text: string }> = {
+  Coordinador: { bg: '#dbeafe', text: '#1d4ed8' },
+  Comercial:   { bg: '#dcfce7', text: '#15803d' },
+  Logística:   { bg: '#fef9c3', text: '#a16207' },
+  Otro:        { bg: '#f1f5f9', text: '#475569' },
+}
+// mantener para filtros y modal
 const TIPO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
-  AUMENTO_LIMITE:    { bg: '#e0f2fe', text: '#0369a1' },
-  EXCEPCION_CREDITO: { bg: '#fef9c3', text: '#a16207' },
-  NOTA_CREDITO:      { bg: '#f3e8ff', text: '#7c3aed' },
-  OTRA:              { bg: '#f1f5f9', text: '#64748b' },
+  aumento_limite:        { bg: '#e0f2fe', text: '#0369a1' },
+  excepcion_credito:     { bg: '#fef9c3', text: '#a16207' },
+  AUMENTO_LIMITE:        { bg: '#e0f2fe', text: '#0369a1' },
+  EXCEPCION_CREDITO:     { bg: '#fef9c3', text: '#a16207' },
+  NOTA_CREDITO:          { bg: '#f3e8ff', text: '#7c3aed' },
+  OTRA:                  { bg: '#f1f5f9', text: '#64748b' },
 }
 const ESTADO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
   PENDIENTE:   { bg: '#fef9c3', text: '#a16207' },
@@ -2788,70 +2857,79 @@ function TabSolicitudes({
         <div className="space-y-3">
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {filtradas.map((s: any) => {
-            const tipoSty   = TIPO_SOL_COLORES[s.tipo]   ?? { bg: '#f1f5f9', text: '#64748b' }
+            const tipoColor = TIPO_SOL_COLOR[s.tipo]  ?? '#9ca3af'
             const estadoSty = ESTADO_SOL_COLORES[s.estado] ?? { bg: '#f1f5f9', text: '#64748b' }
+            const area      = TIPO_SOL_AREA[s.tipo] ?? 'Otro'
+            const areaSty   = AREA_SOL_CFG[area] ?? AREA_SOL_CFG['Otro']
             return (
-              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
-                        style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
-                        {TIPO_SOL_LABELS[s.tipo] ?? s.tipo.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
+              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                {/* Franja de color por tipo */}
+                <div className="h-0.5 w-full" style={{ backgroundColor: tipoColor }} />
+                <div className="px-4 py-3.5">
+                  <div className="flex items-start gap-3">
+
+                    {/* Columna izquierda */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                          style={{ backgroundColor: tipoColor + '18', color: tipoColor }}>
+                          {TIPO_SOL_LABELS[s.tipo] ?? s.tipo.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-[10px] font-bold rounded-full px-2 py-0.5 uppercase tracking-wide"
+                          style={{ backgroundColor: areaSty.bg, color: areaSty.text }}>
+                          {area}
+                        </span>
+                      </div>
+
+                      {/* Montos (aumento de límite) */}
+                      {s.monto_actual != null && s.monto_solicitado != null && (
+                        <p className="text-[12px] font-bold text-gray-700 tabular-nums">
+                          {fmtCRC2(s.monto_actual)}
+                          <span className="text-gray-400 font-normal mx-1.5">→</span>
+                          <span style={{ color: tipoColor }}>{fmtCRC2(s.monto_solicitado)}</span> solicitado
+                        </p>
+                      )}
+
+                      <p className="text-[12px] text-gray-500 leading-snug line-clamp-2">{s.justificacion}</p>
+
+                      {s.comentario_revisor && (
+                        <div className="rounded-lg px-3 py-2 text-[12px]"
+                          style={{ backgroundColor: '#f0f9ff', borderLeft: '3px solid #009ee3' }}>
+                          <p className="font-bold text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Respuesta del coordinador</p>
+                          <p className="text-gray-600">{s.comentario_revisor}</p>
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-gray-400">{fmtFechaHora(s.created_at)}</p>
+                    </div>
+
+                    {/* Columna derecha */}
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 whitespace-nowrap"
                         style={{ backgroundColor: estadoSty.bg, color: estadoSty.text }}>
                         {s.estado.replace(/_/g, ' ')}
                       </span>
-                      {s.destinatario && (
-                        <span className="text-[11px] font-medium rounded-full px-2.5 py-0.5"
-                          style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>
-                          {{
-                            coordinador: 'Coordinador',
-                            comercial:   'Área comercial',
-                            logistica:   'Área logística',
-                            otro:        'Otro',
-                          }[s.destinatario as string] ?? s.destinatario}
-                        </span>
+                      {esCoordinador && s.estado === 'PENDIENTE' && (
+                        <>
+                          <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'APROBAR' })}
+                            className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-80 whitespace-nowrap"
+                            style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
+                            Aprobar
+                          </button>
+                          <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'RECHAZAR' })}
+                            className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-80 whitespace-nowrap"
+                            style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
+                            Rechazar
+                          </button>
+                        </>
+                      )}
+                      {!esCoordinador && s.estado === 'PENDIENTE' && (
+                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
+                          className="rounded-lg px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition whitespace-nowrap">
+                          Cancelar
+                        </button>
                       )}
                     </div>
-                    {s.tipo === 'AUMENTO_LIMITE' && s.monto_actual != null && s.monto_solicitado != null && (
-                      <p className="text-[13px] font-bold text-gray-700 mb-1">
-                        {fmtCRC2(s.monto_actual)}
-                        <span className="text-gray-400 font-normal mx-1.5">→</span>
-                        {fmtCRC2(s.monto_solicitado)} solicitado
-                      </p>
-                    )}
-                    <p className="text-[13px] text-gray-600 mb-1">{s.justificacion}</p>
-                    {(s.estado === 'APROBADA' || s.estado === 'RECHAZADA') && s.comentario_revisor && (
-                      <p className="text-[12px] mt-1 italic"
-                        style={{ color: s.estado === 'APROBADA' ? '#15803d' : '#dc2626' }}>
-                        Nota revisor: {s.comentario_revisor}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-gray-400 mt-1.5">{fmtFechaHora(s.created_at)}</p>
-                  </div>
-                  <div className="flex flex-col gap-1.5 flex-shrink-0">
-                    {esCoordinador && s.estado === 'PENDIENTE' && (
-                      <>
-                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'APROBAR' })}
-                          className="rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
-                          style={{ backgroundColor: '#16a34a' }}>
-                          Aprobar
-                        </button>
-                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'RECHAZAR' })}
-                          className="rounded-lg px-3 py-1.5 text-[12px] font-bold text-white transition hover:opacity-90"
-                          style={{ backgroundColor: '#dc2626' }}>
-                          Rechazar
-                        </button>
-                      </>
-                    )}
-                    {!esCoordinador && s.estado === 'PENDIENTE' && (
-                      <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
-                        className="rounded-lg px-3 py-1.5 text-[12px] font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
-                        Cancelar
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
