@@ -12,6 +12,7 @@ import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/uti
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
+import ModalNuevaSolicitud from './modal-nueva-solicitud'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
 const TABS = [
@@ -684,14 +685,19 @@ export default function FichaCliente({
         {/* ── TAB: SOLICITUDES ─────────────────────────────────── */}
         {tab === 'Solicitudes' && (
           <TabSolicitudes
-            solicitudes   = {solicitudes}
-            clienteCod    = {cartera.cliente_cod}
-            clienteNombre = {cartera.cliente_nombre}
-            limiteActual  = {maestro?.limite_credito ?? 0}
-            esCoordinador = {esCoordinador}
-            userEmail     = {userEmail}
-            onToast       = {showToast}
-            onRefresh     = {() => router.refresh()}
+            solicitudes        = {solicitudes}
+            clienteCod         = {cartera.cliente_cod}
+            clienteNombre      = {cartera.cliente_nombre}
+            limiteActual       = {maestro?.limite_credito ?? 0}
+            moraTotal          = {mora_total}
+            diasAtraso         = {tramo_peor}
+            creditoDisponible  = {maestro?.limite_credito ? maestro.limite_credito - cartera.total : null}
+            condicionPago      = {maestro?.condicion_pago ? String(maestro.condicion_pago) : '—'}
+            facturas           = {facturas}
+            esCoordinador      = {esCoordinador}
+            userEmail          = {userEmail}
+            onToast            = {showToast}
+            onRefresh          = {() => router.refresh()}
           />
         )}
 
@@ -2615,95 +2621,6 @@ const ESTADO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
   RECHAZADA:   { bg: '#fee2e2', text: '#dc2626' },
 }
 
-function ModalNuevaSolicitud({ clienteCod, clienteNombre, limiteActual, onClose, onSuccess }: {
-  clienteCod:    string
-  clienteNombre: string
-  limiteActual:  number
-  onClose:       () => void
-  onSuccess:     () => void
-}) {
-  const [tipo,            setTipo]            = useState('AUMENTO_LIMITE')
-  const [justificacion,   setJustificacion]   = useState('')
-  const [montoSolicitado, setMontoSolicitado] = useState('')
-  const [loading,         setLoading]         = useState(false)
-  const [error,           setError]           = useState('')
-
-  async function enviar(e: React.FormEvent) {
-    e.preventDefault()
-    if (!justificacion.trim()) { setError('La justificación es obligatoria'); return }
-    setLoading(true); setError('')
-    const body: Record<string, unknown> = {
-      tipo, cliente_cod: clienteCod, cliente_nombre: clienteNombre, justificacion,
-      monto_actual: limiteActual > 0 ? limiteActual : undefined,
-    }
-    if (tipo === 'AUMENTO_LIMITE' && montoSolicitado) {
-      body.monto_solicitado = parseFloat(montoSolicitado.replace(/\D/g, ''))
-    }
-    const res = await fetch('/api/solicitudes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    })
-    setLoading(false)
-    if (res.ok) onSuccess()
-    else { const d = await res.json(); setError(d.error ?? 'Error al enviar') }
-  }
-
-  const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition'
-
-  return (
-    <ModalOverlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <div>
-          <h2 className="text-[15px] font-bold text-gray-900">Nueva solicitud</h2>
-          <p className="text-[12px] text-gray-400 mt-0.5">{clienteNombre}</p>
-        </div>
-        <CloseBtn onClose={onClose} />
-      </div>
-      <form onSubmit={enviar} className="p-5 space-y-3">
-        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tipo de solicitud</label>
-          <select value={tipo} onChange={e => setTipo(e.target.value)} className={inputCls}>
-            {Object.entries(TIPO_SOL_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </div>
-        {tipo === 'AUMENTO_LIMITE' && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Límite actual</label>
-              <input readOnly value={limiteActual > 0 ? fmtCRC2(limiteActual) : 'Sin límite'} className={inputCls + ' bg-gray-50 text-gray-400'} />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Límite solicitado (₡)</label>
-              <input type="text" value={montoSolicitado} onChange={e => setMontoSolicitado(e.target.value)}
-                className={inputCls} placeholder="Ej: 200000000" />
-              {montoSolicitado && !isNaN(parseFloat(montoSolicitado.replace(/\D/g, ''))) && (
-                <p className="text-[11px] text-blue-500 mt-1">{fmtCRC2(parseFloat(montoSolicitado.replace(/\D/g, '')))}</p>
-              )}
-            </div>
-          </div>
-        )}
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Justificación *</label>
-          <textarea value={justificacion} onChange={e => setJustificacion(e.target.value)} rows={4}
-            className={inputCls + ' resize-none'} placeholder="Explicá el motivo de la solicitud..." />
-        </div>
-        <p className="text-[10px] text-gray-400">Se notificará al coordinador automáticamente.</p>
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose}
-            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
-            Cancelar
-          </button>
-          <button type="submit" disabled={loading}
-            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
-            style={{ backgroundColor: '#009ee3' }}>
-            {loading ? 'Enviando...' : 'Enviar solicitud'}
-          </button>
-        </div>
-      </form>
-    </ModalOverlay>
-  )
-}
-
 function ModalAccionSolicitud({ solicitud, accion, onClose, onSuccess }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   solicitud: any
@@ -2771,19 +2688,29 @@ function TabSolicitudes({
   clienteCod,
   clienteNombre,
   limiteActual,
+  moraTotal,
+  diasAtraso,
+  creditoDisponible,
+  condicionPago,
+  facturas,
   esCoordinador,
   onToast,
   onRefresh,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  solicitudes:   any[]
-  clienteCod:    string
-  clienteNombre: string
-  limiteActual:  number
-  esCoordinador: boolean
-  userEmail:     string
-  onToast:       (msg: string) => void
-  onRefresh:     () => void
+  solicitudes:       any[]
+  clienteCod:        string
+  clienteNombre:     string
+  limiteActual:      number
+  moraTotal:         number
+  diasAtraso:        string
+  creditoDisponible: number | null
+  condicionPago:     string
+  facturas:          Factura[]
+  esCoordinador:     boolean
+  userEmail:         string
+  onToast:           (msg: string) => void
+  onRefresh:         () => void
 }) {
   const [filtroEstado, setFiltroEstado] = useState('Todos')
   const [modalNueva,   setModalNueva]   = useState(false)
@@ -2870,12 +2797,23 @@ function TabSolicitudes({
                     <div className="flex flex-wrap gap-2 mb-2">
                       <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
                         style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
-                        {TIPO_SOL_LABELS[s.tipo] ?? s.tipo}
+                        {TIPO_SOL_LABELS[s.tipo] ?? s.tipo.replace(/_/g, ' ')}
                       </span>
                       <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
                         style={{ backgroundColor: estadoSty.bg, color: estadoSty.text }}>
                         {s.estado.replace(/_/g, ' ')}
                       </span>
+                      {s.destinatario && (
+                        <span className="text-[11px] font-medium rounded-full px-2.5 py-0.5"
+                          style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}>
+                          {{
+                            coordinador: 'Coordinador',
+                            comercial:   'Área comercial',
+                            logistica:   'Área logística',
+                            otro:        'Otro',
+                          }[s.destinatario as string] ?? s.destinatario}
+                        </span>
+                      )}
                     </div>
                     {s.tipo === 'AUMENTO_LIMITE' && s.monto_actual != null && s.monto_solicitado != null && (
                       <p className="text-[13px] font-bold text-gray-700 mb-1">
@@ -2924,11 +2862,16 @@ function TabSolicitudes({
 
       {modalNueva && (
         <ModalNuevaSolicitud
-          clienteCod    = {clienteCod}
-          clienteNombre = {clienteNombre}
-          limiteActual  = {limiteActual}
-          onClose       = {() => setModalNueva(false)}
-          onSuccess     = {() => { setModalNueva(false); onToast('Solicitud enviada al coordinador'); onRefresh() }}
+          clienteCod        = {clienteCod}
+          clienteNombre     = {clienteNombre}
+          limiteActual      = {limiteActual}
+          moraTotal         = {moraTotal}
+          diasAtraso        = {diasAtraso}
+          creditoDisponible = {creditoDisponible}
+          condicionPago     = {condicionPago}
+          facturas          = {facturas}
+          onClose           = {() => setModalNueva(false)}
+          onSuccess         = {() => { setModalNueva(false); onToast('Solicitud enviada'); onRefresh() }}
         />
       )}
       {modalAccion && (

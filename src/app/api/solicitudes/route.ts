@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 // POST /api/solicitudes
-// { tipo, cliente_cod, cliente_nombre, justificacion, monto_actual?, monto_solicitado?, monto?, motivo_nota?, documento_ref? }
+// { tipo, destinatario?, cliente_cod, cliente_nombre, justificacion,
+//   para_email?, cc_emails?, datos?,
+//   monto_actual?, monto_solicitado?, monto?, motivo_nota?, documento_ref?, fecha_limite? }
 export async function POST(req: NextRequest) {
   let body: {
     tipo?: string
+    destinatario?: string
     cliente_cod?: string
     cliente_nombre?: string
     justificacion?: string
+    para_email?: string
+    cc_emails?: string[]
+    datos?: Record<string, unknown>
     monto_actual?: number
     monto_solicitado?: number
     monto?: number
@@ -19,7 +25,8 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { tipo, cliente_cod, cliente_nombre, justificacion,
+  const { tipo, destinatario, cliente_cod, cliente_nombre, justificacion,
+    para_email, cc_emails, datos,
     monto_actual, monto_solicitado, monto, motivo_nota, documento_ref, fecha_limite } = body
 
   if (!tipo || !cliente_cod || !justificacion?.trim()) {
@@ -38,10 +45,14 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: nuevaSolicitud, error } = await (supabase as any).from('solicitudes').insert({
     tipo,
+    destinatario:     destinatario     ?? null,
     cliente_cod,
-    cliente_nombre:   cliente_nombre ?? '',
+    cliente_nombre:   cliente_nombre   ?? '',
     solicitante_id:   solicitanteId,
     justificacion:    justificacion.trim(),
+    para_email:       para_email       ?? null,
+    cc_emails:        cc_emails        ?? null,
+    datos:            datos            ?? null,
     monto_actual:     monto_actual     ?? null,
     monto_solicitado: monto_solicitado ?? null,
     monto:            monto            ?? null,
@@ -67,8 +78,8 @@ export async function POST(req: NextRequest) {
     await (supabase as any).from('notificaciones').insert({
       usuario_id: (coordRow as { id: string }).id,
       tipo:       'SOLICITUD',
-      titulo:     `Nueva solicitud de ${tipo.replace(/_/g, ' ')}`,
-      mensaje:    `Cliente: ${cliente_nombre ?? cliente_cod}. Solicitante: ${user.email}`,
+      titulo:     `Nueva solicitud: ${tipo.replace(/_/g, ' ')}`,
+      mensaje:    `Cliente: ${cliente_nombre ?? cliente_cod}. Destinatario: ${destinatario ?? 'coordinador'}. Solicitante: ${user.email}`,
       leida:      false,
       link:       `/solicitudes/${(nuevaSolicitud as { id: string })?.id ?? ''}`,
       created_at: new Date().toISOString(),
