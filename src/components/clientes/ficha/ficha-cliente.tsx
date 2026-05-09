@@ -12,7 +12,6 @@ import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/uti
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import ModalGestion from './modal-gestion'
-import ModalNuevaSolicitud from './modal-nueva-solicitud'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
 const TABS = [
@@ -2712,8 +2711,8 @@ function TabSolicitudes({
   onToast:           (msg: string) => void
   onRefresh:         () => void
 }) {
+  const router = useRouter()
   const [filtroEstado, setFiltroEstado] = useState('Todos')
-  const [modalNueva,   setModalNueva]   = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [modalAccion,  setModalAccion]  = useState<{ sol: any; accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR' } | null>(null)
 
@@ -2770,7 +2769,8 @@ function TabSolicitudes({
             )
           })}
         </div>
-        <button type="button" onClick={() => setModalNueva(true)}
+        <button type="button"
+          onClick={() => router.push(`/clientes/${clienteCod}/solicitudes/nueva`)}
           className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 flex-shrink-0"
           style={{ backgroundColor: '#009ee3' }}>
           <Plus size={14} /> Nueva solicitud
@@ -2860,20 +2860,6 @@ function TabSolicitudes({
         </div>
       )}
 
-      {modalNueva && (
-        <ModalNuevaSolicitud
-          clienteCod        = {clienteCod}
-          clienteNombre     = {clienteNombre}
-          limiteActual      = {limiteActual}
-          moraTotal         = {moraTotal}
-          diasAtraso        = {diasAtraso}
-          creditoDisponible = {creditoDisponible}
-          condicionPago     = {condicionPago}
-          facturas          = {facturas}
-          onClose           = {() => setModalNueva(false)}
-          onSuccess         = {() => { setModalNueva(false); onToast('Solicitud enviada'); onRefresh() }}
-        />
-      )}
       {modalAccion && (
         <ModalAccionSolicitud
           solicitud = {modalAccion.sol}
