@@ -113,14 +113,15 @@ export interface ConfigSistema {
   descripcion: string
 }
 
-export type EstadoSolicitud = 'PENDIENTE' | 'EN_REVISION' | 'APROBADA' | 'RECHAZADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'APROBADA' | 'RECHAZADA'
 export type TipoSolicitud   = 'AUMENTO_LIMITE' | 'EXCEPCION_CREDITO' | 'NOTA_CREDITO'
 export type EstadoCoord     = 'PENDIENTE' | 'EN_PROCESO' | 'CERRADO'
 export type TipoNotif       = 'SOLICITUD' | 'PROMESA' | 'ALERTA' | 'SYNC'
 
 export interface Solicitud {
   id: string
-  tipo: TipoSolicitud
+  tipo: string                  // acepta slugs nuevos + legacy uppercase
+  destinatario: string | null   // 'coordinador' | 'comercial' | 'logistica' | 'otro'
   cliente_id: number | null
   cliente_cod: string | null
   cliente_nombre: string | null
@@ -134,6 +135,8 @@ export interface Solicitud {
   motivo_nota: string | null
   documento_ref: string | null
   fecha_limite: string | null
+  para_email: string | null     // correo principal al que se envió
+  cc_emails: string[] | null    // correos en copia
   estado: EstadoSolicitud
   created_at: string
   updated_at: string

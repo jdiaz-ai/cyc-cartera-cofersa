@@ -67,6 +67,7 @@ export default async function FichaClientePage({ params }: PageProps) {
   // ── Solicitudes (tabla puede no existir aún) ─────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let solicitudes: any[] = []
+  let solicitanteMap: Record<string, string> = {}
   try {
     const { data: solRaw } = await supabase
       .from('solicitudes')
@@ -75,6 +76,18 @@ export default async function FichaClientePage({ params }: PageProps) {
       .eq('cliente_cod' as any, cod)
       .order('created_at', { ascending: false })
     solicitudes = solRaw ?? []
+
+    // Mapa solicitante_id → nombre para "Creada por" en el card
+    const idsUnicos = Array.from(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      new Set(solicitudes.map((s: any) => s.solicitante_id).filter(Boolean))
+    ) as string[]
+    if (idsUnicos.length > 0) {
+      const { data: usRows } = await supabase
+        .from('usuarios').select('id, nombre').in('id', idsUnicos)
+      ;((usRows ?? []) as { id: string; nombre: string }[])
+        .forEach(u => { solicitanteMap[u.id] = u.nombre })
+    }
   } catch { /* tabla aún no creada */ }
 
   // ── Nombre del analista + rol del usuario logueado ─────────────────
@@ -99,15 +112,16 @@ export default async function FichaClientePage({ params }: PageProps) {
 
   return (
     <FichaCliente
-      cartera        = {cartera}
-      maestro        = {maestro}
-      facturas       = {facturas}
-      gestiones      = {gestiones}
-      promesas       = {promesas}
-      solicitudes    = {solicitudes}
-      analistaNombre = {analistaNombre}
-      userEmail      = {userEmail}
-      esCoordinador  = {esCoordinador}
+      cartera         = {cartera}
+      maestro         = {maestro}
+      facturas        = {facturas}
+      gestiones       = {gestiones}
+      promesas        = {promesas}
+      solicitudes     = {solicitudes}
+      solicitanteMap  = {solicitanteMap}
+      analistaNombre  = {analistaNombre}
+      userEmail       = {userEmail}
+      esCoordinador   = {esCoordinador}
     />
   )
 }

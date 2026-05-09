@@ -65,6 +65,7 @@ interface Props {
   promesas:       Promesa[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   solicitudes:    any[]
+  solicitanteMap: Record<string, string>  // solicitante_id → nombre
   analistaNombre: string
   userEmail:      string
   esCoordinador:  boolean
@@ -121,7 +122,7 @@ function facturaEnTramo(f: Factura, tramo: string, hoy: string): boolean {
 // COMPONENTE PRINCIPAL
 // ══════════════════════════════════════════════════════════════════════
 export default function FichaCliente({
-  cartera, maestro, facturas, gestiones, promesas, solicitudes,
+  cartera, maestro, facturas, gestiones, promesas, solicitudes, solicitanteMap,
   analistaNombre, userEmail, esCoordinador,
 }: Props) {
   const router   = useRouter()
@@ -685,6 +686,7 @@ export default function FichaCliente({
         {tab === 'Solicitudes' && (
           <TabSolicitudes
             solicitudes        = {solicitudes}
+            solicitanteMap     = {solicitanteMap}
             clienteCod         = {cartera.cliente_cod}
             clienteNombre      = {cartera.cliente_nombre}
             limiteActual       = {maestro?.limite_credito ?? 0}
@@ -2753,20 +2755,15 @@ function ModalAccionSolicitud({ solicitud, accion, onClose, onSuccess }: {
 
 function TabSolicitudes({
   solicitudes,
+  solicitanteMap,
   clienteCod,
-  clienteNombre,
-  limiteActual,
-  moraTotal,
-  diasAtraso,
-  creditoDisponible,
-  condicionPago,
-  facturas,
   esCoordinador,
   onToast,
   onRefresh,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   solicitudes:       any[]
+  solicitanteMap:    Record<string, string>
   clienteCod:        string
   clienteNombre:     string
   limiteActual:      number
@@ -2796,44 +2793,68 @@ function TabSolicitudes({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filtradas  = solicitudes.filter((s: any) => filtroEstado === 'Todos' || s.estado === filtroEstado)
 
+  // helper fecha hora
+  function fmtFechaCorta(iso: string) {
+    try {
+      const d = new Date(iso)
+      const dia  = d.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })
+      const hora = d.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false })
+      return `${dia} · ${hora}`
+    } catch { return iso }
+  }
+
+  // configs visuales — reutiliza los mapas de módulo-nivel
+  const AREA_BADGES: Record<string, { bg: string; color: string }> = {
+    'Coordinador':    { bg: 'rgba(59,130,246,0.12)',  color: '#2563eb' },
+    'Área comercial': { bg: 'rgba(34,197,94,0.12)',   color: '#16a34a' },
+    'Área logística': { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
+    'Otro':           { bg: 'rgba(107,114,128,0.10)', color: '#6b7280' },
+  }
+  const ESTADO_BADGES: Record<string, { bg: string; color: string; label: string }> = {
+    PENDIENTE: { bg: 'rgba(245,158,11,0.15)',  color: '#d97706', label: 'Pendiente' },
+    APROBADA:  { bg: 'rgba(34,197,94,0.15)',   color: '#16a34a', label: 'Aprobada'  },
+    RECHAZADA: { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', label: 'Rechazada' },
+  }
+
   return (
     <div className="space-y-4">
 
-      {/* KPIs */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pendientes</p>
-          <p className="text-[22px] font-black tabular-nums leading-tight"
-            style={{ color: pendientes > 0 ? '#f59e0b' : '#94a3b8' }}>{pendientes}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Aprobadas</p>
-          <p className="text-[22px] font-black tabular-nums leading-tight"
-            style={{ color: aprobadas > 0 ? '#16a34a' : '#94a3b8' }}>{aprobadas}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Rechazadas</p>
-          <p className="text-[22px] font-black tabular-nums leading-tight"
-            style={{ color: rechazadas > 0 ? '#dc2626' : '#94a3b8' }}>{rechazadas}</p>
-        </div>
+      {/* ── KPIs — solo 3 estados ───────────────────────── */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        {([
+          { key: 'PENDIENTE', label: 'Pendientes', val: pendientes, color: pendientes > 0 ? '#d97706' : '#94a3b8' },
+          { key: 'APROBADA',  label: 'Aprobadas',  val: aprobadas,  color: aprobadas  > 0 ? '#16a34a' : '#94a3b8' },
+          { key: 'RECHAZADA', label: 'Rechazadas', val: rechazadas, color: rechazadas > 0 ? '#ef4444' : '#94a3b8' },
+        ]).map(k => (
+          <div key={k.key} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{k.label}</p>
+            <p className="text-[22px] font-black tabular-nums leading-tight" style={{ color: k.color }}>{k.val}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Filtros + botón */}
+      {/* ── Filtros + botón ─────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1.5 flex-wrap flex-1">
-          {['Todos', 'PENDIENTE', 'EN_REVISION', 'APROBADA', 'RECHAZADA'].map(est => {
-            const sty    = ESTADO_SOL_COLORES[est] ?? { bg: '#f1f5f9', text: '#64748b' }
-            const active = filtroEstado === est
+          {[
+            { key: 'Todos',     label: 'Todas'     },
+            { key: 'PENDIENTE', label: 'Pendiente' },
+            { key: 'APROBADA',  label: 'Aprobada'  },
+            { key: 'RECHAZADA', label: 'Rechazada' },
+          ].map(f => {
+            const active = filtroEstado === f.key
+            const sty    = ESTADO_BADGES[f.key] ?? { bg: '#f1f5f9', color: '#64748b', label: '' }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cnt    = f.key !== 'Todos' ? solicitudes.filter((s: any) => s.estado === f.key).length : null
             return (
-              <button key={est} type="button" onClick={() => setFiltroEstado(est)}
+              <button key={f.key} type="button" onClick={() => setFiltroEstado(f.key)}
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition"
                 style={active
-                  ? { backgroundColor: sty.bg, color: sty.text, boxShadow: '0 0 0 2px ' + sty.text + '40' }
+                  ? { backgroundColor: sty.bg, color: sty.color, boxShadow: `0 0 0 1.5px ${sty.color}40` }
                   : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
                 }>
-                {est === 'Todos' ? 'Todas' : est.replace(/_/g, ' ')}
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {est !== 'Todos' && <span className="text-[10px]">({solicitudes.filter((s: any) => s.estado === est).length})</span>}
+                {f.label}
+                {cnt !== null && <span className="text-[10px]">({cnt})</span>}
               </button>
             )
           })}
@@ -2846,7 +2867,7 @@ function TabSolicitudes({
         </button>
       </div>
 
-      {/* Lista */}
+      {/* ── Lista de solicitudes ─────────────────────────── */}
       {filtradas.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <EmptyState icon={<AlertTriangle size={32} />}
@@ -2854,83 +2875,124 @@ function TabSolicitudes({
             sub="Las solicitudes de aumento de crédito, excepciones y notas de crédito aparecerán aquí." />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-[10px]">
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           {filtradas.map((s: any) => {
-            const tipoColor = TIPO_SOL_COLOR[s.tipo]  ?? '#9ca3af'
-            const estadoSty = ESTADO_SOL_COLORES[s.estado] ?? { bg: '#f1f5f9', text: '#64748b' }
-            const area      = TIPO_SOL_AREA[s.tipo] ?? 'Otro'
-            const areaSty   = AREA_SOL_CFG[area] ?? AREA_SOL_CFG['Otro']
+            const tipoLabel   = TIPO_SOL_LABELS[s.tipo] ?? (s.tipo as string).replace(/_/g, ' ')
+            const tipoAccent  = TIPO_SOL_COLOR[s.tipo]  ?? '#6b7280'
+            const area        = TIPO_SOL_AREA[s.tipo]   ?? 'Otro'
+            const areaBadge   = AREA_BADGES[area]       ?? AREA_BADGES['Otro']
+            const estadoBadge = ESTADO_BADGES[s.estado] ?? ESTADO_BADGES['PENDIENTE']
+            const solNombre   = s.solicitante_id ? (solicitanteMap[s.solicitante_id] ?? '—') : '—'
             return (
-              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                {/* Franja de color por tipo */}
-                <div className="h-0.5 w-full" style={{ backgroundColor: tipoColor }} />
-                <div className="px-4 py-3.5">
-                  <div className="flex items-start gap-3">
+              <div key={s.id}
+                className="bg-white rounded-xl overflow-hidden transition-colors"
+                style={{ border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: '12px' }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border-tertiary, #e2e8f0)')}
+              >
+                <div style={{ padding: '16px' }}>
 
-                    {/* Columna izquierda */}
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5"
-                          style={{ backgroundColor: tipoColor + '18', color: tipoColor }}>
-                          {TIPO_SOL_LABELS[s.tipo] ?? s.tipo.replace(/_/g, ' ')}
-                        </span>
-                        <span className="text-[10px] font-bold rounded-full px-2 py-0.5 uppercase tracking-wide"
-                          style={{ backgroundColor: areaSty.bg, color: areaSty.text }}>
-                          {area}
-                        </span>
-                      </div>
+                  {/* FILA 1: Badges */}
+                  <div className="flex items-center gap-2 flex-wrap mb-3">
+                    <span className="inline-flex items-center gap-1.5"
+                      style={{
+                        background: 'var(--color-background-secondary, #f8fafc)',
+                        border: '0.5px solid var(--color-border-secondary, #e2e8f0)',
+                        borderRadius: '6px', padding: '3px 8px',
+                        fontSize: '12px', fontWeight: 500, color: tipoAccent,
+                      }}>
+                      {tipoLabel}
+                    </span>
+                    <span style={{
+                      background: areaBadge.bg, borderRadius: '6px', padding: '3px 8px',
+                      fontSize: '11px', fontWeight: 500, color: areaBadge.color,
+                    }}>
+                      {area}
+                    </span>
+                    <span className="ml-auto inline-flex items-center gap-1"
+                      style={{
+                        background: estadoBadge.bg, borderRadius: '6px', padding: '3px 8px',
+                        fontSize: '11px', fontWeight: 600, color: estadoBadge.color,
+                      }}>
+                      <span style={{ fontSize: '8px' }}>●</span> {estadoBadge.label}
+                    </span>
+                  </div>
 
-                      {/* Montos (aumento de límite) */}
-                      {s.monto_actual != null && s.monto_solicitado != null && (
-                        <p className="text-[12px] font-bold text-gray-700 tabular-nums">
-                          {fmtCRC2(s.monto_actual)}
-                          <span className="text-gray-400 font-normal mx-1.5">→</span>
-                          <span style={{ color: tipoColor }}>{fmtCRC2(s.monto_solicitado)}</span> solicitado
-                        </p>
+                  {/* FILA 2: Grid 2 columnas */}
+                  <div className="grid gap-3 mb-3" style={{
+                    gridTemplateColumns: '1fr 1fr',
+                    background: 'var(--color-background-secondary, #f8fafc)',
+                    borderRadius: '8px', padding: '12px',
+                  }}>
+                    {/* Enviado a */}
+                    <div>
+                      <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: '4px' }}>
+                        Enviado a
+                      </p>
+                      {s.para_email ? (
+                        <>
+                          <p className="truncate" style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', marginBottom: '2px' }}>
+                            {s.para_email}
+                          </p>
+                          {s.cc_emails && s.cc_emails.length > 0 && (
+                            <p className="truncate" style={{ fontSize: '11px', color: '#64748b' }}>
+                              CC: {s.cc_emails.join(', ')}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p style={{ fontSize: '13px', fontStyle: 'italic', color: '#94a3b8' }}>Sin destinatario registrado</p>
                       )}
-
-                      <p className="text-[12px] text-gray-500 leading-snug line-clamp-2">{s.justificacion}</p>
-
-                      {s.comentario_revisor && (
-                        <div className="rounded-lg px-3 py-2 text-[12px]"
-                          style={{ backgroundColor: '#f0f9ff', borderLeft: '3px solid #009ee3' }}>
-                          <p className="font-bold text-gray-400 text-[10px] uppercase tracking-wide mb-0.5">Respuesta del coordinador</p>
-                          <p className="text-gray-600">{s.comentario_revisor}</p>
-                        </div>
-                      )}
-
-                      <p className="text-[11px] text-gray-400">{fmtFechaHora(s.created_at)}</p>
                     </div>
 
-                    {/* Columna derecha */}
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <span className="text-[11px] font-bold rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                        style={{ backgroundColor: estadoSty.bg, color: estadoSty.text }}>
-                        {s.estado.replace(/_/g, ' ')}
-                      </span>
-                      {esCoordinador && s.estado === 'PENDIENTE' && (
-                        <>
-                          <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'APROBAR' })}
-                            className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-80 whitespace-nowrap"
-                            style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
-                            Aprobar
-                          </button>
-                          <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'RECHAZAR' })}
-                            className="rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-80 whitespace-nowrap"
-                            style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                            Rechazar
-                          </button>
-                        </>
-                      )}
-                      {!esCoordinador && s.estado === 'PENDIENTE' && (
-                        <button type="button" onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
-                          className="rounded-lg px-3 py-1.5 text-[11px] font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition whitespace-nowrap">
-                          Cancelar
-                        </button>
-                      )}
+                    {/* Fecha + analista */}
+                    <div>
+                      <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: '4px' }}>
+                        Fecha
+                      </p>
+                      <p style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', marginBottom: '2px' }}>
+                        {fmtFechaCorta(s.created_at)}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#64748b' }}>Por {solNombre}</p>
                     </div>
                   </div>
+
+                  {/* FILA 3: Nota + acción */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      {s.justificacion && (
+                        <p className="line-clamp-2"
+                          style={{ fontSize: '13px', fontStyle: 'italic', color: '#64748b' }}>
+                          &ldquo;{s.justificacion}&rdquo;
+                        </p>
+                      )}
+                      {s.comentario_revisor && (
+                        <div className="mt-2 rounded-lg px-3 py-2"
+                          style={{ backgroundColor: '#f0f9ff', borderLeft: '3px solid #009ee3' }}>
+                          <p style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
+                            Respuesta
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#334155' }}>{s.comentario_revisor}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Cancelar — solo analista + pendiente */}
+                    {!esCoordinador && s.estado === 'PENDIENTE' && (
+                      <button type="button"
+                        onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
+                        className="flex-shrink-0 transition hover:opacity-80"
+                        style={{
+                          border: '0.5px solid #ef4444', borderRadius: '8px',
+                          padding: '6px 12px', fontSize: '12px', fontWeight: 500,
+                          color: '#ef4444', background: 'white', whiteSpace: 'nowrap',
+                        }}>
+                        Cancelar solicitud
+                      </button>
+                    )}
+                  </div>
+
                 </div>
               </div>
             )
