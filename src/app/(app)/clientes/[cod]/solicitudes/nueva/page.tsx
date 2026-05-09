@@ -31,11 +31,11 @@ export default async function NuevaSolicitudClientePage({ params }: PageProps) {
     .single()
   const maestro = (maestroRaw ?? null) as MaestroCliente | null
 
-  // ── 3. Facturas pendientes (saldo > 0) ────────────────────────────────
+  // ── 3. Facturas pendientes — filtrar por contribuyente (igual que ficha) ─
   const { data: facturasRaw } = await supabase
     .from('facturas')
     .select('*')
-    .eq('cliente_cod', cod)
+    .eq('contribuyente', cartera.contribuyente)
     .gt('saldo', 0)
     .order('saldo', { ascending: false })
     .limit(100)
