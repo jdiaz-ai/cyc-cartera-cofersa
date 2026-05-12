@@ -722,10 +722,10 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: '0.4fr 0.6fr' }}>
+    <div className="grid gap-4 items-stretch" style={{ gridTemplateColumns: '0.4fr 0.6fr' }}>
 
       {/* ── COLUMNA IZQUIERDA (40%) ── */}
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
 
         {/* Card 1: DATOS DE CONTACTO CxP */}
         <InfoCard2 titulo="DATOS DE CONTACTO CxP">
@@ -771,20 +771,36 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
 
       </div>
 
-      {/* ── COLUMNA DERECHA (60%) ── */}
-      <div>
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}>
+      {/* ── COLUMNA DERECHA (60%): se estira a la altura de la columna izquierda ── */}
+      <div className="flex flex-col">
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col flex-1"
+          style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}>
 
-          {/* Header compacto */}
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Distribución de Saldos</h3>
-              <p className="text-[10px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)} · Clic en un tramo para ver facturas</p>
-            </div>
+          {/* ── Header ── */}
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Distribución de Saldos por Antigüedad</h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)} · Clic en un tramo para ver sus facturas</p>
           </div>
 
-          {/* Filas integradas: círculo + tramo + barra + monto + % */}
-          <div className="divide-y divide-gray-50">
+          {/* ── Encabezados de columna ── */}
+          <div className="flex items-center gap-3 px-4 py-1.5 border-b border-gray-100" style={{ backgroundColor: '#f8fafc' }}>
+            {/* Spacer círculo */}
+            <div style={{ width: '8px', flexShrink: 0 }} />
+            {/* TRAMO */}
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider"
+              style={{ width: '82px', flexShrink: 0 }}>Tramo</span>
+            {/* Spacer barra */}
+            <div className="flex-1" />
+            {/* MONTO */}
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right"
+              style={{ width: '116px', flexShrink: 0 }}>Monto</span>
+            {/* % TOTAL */}
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right"
+              style={{ width: '44px', flexShrink: 0 }}>% Total</span>
+          </div>
+
+          {/* ── Filas de datos ── */}
+          <div className="divide-y divide-gray-50 flex-1">
             {AGING_TRAMOS.map(({ key, label, color }) => {
               const monto = (cartera[key as keyof Cartera] as number) || 0
               const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
@@ -794,34 +810,27 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
                   onClick={() => onVerTramo(label)}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50/40 cursor-pointer transition-colors group"
                 >
-                  {/* Indicador de color */}
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                  {/* Círculo de color */}
+                  <div className="rounded-full flex-shrink-0"
+                    style={{ width: '8px', height: '8px', backgroundColor: color }} />
                   {/* Nombre del tramo */}
-                  <span
-                    className="text-[12px] font-semibold text-gray-600 group-hover:text-gray-800 transition-colors whitespace-nowrap"
-                    style={{ width: '82px', flexShrink: 0 }}
-                  >
+                  <span className="text-[12px] font-semibold text-gray-700 group-hover:text-gray-900 transition-colors whitespace-nowrap"
+                    style={{ width: '82px', flexShrink: 0 }}>
                     {label}
                   </span>
-                  {/* Barra de progreso delgada */}
-                  <div className="flex-1 rounded-full bg-gray-100 overflow-hidden" style={{ height: '6px' }}>
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '3px' : '0' }}
-                    />
+                  {/* Barra de progreso */}
+                  <div className="flex-1 rounded-full bg-gray-100 overflow-hidden" style={{ height: '5px' }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '3px' : '0' }} />
                   </div>
-                  {/* Monto */}
-                  <span
-                    className="text-[12px] font-semibold tabular-nums text-right"
-                    style={{ width: '78px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#d1d5db' }}
-                  >
-                    {monto > 0 ? fmtM(monto) : '—'}
+                  {/* Monto completo — fmtCRC sin abreviaciones */}
+                  <span className="text-[12px] font-semibold tabular-nums text-right"
+                    style={{ width: '116px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#d1d5db' }}>
+                    {monto > 0 ? fmtCRC(monto) : '—'}
                   </span>
                   {/* Porcentaje */}
-                  <span
-                    className="text-[11px] tabular-nums text-right text-gray-400"
-                    style={{ width: '32px', flexShrink: 0 }}
-                  >
+                  <span className="text-[11px] tabular-nums text-right text-gray-400"
+                    style={{ width: '44px', flexShrink: 0 }}>
                     {pct > 0 ? `${pct}%` : ''}
                   </span>
                 </div>
@@ -829,22 +838,21 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
             })}
           </div>
 
-          {/* Fila total */}
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50" style={{ borderTop: '2px solid #e2e8f0' }}>
-            <div className="w-2 h-2 flex-shrink-0" />
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider" style={{ width: '82px', flexShrink: 0 }}>
-              Total
-            </span>
+          {/* ── Fila TOTAL ── */}
+          <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderTop: '2px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+            <div style={{ width: '8px', flexShrink: 0 }} />
+            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider"
+              style={{ width: '82px', flexShrink: 0 }}>Total</span>
             <div className="flex-1" />
-            <span className="text-[13px] font-black tabular-nums text-right text-gray-800" style={{ width: '78px', flexShrink: 0 }}>
+            <span className="text-[13px] font-black tabular-nums text-right text-gray-800"
+              style={{ width: '116px', flexShrink: 0 }}>
               {fmtCRC(cartera.total)}
             </span>
-            <span className="text-[11px] font-bold tabular-nums text-right text-gray-400" style={{ width: '32px', flexShrink: 0 }}>
-              100%
-            </span>
+            <span className="text-[11px] font-bold tabular-nums text-right text-gray-500"
+              style={{ width: '44px', flexShrink: 0 }}>100%</span>
           </div>
 
-          {/* Footer: chips KPI + botón */}
+          {/* ── Footer: chips KPI + botón ── */}
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex flex-wrap gap-2">
               <Chip
@@ -857,7 +865,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
                 bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'}
                 color={mora_total > 0 ? '#dc2626' : '#15803d'}
               />
-              <Chip label="Mora total" valor={fmtM(mora_total)} />
+              <Chip label="Mora total" valor={fmtCRC(mora_total)} />
             </div>
             <button
               type="button"
