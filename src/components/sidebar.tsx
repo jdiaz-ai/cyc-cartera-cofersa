@@ -15,8 +15,6 @@ import {
   Package,
   LogOut,
   FileText,
-  CreditCard,
-  Clock,
   PieChart,
   Target,
   AlertTriangle,
@@ -157,35 +155,9 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
 
-  // ── GESTIÓN DE PAGOS (analista) ──────────────────────────────
+  // ── INTELIGENCIA (analista) — renombrado desde Reportes, + Análisis de Pagos ──
   {
-    label: 'Gestión de Pagos',
-    roles: ['ANALISTA'],
-    items: [
-      {
-        label: 'Pagos Aplicados',
-        href: '/gestion-pagos/pagos-aplicados',
-        icon: <CreditCard size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Pagos Pendientes',
-        href: '/gestion-pagos/pagos-pendientes',
-        icon: <Clock size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Análisis de Pagos',
-        href: '/gestion-pagos/analisis',
-        icon: <PieChart size={16} />,
-        roles: ['ANALISTA'],
-      },
-    ],
-  },
-
-  // ── REPORTES (analista) ──────────────────────────────────────
-  {
-    label: 'Reportes',
+    label: 'Inteligencia',
     roles: ['ANALISTA'],
     items: [
       {
@@ -204,6 +176,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: 'Gestiones del Período',
         href: '/reportes/gestiones-periodo',
         icon: <CalendarRange size={16} />,
+        roles: ['ANALISTA'],
+      },
+      {
+        label: 'Análisis de Pagos',
+        href: '/gestion-pagos/analisis',
+        icon: <PieChart size={16} />,
         roles: ['ANALISTA'],
       },
     ],
