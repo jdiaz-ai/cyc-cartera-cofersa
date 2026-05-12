@@ -71,6 +71,7 @@ export interface MaestroCliente {
   estado_manual: string
   notas_internas: string
   agrupacion: string
+  dimension: string
   zona: string
   latitud: number
   longitud: number

@@ -6,7 +6,7 @@ import {
   ArrowLeft, ClipboardList, Handshake, FileText, AlertTriangle,
   CheckCircle2, XCircle, Clock, Circle, Plus,
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
-  MailOpen, Receipt, MessageCircle, ChevronDown, FileDown, Send, Search,
+  MailOpen, MessageCircle, ChevronDown, FileDown, Send, Search,
 } from 'lucide-react'
 import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
@@ -16,13 +16,11 @@ import ModalGestion from './modal-gestion'
 // ── Tabs ───────────────────────────────────────────────────────────────
 const TABS = [
   'Información',
-  'Aging',
   'Estado de Cuenta',
   'Gestiones',
   'Promesas',
-  'Emails',
-  'Notas de Crédito',
   'Solicitudes',
+  'Reportar Pago',
 ] as const
 type Tab = typeof TABS[number]
 
@@ -491,131 +489,11 @@ export default function FichaCliente({
             mora_total     = {mora_total}
             pct_mora       = {pct_mora}
             onToast        = {showToast}
+            onVerTramo     = {(label) => { setFiltroTramoEdoCta(label); setTab('Estado de Cuenta') }}
+            onVerEdoCta    = {() => { setFiltroTramoEdoCta('Todos'); setTab('Estado de Cuenta') }}
           />
         )}
 
-        {/* ── TAB: AGING ───────────────────────────────────────── */}
-        {tab === 'Aging' && (
-          <div className="space-y-4">
-
-            {/* ── Fila 1: Barras (izq) + Tabla numérica (der) ── */}
-            <div className="grid gap-4" style={{ gridTemplateColumns: '55fr 45fr' }}>
-
-              {/* Card 1: Barras visuales */}
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100">
-                  <h3 className="text-[13px] font-bold text-gray-700">Distribución de saldo por antigüedad</h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)}</p>
-                </div>
-                <div className="px-5 py-4 space-y-3">
-                  {AGING_TRAMOS.map(({ key, label, color }) => {
-                    const monto = (cartera[key as keyof Cartera] as number) || 0
-                    const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
-                    return (
-                      <div key={key} className="flex items-center gap-3">
-                        <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '76px', flexShrink: 0 }}>{label}</span>
-                        <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
-                          <div className="h-full rounded-full transition-all"
-                            style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }} />
-                        </div>
-                        <span className="text-[12px] font-semibold tabular-nums text-right"
-                          style={{ width: '72px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
-                          {monto > 0 ? fmtM(monto) : '—'}
-                        </span>
-                        <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '30px', flexShrink: 0 }}>
-                          {pct > 0 ? `${pct}%` : ''}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Card 2: Tabla numérica detallada */}
-              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-100">
-                  <h3 className="text-[12px] font-bold text-gray-600">Detalle por tramo</h3>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Clic en un tramo para ver sus facturas</p>
-                </div>
-                <table className="w-full" style={{ fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <th className="px-5 py-2.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tramo</th>
-                      <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
-                      <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">% Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {AGING_TRAMOS.map(({ key, label, color }) => {
-                      const monto = (cartera[key as keyof Cartera] as number) || 0
-                      const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
-                      return (
-                        <tr
-                          key={key}
-                          onClick={() => { setFiltroTramoEdoCta(label); setTab('Estado de Cuenta') }}
-                          className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors"
-                        >
-                          <td className="px-5 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                              <span className="text-[13px] font-semibold text-gray-700">{label}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums text-[13px] font-semibold"
-                            style={{ color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
-                            {monto > 0 ? fmtCRC(monto) : '—'}
-                          </td>
-                          <td className="px-5 py-2.5 text-right tabular-nums text-[12px] text-gray-400">
-                            {pct > 0 ? `${pct}%` : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
-                      <td className="px-5 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
-                      <td className="px-5 py-2.5 text-right text-[14px] font-black text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</td>
-                      <td className="px-5 py-2.5 text-right text-[12px] font-bold text-gray-500">100%</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-
-            {/* ── Fila 2: KPIs + botón (full width) ─────────── */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex flex-wrap gap-3">
-                <Chip
-                  label="DSO"
-                  valor={`${cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d`}
-                />
-                <Chip
-                  label="% Mora"
-                  valor={`${pct_mora}%`}
-                  bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'}
-                  color={mora_total > 0 ? '#dc2626' : '#15803d'}
-                />
-                <Chip label="Mora total" valor={fmtM(mora_total)} />
-                <Chip label="Comparativa" valor="Sin historial" bg="#f1f5f9" color="#94a3b8" />
-                <Chip
-                  label="Comportamiento"
-                  valor={mora_total === 0 ? 'Al día' : pct_mora > 25 ? 'En riesgo' : 'En seguimiento'}
-                  bg={mora_total === 0 ? '#dcfce7' : pct_mora > 25 ? '#fee2e2' : '#fef9c3'}
-                  color={mora_total === 0 ? '#15803d' : pct_mora > 25 ? '#dc2626' : '#a16207'}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => { setFiltroTramoEdoCta('Todos'); setTab('Estado de Cuenta') }}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90 flex-shrink-0"
-                style={{ backgroundColor: '#009ee3', color: 'white' }}
-              >
-                Ver Estado de Cuenta →
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* ── TAB: ESTADO DE CUENTA ─────────────────────────────── */}
         {tab === 'Estado de Cuenta' && (
@@ -654,34 +532,6 @@ export default function FichaCliente({
           />
         )}
 
-        {/* ── TAB: EMAILS ───────────────────────────────────────── */}
-        {tab === 'Emails' && (
-          <div className="max-w-2xl">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <EmptyState
-                icon={<MailOpen size={32} />}
-                texto="Integración de correo próximamente"
-                sub="Aquí verás el historial de emails con este cliente y podrás responder directamente desde la app. Fase 2 — Junio 2026."
-                comingSoon
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB: NOTAS DE CRÉDITO ─────────────────────────────── */}
-        {tab === 'Notas de Crédito' && (
-          <div className="max-w-2xl">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <EmptyState
-                icon={<Receipt size={32} />}
-                texto="Notas de crédito y saldos a favor"
-                sub="Aquí aparecerán las notas de crédito pendientes de aplicar contra facturas de este cliente."
-                comingSoon
-              />
-            </div>
-          </div>
-        )}
-
         {/* ── TAB: SOLICITUDES ─────────────────────────────────── */}
         {tab === 'Solicitudes' && (
           <TabSolicitudes
@@ -700,6 +550,20 @@ export default function FichaCliente({
             onToast            = {showToast}
             onRefresh          = {() => router.refresh()}
           />
+        )}
+
+        {/* ── TAB: REPORTAR PAGO ───────────────────────────────── */}
+        {tab === 'Reportar Pago' && (
+          <div className="max-w-2xl">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <EmptyState
+                icon={<FileText size={32} />}
+                texto="Reportar pago recibido"
+                sub="Aquí podrás registrar pagos con comprobante, aplicar contra facturas específicas y notificar al coordinador automáticamente. Próximamente."
+                comingSoon
+              />
+            </div>
+          </div>
         )}
 
       </div>
@@ -796,7 +660,7 @@ export default function FichaCliente({
 // ══════════════════════════════════════════════════════════════════════
 // TAB INFORMACIÓN
 // ══════════════════════════════════════════════════════════════════════
-function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_total, pct_mora, onToast }: {
+function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_total, pct_mora, onToast, onVerTramo, onVerEdoCta }: {
   cartera:        Cartera
   maestro:        MaestroCliente | null
   analistaNombre: string
@@ -804,6 +668,8 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   mora_total:     number
   pct_mora:       number
   onToast:        (msg: string) => void
+  onVerTramo:     (label: string) => void
+  onVerEdoCta:    () => void
 }) {
   // Estado de edición por campo
   type CampoEditable = 'nombre_cxp' | 'telefono' | 'telefono2' | 'correo'
@@ -855,83 +721,160 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
     )
   }
 
-  const limite    = maestro?.limite_credito ?? 0
-  const disponible = limite > 0 ? limite - cartera.total : null
-
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+    <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: '0.4fr 0.6fr' }}>
 
-      {/* ── CARD 1: DATOS DE CONTACTO CxP ── */}
-      <InfoCard2 titulo="DATOS DE CONTACTO CxP">
-        <CampoEdit
-          label="Nombre CxP" valor={valNombre} vacio="Sin nombre"
-          editando={editando === 'nombre_cxp'} saving={saving}
-          onEditar={() => setEditando('nombre_cxp')} onGuardar={() => guardar('nombre_cxp')}
-          onCancelar={() => cancelar('nombre_cxp')} onChange={v => setValNombre(v)}
-          onCopiar={valNombre ? () => copiar(valNombre, 'Nombre') : undefined}
-        />
-        <CampoEdit
-          label="Teléfono 1" valor={valTel ? fmtTel(valTel) : ''} valorInput={valTel}
-          vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel)} hint="8 dígitos"
-          editando={editando === 'telefono'} saving={saving}
-          onEditar={() => setEditando('telefono')} onGuardar={() => guardar('telefono')}
-          onCancelar={() => cancelar('telefono')} onChange={v => setValTel(fmtTel(v))}
-          onCopiar={valTel ? () => copiar(fmtTel(valTel), 'Teléfono 1') : undefined}
-        />
-        <CampoEdit
-          label="Teléfono 2" valor={valTel2 ? fmtTel(valTel2) : ''} valorInput={valTel2}
-          vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel2)} hint="8 dígitos"
-          editando={editando === 'telefono2'} saving={saving}
-          onEditar={() => setEditando('telefono2')} onGuardar={() => guardar('telefono2')}
-          onCancelar={() => cancelar('telefono2')} onChange={v => setValTel2(fmtTel(v))}
-          onCopiar={valTel2 ? () => copiar(fmtTel(valTel2), 'Teléfono 2') : undefined}
-        />
-        <CampoEdit
-          label="Email CxP" valor={valCorreo} vacio="Sin email" type="email"
-          editando={editando === 'correo'} saving={saving}
-          onEditar={() => setEditando('correo')} onGuardar={() => guardar('correo')}
-          onCancelar={() => cancelar('correo')} onChange={v => setValCorreo(v)}
-          onCopiar={valCorreo ? () => copiar(valCorreo, 'Email') : undefined}
-        />
-      </InfoCard2>
+      {/* ── COLUMNA IZQUIERDA (40%) ── */}
+      <div className="space-y-4">
 
-      {/* ── CARD 2: INFORMACIÓN FISCAL ── */}
-      <InfoCard2 titulo="INFORMACIÓN FISCAL">
-        <CampoReadOnly label="Contribuyente"   valor={cartera.contribuyente}
-          onCopiar={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
-        <CampoReadOnly label="Razón social"    valor={cartera.cliente_nombre}
-          onCopiar={() => copiar(cartera.cliente_nombre, 'Razón social')} />
-        <CampoReadOnly label="Tipo de cliente" valor={maestro?.segmento || '—'} />
-      </InfoCard2>
+        {/* Card 1: DATOS DE CONTACTO CxP */}
+        <InfoCard2 titulo="DATOS DE CONTACTO CxP">
+          <CampoEdit
+            label="Nombre CxP" valor={valNombre} vacio="Sin nombre"
+            editando={editando === 'nombre_cxp'} saving={saving}
+            onEditar={() => setEditando('nombre_cxp')} onGuardar={() => guardar('nombre_cxp')}
+            onCancelar={() => cancelar('nombre_cxp')} onChange={v => setValNombre(v)}
+            onCopiar={valNombre ? () => copiar(valNombre, 'Nombre') : undefined}
+          />
+          <CampoEdit
+            label="Teléfono 1" valor={valTel ? fmtTel(valTel) : ''} valorInput={valTel}
+            vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel)} hint="8 dígitos"
+            editando={editando === 'telefono'} saving={saving}
+            onEditar={() => setEditando('telefono')} onGuardar={() => guardar('telefono')}
+            onCancelar={() => cancelar('telefono')} onChange={v => setValTel(fmtTel(v))}
+            onCopiar={valTel ? () => copiar(fmtTel(valTel), 'Teléfono 1') : undefined}
+          />
+          <CampoEdit
+            label="Teléfono 2" valor={valTel2 ? fmtTel(valTel2) : ''} valorInput={valTel2}
+            vacio="Sin teléfono" type="tel" maxLength={9} invalido={!telValido(valTel2)} hint="8 dígitos"
+            editando={editando === 'telefono2'} saving={saving}
+            onEditar={() => setEditando('telefono2')} onGuardar={() => guardar('telefono2')}
+            onCancelar={() => cancelar('telefono2')} onChange={v => setValTel2(fmtTel(v))}
+            onCopiar={valTel2 ? () => copiar(fmtTel(valTel2), 'Teléfono 2') : undefined}
+          />
+          <CampoEdit
+            label="Email CxP" valor={valCorreo} vacio="Sin email" type="email"
+            editando={editando === 'correo'} saving={saving}
+            onEditar={() => setEditando('correo')} onGuardar={() => guardar('correo')}
+            onCancelar={() => cancelar('correo')} onChange={v => setValCorreo(v)}
+            onCopiar={valCorreo ? () => copiar(valCorreo, 'Email') : undefined}
+          />
+        </InfoCard2>
 
-      {/* ── CARD 3: CONDICIONES COMERCIALES ── */}
-      <InfoCard2 titulo="CONDICIONES COMERCIALES">
-        <CampoReadOnly label="Condición de pago" valor={String(maestro?.condicion_pago || '—')}
-          onCopiar={maestro?.condicion_pago ? () => copiar(String(maestro!.condicion_pago), 'Condición de pago') : undefined} />
-        <CampoReadOnly label="Límite de crédito" valor={limite > 0 ? fmtCRC(limite) : 'Sin límite'}
-          onCopiar={limite > 0 ? () => copiar(fmtCRC(limite), 'Límite de crédito') : undefined} />
-        <div className="space-y-0.5">
-          <span className="block text-[13px] font-semibold text-gray-600">Crédito disponible</span>
-          {limite > 0 && disponible !== null ? (
-            <span className="text-[13px] font-medium"
-              style={{ color: disponible >= 0 ? '#22c55e' : '#dc2626' }}>
-              {disponible >= 0
-                ? `${fmtCRC(disponible)} disponible`
-                : `Límite excedido en ${fmtCRC(Math.abs(disponible))}`}
-            </span>
-          ) : (
-            <span className="text-[13px] text-gray-400">—</span>
-          )}
+        {/* Card 2: INFORMACIÓN FISCAL */}
+        <InfoCard2 titulo="INFORMACIÓN FISCAL">
+          <CampoReadOnly label="Contribuyente" valor={cartera.contribuyente}
+            onCopiar={() => copiar(cartera.contribuyente, 'Contribuyente')} mono />
+          <CampoReadOnly label="Agrupación"    valor={maestro?.agrupacion || '—'} />
+          <CampoReadOnly label="Dimensión"     valor={maestro?.dimension  || '—'} />
+        </InfoCard2>
+
+      </div>
+
+      {/* ── COLUMNA DERECHA (60%) ── */}
+      <div>
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}>
+
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-[13px] font-bold text-gray-700">Distribución de Saldos por Antigüedad</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5">Corte: {fmtFecha(cartera.fecha_corte)}</p>
+          </div>
+
+          {/* Barras visuales */}
+          <div className="px-5 py-4 space-y-3">
+            {AGING_TRAMOS.map(({ key, label, color }) => {
+              const monto = (cartera[key as keyof Cartera] as number) || 0
+              const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <span className="text-[12px] text-gray-500 font-semibold" style={{ width: '76px', flexShrink: 0 }}>{label}</span>
+                  <div className="flex-1 rounded-full bg-gray-100 h-2 overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: color, minWidth: monto > 0 ? '4px' : '0' }} />
+                  </div>
+                  <span className="text-[12px] font-semibold tabular-nums text-right"
+                    style={{ width: '72px', flexShrink: 0, color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                    {monto > 0 ? fmtM(monto) : '—'}
+                  </span>
+                  <span className="text-[11px] text-gray-400 tabular-nums text-right" style={{ width: '30px', flexShrink: 0 }}>
+                    {pct > 0 ? `${pct}%` : ''}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Tabla clickeable por tramo */}
+          <div className="border-t border-gray-100">
+            <p className="px-5 pt-3 pb-1 text-[10px] text-gray-400 italic">Clic en un tramo para ver sus facturas</p>
+            <table className="w-full" style={{ fontSize: '13px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <th className="px-5 py-2 text-left   text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tramo</th>
+                  <th className="px-5 py-2 text-right  text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Monto</th>
+                  <th className="px-5 py-2 text-right  text-[11px] font-semibold text-gray-400 uppercase tracking-wider">% Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {AGING_TRAMOS.map(({ key, label, color }) => {
+                  const monto = (cartera[key as keyof Cartera] as number) || 0
+                  const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
+                  return (
+                    <tr key={key}
+                      onClick={() => onVerTramo(label)}
+                      className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors">
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-[13px] font-semibold text-gray-700">{label}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-[13px] font-semibold"
+                        style={{ color: monto > 0 ? '#1e293b' : '#cbd5e1' }}>
+                        {monto > 0 ? fmtCRC(monto) : '—'}
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-[12px] text-gray-400">
+                        {pct > 0 ? `${pct}%` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                  <td className="px-5 py-2.5 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Total</td>
+                  <td className="px-5 py-2.5 text-right text-[14px] font-black text-gray-800 tabular-nums">{fmtCRC(cartera.total)}</td>
+                  <td className="px-5 py-2.5 text-right text-[12px] font-bold text-gray-500">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Chips de KPI + botón */}
+          <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex flex-wrap gap-2">
+              <Chip label="DSO" valor={`${cartera.total > 0 ? Math.round((mora_total / cartera.total) * 30) : 0}d`} />
+              <Chip
+                label="% Mora"
+                valor={`${pct_mora}%`}
+                bg={mora_total > 0 ? '#fee2e2' : '#dcfce7'}
+                color={mora_total > 0 ? '#dc2626' : '#15803d'}
+              />
+              <Chip label="Mora total" valor={fmtM(mora_total)} />
+            </div>
+            <button
+              type="button"
+              onClick={onVerEdoCta}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-bold transition hover:opacity-90 flex-shrink-0"
+              style={{ backgroundColor: '#009ee3', color: 'white' }}
+            >
+              Ver Estado de Cuenta →
+            </button>
+          </div>
+
         </div>
-      </InfoCard2>
-
-      {/* ── CARD 4: INFORMACIÓN INTERNA ── */}
-      <InfoCard2 titulo="INFORMACIÓN INTERNA">
-        <CampoReadOnly label="Código cliente"    valor={cartera.cliente_cod}
-          onCopiar={() => copiar(cartera.cliente_cod, 'Código')} mono />
-        <CampoReadOnly label="Vendedor asignado" valor={cartera.vendedor_nombre || '—'} />
-        <CampoReadOnly label="Analista asignado" valor={analistaNombre || '—'} />
-      </InfoCard2>
+      </div>
 
     </div>
   )
