@@ -2,7 +2,7 @@
 
 import { createClient }                from '@/lib/supabase/server'
 import { hoyISO }                      from '@/lib/utils/formato'
-import { aplicarFiltros, aplicarOrden } from './page'
+import { aplicarFiltros, aplicarOrden } from '@/lib/clientes/filtros'
 import type { ClienteRow, FiltrosClientes } from './page'
 import type { Cartera, MaestroCliente }     from '@/types/database'
 

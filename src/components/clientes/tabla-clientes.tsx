@@ -228,12 +228,12 @@ export default function TablaClientes({
       <div className="grid grid-cols-3 gap-4">
 
         {/* Cartera filtrada */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             Cartera filtrada
           </p>
-          <p className="text-[22px] font-bold text-gray-800 tabular-nums leading-tight">
-            {fmtM(kpis.carteraFiltrada)}
+          <p className="text-[20px] font-bold text-gray-800 tabular-nums leading-tight break-all">
+            {fmtCRC(kpis.carteraFiltrada)}
           </p>
           <p className="text-[11px] text-gray-400 mt-1">
             {kpis.totalClientes} cliente{kpis.totalClientes !== 1 ? 's' : ''}
@@ -241,23 +241,23 @@ export default function TablaClientes({
         </div>
 
         {/* Mora filtrada */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             Mora filtrada
           </p>
-          <p className="text-[22px] font-bold tabular-nums leading-tight" style={{ color: '#dc2626' }}>
-            {fmtM(kpis.moraFiltrada)}
+          <p className="text-[20px] font-bold tabular-nums leading-tight break-all" style={{ color: '#dc2626' }}>
+            {fmtCRC(kpis.moraFiltrada)}
           </p>
           <p className="text-[11px] text-gray-400 mt-1">monto vencido total</p>
         </div>
 
         {/* % Morosidad */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
             % Morosidad
           </p>
           <p
-            className="text-[22px] font-bold tabular-nums leading-tight"
+            className="text-[20px] font-bold tabular-nums leading-tight"
             style={{
               color: kpis.pctMorosidad === null
                 ? '#94a3b8'
@@ -392,43 +392,48 @@ export default function TablaClientes({
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
 
                 {/* CLIENTE */}
-                <th className="px-4 py-3 text-left w-[27%]">
+                <th className="px-4 py-3 text-left w-[24%]">
                   <button className={thBtnCls} onClick={() => navegarSort('cliente_nombre')}>
                     Cliente <SortIcon activo={filtros.sort === 'cliente_nombre'} dir={filtros.dir} />
                   </button>
                 </th>
 
                 {/* EQUIPO */}
-                <th className="px-3 py-3 text-left w-[16%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
+                <th className="px-3 py-3 text-left w-[13%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
                   Equipo
                 </th>
 
                 {/* CONDICIONES */}
-                <th className="px-3 py-3 text-left w-[12%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
+                <th className="px-3 py-3 text-left w-[9%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
                   Condiciones
                 </th>
 
-                {/* RANGO MORA */}
+                {/* DIMENSIÓN */}
                 <th className="px-3 py-3 text-left w-[9%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
+                  Dimensión
+                </th>
+
+                {/* RANGO MORA */}
+                <th className="px-3 py-3 text-left w-[8%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
                   Rango Mora
                 </th>
 
                 {/* MONTO VENCIDO */}
-                <th className="px-3 py-3 text-right w-[13%]">
+                <th className="px-3 py-3 text-right w-[12%]">
                   <button className={`${thBtnCls} ml-auto`} onClick={() => navegarSort('mora_total')}>
                     Monto Vencido <SortIcon activo={filtros.sort === 'mora_total'} dir={filtros.dir} />
                   </button>
                 </th>
 
                 {/* TOTAL CARTERA */}
-                <th className="px-3 py-3 text-right w-[13%]">
+                <th className="px-3 py-3 text-right w-[12%]">
                   <button className={`${thBtnCls} ml-auto`} onClick={() => navegarSort('total')}>
                     Total Cartera <SortIcon activo={filtros.sort === 'total'} dir={filtros.dir} />
                   </button>
                 </th>
 
                 {/* RIESGO ACTUAL */}
-                <th className="px-3 py-3 text-left w-[10%]">
+                <th className="px-3 py-3 text-left w-[13%]">
                   <button className={thBtnCls} onClick={() => navegarSort('dias_sin_gestion')}>
                     Riesgo Actual <SortIcon activo={filtros.sort === 'dias_sin_gestion'} dir={filtros.dir} />
                   </button>
@@ -442,7 +447,7 @@ export default function TablaClientes({
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-16 text-center text-sm text-gray-400"
                   >
                     No se encontraron clientes con los filtros aplicados.
@@ -505,10 +510,16 @@ export default function TablaClientes({
                       ) : (
                         <span className="text-gray-300 text-[11px]">—</span>
                       )}
-                      {r.dimension && (
-                        <p className="text-gray-400 text-[10px] mt-0.5 leading-snug truncate">
+                    </td>
+
+                    {/* DIMENSIÓN */}
+                    <td className="px-3 py-3">
+                      {r.dimension ? (
+                        <span className="text-[12px] text-gray-600 truncate block">
                           {r.dimension}
-                        </p>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300 text-[11px]">—</span>
                       )}
                     </td>
 

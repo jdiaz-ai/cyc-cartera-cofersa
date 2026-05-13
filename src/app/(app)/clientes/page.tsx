@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { hoyISO }       from '@/lib/utils/formato'
 import TablaClientes    from '@/components/clientes/tabla-clientes'
 import type { Cartera, MaestroCliente } from '@/types/database'
+import { aplicarFiltros, aplicarOrden } from '@/lib/clientes/filtros'
 
 // ── Interfaces exportadas ─────────────────────────────────────────────
 export interface ClienteRow {
@@ -47,46 +48,6 @@ export interface FiltrosClientes {
 }
 
 const PAGE_SIZE = 25
-
-// ── Helpers compartidos (también usados en actions.ts) ────────────────
-export function aplicarFiltros(rows: ClienteRow[], f: FiltrosClientes): ClienteRow[] {
-  let data = rows
-
-  if (f.q) {
-    const q = f.q.toLowerCase()
-    data = data.filter(r =>
-      r.cliente_nombre.toLowerCase().includes(q) ||
-      r.cliente_cod.toLowerCase().includes(q)    ||
-      r.contribuyente.toLowerCase().includes(q)
-    )
-  }
-
-  if (f.analista) data = data.filter(r => r.analista_email === f.analista)
-  if (f.vendedor) data = data.filter(r => r.vendedor_nombre === f.vendedor)
-
-  if (f.etiqueta === 'criticos')  data = data.filter(r => r.dias_mora > 90)
-  if (f.etiqueta === 'olvidados') data = data.filter(r => r.dias_sin_gestion > 15)
-
-  return data
-}
-
-export function aplicarOrden(rows: ClienteRow[], sort: string, dir: 'asc' | 'desc'): ClienteRow[] {
-  return [...rows].sort((a, b) => {
-    if (sort === 'cliente_nombre') {
-      const cmp = a.cliente_nombre.localeCompare(b.cliente_nombre)
-      return dir === 'asc' ? cmp : -cmp
-    }
-    const colMap: Partial<Record<string, keyof ClienteRow>> = {
-      mora_total:       'mora_total',
-      total:            'total',
-      dias_sin_gestion: 'dias_sin_gestion',
-    }
-    const col = colMap[sort] ?? 'mora_total'
-    const va = a[col] as number
-    const vb = b[col] as number
-    return dir === 'asc' ? va - vb : vb - va
-  })
-}
 
 // ── Página (Server Component) ─────────────────────────────────────────
 interface PageProps {
@@ -295,9 +256,13 @@ export default async function ClientesPage({ searchParams }: PageProps) {
   const pagina     = Math.min(filtros.page, totalPages)
   const rows       = sorted.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE)
 
-  // ── Vendedores únicos para el dropdown ────────────────────────────
+  // ── Vendedores únicos para el dropdown ──────────────────────────────
+  // Si hay un analista seleccionado, mostrar solo los vendedores asignados a él
+  const rowsParaVendedores = filtros.analista
+    ? todosLosRows.filter(r => r.analista_email === filtros.analista)
+    : todosLosRows
   const vendedores: VendedorOpt[] = Array.from(
-    new Set(todosLosRows.map(r => r.vendedor_nombre).filter(v => v && v !== '—'))
+    new Set(rowsParaVendedores.map(r => r.vendedor_nombre).filter(v => v && v !== '—'))
   ).sort().map(nombre => ({ nombre }))
 
   return (
