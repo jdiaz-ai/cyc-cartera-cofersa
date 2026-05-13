@@ -62,15 +62,35 @@ export default async function ClientesPage() {
     codigosFiltro = codigos
   }
 
-  // ── 2. Fetch cartera ───────────────────────────────────────────────
-  let carteraQuery = supabase.from('cartera').select('*')
-  if (codigosFiltro) {
-    carteraQuery = carteraQuery.in('cliente_cod', codigosFiltro)
-  }
-  const { data: carteraData } = await carteraQuery
-  const cartera = (carteraData ?? []) as Cartera[]
+  // ── 2. Sync más reciente ────────────────────────────────────────────
+  // El GAS solo sincroniza los clientes presentes en el reporte de Softland.
+  // Cuando un cliente paga y desaparece del reporte, su registro viejo persiste
+  // en Supabase. Filtrando por el sync_id más reciente garantizamos mostrar
+  // únicamente el estado actual de la cartera.
+  const { data: syncRefData } = await supabase
+    .from('cartera')
+    .select('sync_id')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const latestSyncId = ((syncRefData ?? [])[0] as { sync_id: string } | undefined)?.sync_id ?? ''
 
-  // ── 3. Mapa analista_email por cliente (desde maestro_clientes) ────
+  // ── 3. Fetch cartera — solo del sync más reciente ──────────────────
+  let carteraQuery = supabase.from('cartera').select('*')
+  if (latestSyncId) carteraQuery = carteraQuery.eq('sync_id', latestSyncId)
+  if (codigosFiltro) carteraQuery = carteraQuery.in('cliente_cod', codigosFiltro)
+  const { data: carteraRaw } = await carteraQuery
+
+  // Deduplicar por cliente_cod: en caso de registros múltiples, tomar el más reciente
+  const carteraMapDedup: Record<string, Cartera> = {}
+  ;((carteraRaw ?? []) as Cartera[]).forEach(c => {
+    const prev = carteraMapDedup[c.cliente_cod]
+    if (!prev || (c.fecha_corte ?? '') > (prev.fecha_corte ?? '')) {
+      carteraMapDedup[c.cliente_cod] = c
+    }
+  })
+  const cartera = Object.values(carteraMapDedup)
+
+  // ── 4. Mapa analista_email por cliente (desde maestro_clientes) ────
   const codsEnCartera = cartera.map(c => c.cliente_cod)
   const analistaMap: Record<string, string> = {}
 
@@ -83,7 +103,7 @@ export default async function ClientesPage() {
       .forEach(m => { analistaMap[m.cliente_cod] = m.analista_email ?? '' })
   }
 
-  // ── 4. Última gestión por cliente ──────────────────────────────────
+  // ── 5. Última gestión por cliente ──────────────────────────────────
   //    Fetch ordenado desc → primera aparición de cada cod = la más reciente
   const ultimaGestionMap: Record<string, string> = {}
   {
@@ -99,7 +119,7 @@ export default async function ClientesPage() {
       })
   }
 
-  // ── 5. Lista de analistas (para filtro del coordinador) ────────────
+  // ── 6. Lista de analistas (para filtro del coordinador) ────────────
   let analistas: AnalistaOpt[] = []
   if (esCoordinador) {
     const { data: analistasData } = await supabase
@@ -111,7 +131,7 @@ export default async function ClientesPage() {
     analistas = (analistasData ?? []) as AnalistaOpt[]
   }
 
-  // ── 6. Armar rows finales ──────────────────────────────────────────
+  // ── 7. Armar rows finales ──────────────────────────────────────────
   const hoyMs = new Date(hoy).getTime()
 
   // Mapa email → nombre para analistas (usar en rows)
@@ -152,7 +172,7 @@ export default async function ClientesPage() {
   // Ordenar por mora_total desc como default
   rows.sort((a, b) => b.mora_total - a.mora_total)
 
-  // ── 7. Lista de vendedores únicos (para dropdown) ──────────────────
+  // ── 8. Lista de vendedores únicos (para dropdown) ──────────────────
   // Analista: vendedores de sus propios clientes (ya filtrados por RLS)
   // Coordinador: todos los vendedores de todos los clientes
   const vendedores: VendedorOpt[] = Array.from(

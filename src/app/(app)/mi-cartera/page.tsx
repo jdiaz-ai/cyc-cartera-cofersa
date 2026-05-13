@@ -164,10 +164,24 @@ export default async function MiCarteraPage() {
 
   if (codigos.length === 0) return <MiCarteraView rows={[]} kpis={EMPTY_KPIS} />
 
-  // ── 2. Cartera — sync más reciente por cliente ───────────────────
-  const { data: carteraData } = await supabase
-    .from('cartera').select('*').in('cliente_cod', codigos)
+  // ── 2. Sync más reciente ──────────────────────────────────────────
+  // El GAS solo sincroniza los clientes presentes en el reporte de Softland.
+  // Cuando un cliente paga y desaparece del reporte, su registro viejo persiste
+  // en Supabase. Filtrando por el sync_id más reciente garantizamos mostrar
+  // únicamente el estado actual de la cartera.
+  const { data: syncRefData } = await supabase
+    .from('cartera')
+    .select('sync_id')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  const latestSyncId = ((syncRefData ?? [])[0] as { sync_id: string } | undefined)?.sync_id ?? ''
 
+  // ── 3. Cartera — solo del sync más reciente ───────────────────────
+  let carteraQuery = supabase.from('cartera').select('*').in('cliente_cod', codigos)
+  if (latestSyncId) carteraQuery = carteraQuery.eq('sync_id', latestSyncId)
+  const { data: carteraData } = await carteraQuery
+
+  // Deduplicar por cliente_cod (seguridad: en caso de registros múltiples)
   const carteraMap: Record<string, Cartera> = {}
   ;((carteraData ?? []) as Cartera[]).forEach(c => {
     const prev = carteraMap[c.cliente_cod]
@@ -177,7 +191,7 @@ export default async function MiCarteraPage() {
   })
   const carteraList = Object.values(carteraMap)
 
-  // ── 3. Última gestión por cliente ────────────────────────────────
+  // ── 4. Última gestión por cliente ────────────────────────────────
   const ultimaGestionMap: Record<string, string> = {}
   {
     const { data: gData } = await supabase
@@ -188,7 +202,7 @@ export default async function MiCarteraPage() {
     })
   }
 
-  // ── 4. Promesas PENDIENTE — más próxima + monto ──────────────────
+  // ── 5. Promesas PENDIENTE — más próxima + monto ──────────────────
   const promesaMap: Record<string, { fecha: string; monto: number | null }> = {}
   let totalPromesasActivas = 0
   {
@@ -209,7 +223,7 @@ export default async function MiCarteraPage() {
     totalPromesasActivas = seenCods.size
   }
 
-  // ── 5. Promesas CUMPLIDA este mes (KPI Recuperado) ───────────────
+  // ── 6. Promesas CUMPLIDA este mes (KPI Recuperado) ───────────────
   let recuperadoMes = 0
   {
     const inicioMes = hoy.slice(0, 7) + '-01'
