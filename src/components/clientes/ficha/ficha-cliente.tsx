@@ -67,6 +67,7 @@ interface Props {
   analistaNombre: string
   userEmail:      string
   esCoordinador:  boolean
+  backHref?:      string   // destino del botón Volver (default: /clientes)
 }
 
 // ── Colores de estado del cliente (rgba 15% bg + sólido text) ──────────
@@ -121,7 +122,7 @@ function facturaEnTramo(f: Factura, tramo: string, hoy: string): boolean {
 // ══════════════════════════════════════════════════════════════════════
 export default function FichaCliente({
   cartera, maestro, facturas, gestiones, promesas, solicitudes, solicitanteMap,
-  analistaNombre, userEmail, esCoordinador,
+  analistaNombre, userEmail, esCoordinador, backHref,
 }: Props) {
   const router   = useRouter()
   const supabase = createClient()
@@ -232,7 +233,7 @@ export default function FichaCliente({
         <div className="flex items-start gap-3 mb-3">
           <button
             type="button"
-            onClick={() => router.push('/clientes')}
+            onClick={() => router.push(backHref ?? '/clientes')}
             className="mt-1 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 transition flex-shrink-0"
             style={{ width: '30px', height: '30px', color: '#64748b' }}
           >
@@ -584,7 +585,7 @@ export default function FichaCliente({
           contribuyente = {cartera.contribuyente}
           analistaEmail = {userEmail}
           onClose       = {() => setModalGestion(false)}
-          onSuccess     = {() => { setModalGestion(false); router.refresh() }}
+          onSuccess     = {() => { setModalGestion(false); if (backHref) router.push(backHref); else router.refresh() }}
         />
       )}
 

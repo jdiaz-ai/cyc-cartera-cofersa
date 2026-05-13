@@ -4,12 +4,19 @@ import FichaCliente        from '@/components/clientes/ficha/ficha-cliente'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 
 // Next.js 15+ requiere que params sea awaited
-interface PageProps { params: Promise<{ cod: string }> }
+interface PageProps {
+  params:       Promise<{ cod: string }>
+  searchParams: Promise<{ from?: string }>
+}
 
-export default async function FichaClientePage({ params }: PageProps) {
+export default async function FichaClientePage({ params, searchParams }: PageProps) {
   const supabase     = await createClient()
   const { cod: raw } = await params
   const cod          = decodeURIComponent(raw ?? '')
+
+  // ── Back navigation ─────────────────────────────────────────────────────
+  const { from } = await searchParams
+  const backHref = from === 'mi-cartera' ? '/mi-cartera' : '/clientes'
 
   // Email del usuario logueado (quien registra la gestión)
   const { data: { user } } = await supabase.auth.getUser()
@@ -122,6 +129,7 @@ export default async function FichaClientePage({ params }: PageProps) {
       analistaNombre  = {analistaNombre}
       userEmail       = {userEmail}
       esCoordinador   = {esCoordinador}
+      backHref        = {backHref}
     />
   )
 }
