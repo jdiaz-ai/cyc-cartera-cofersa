@@ -4,12 +4,15 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   Search, AlertTriangle, TrendingUp, Clock, Calendar,
-  CheckCircle2, ChevronRight, Target, Zap,
+  CheckCircle2, ChevronRight, ChevronLeft, Target, Zap,
 } from 'lucide-react'
 import { fmtCRC } from '@/lib/utils/formato'
 import type { CarteraRow, KPIs } from '@/app/(app)/mi-cartera/page'
 
-// ── Config visual ──────────────────────────────────────────────────────
+// ── Constantes ─────────────────────────────────────────────────────────────
+const ITEMS_PER_PAGE = 20
+
+// ── Config visual ──────────────────────────────────────────────────────────
 type Prioridad = CarteraRow['prioridad']
 
 const PRIORIDAD_CFG: Record<Prioridad, {
@@ -30,12 +33,12 @@ const TRAMO_CFG: Record<string, { bg: string; text: string }> = {
   '+120 días':   { bg: 'rgba(153,27,27,0.15)',   text: '#7f1d1d' },
 }
 
-// ── Tipos internos ──────────────────────────────────────────────────────
+// ── Tipos internos ──────────────────────────────────────────────────────────
 type TabId           = 'agenda' | 'cartera'
 type FiltroPrioridad = 'todos' | Prioridad
 type FiltroGestion   = 'todos' | 'pendientes' | 'hoy'
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function labelContacto(dias: number): { label: string; color: string } {
   if (dias === 0)   return { label: 'Hoy',         color: '#15803d' }
   if (dias === 1)   return { label: 'Ayer',         color: '#64748b' }
@@ -50,76 +53,133 @@ function fmtFechaCorta(iso: string): string {
   return `${p[2]}/${p[1]}`
 }
 
-// ── Columnas tabla (header + fila comparten el mismo grid) ─────────────
+// Genera el array de páginas a mostrar (con '…' como ellipsis)
+function getPageNums(cur: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (cur <= 4)         return [1, 2, 3, 4, 5, '…', total]
+  if (cur >= total - 3) return [1, '…', total-4, total-3, total-2, total-1, total]
+  return                       [1, '…', cur-1, cur, cur+1, '…', total]
+}
+
+// ── Columnas tabla (header + fila comparten el mismo grid) ──────────────────
 const GRID = '18px 1fr 150px 110px 46px 118px 88px'
 
-// ── Props ────────────────────────────────────────────────────────────────
+// ── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   rows: CarteraRow[]
   kpis: KPIs
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 export default function MiCarteraView({ rows, kpis }: Props) {
-  const [tab,             setTab]             = useState<TabId>('agenda')
-  const [busquedaAgenda,  setBusquedaAgenda]  = useState('')
-  const [busqueda,        setBusqueda]        = useState('')
-  const [filtroPrioridad, setFiltroPrioridad] = useState<FiltroPrioridad>('todos')
-  const [filtroGestion,   setFiltroGestion]   = useState<FiltroGestion>('todos')
+  const [tab, setTab] = useState<TabId>('agenda')
 
-  // ── Agenda del Día ─────────────────────────────────────────────────
-  const { agendaActivos, agendaHoy } = useMemo(() => {
-    const match = (r: CarteraRow) => {
-      if (!r.en_agenda) return false
-      if (busquedaAgenda) {
-        const q = busquedaAgenda.toLowerCase()
-        if (
-          !r.cliente_nombre.toLowerCase().includes(q) &&
-          !r.cliente_cod.toLowerCase().includes(q)
-        ) return false
-      }
-      return true
+  // ── Agenda state ──────────────────────────────────────────────────────────
+  const [busquedaAgenda,        setBusquedaAgenda]        = useState('')
+  const [vendedorAgenda,        setVendedorAgenda]        = useState('')
+  const [prioridadAgenda,       setPrioridadAgenda]       = useState<FiltroPrioridad>('todos')
+  const [paginaAgenda,          setPaginaAgenda]          = useState(1)
+
+  // ── Cartera state ──────────────────────────────────────────────────────────
+  const [busqueda,              setBusqueda]              = useState('')
+  const [vendedorCartera,       setVendedorCartera]       = useState('')
+  const [filtroPrioridad,       setFiltroPrioridad]       = useState<FiltroPrioridad>('todos')
+  const [filtroGestion,         setFiltroGestion]         = useState<FiltroGestion>('todos')
+  const [paginaCartera,         setPaginaCartera]         = useState(1)
+
+  // ── Vendedores únicos (ordenados) ──────────────────────────────────────────
+  const vendedores = useMemo(() => {
+    const set = new Set(rows.map(r => r.vendedor_nombre).filter(v => v && v !== '—'))
+    return Array.from(set).sort()
+  }, [rows])
+
+  // ── Handlers que resetean página al cambiar filtro ─────────────────────────
+  const onBusquedaAgenda  = (v: string)          => { setBusquedaAgenda(v);        setPaginaAgenda(1) }
+  const onVendedorAgenda  = (v: string)          => { setVendedorAgenda(v);        setPaginaAgenda(1) }
+  const onPrioridadAgenda = (v: FiltroPrioridad) => { setPrioridadAgenda(v);       setPaginaAgenda(1) }
+  const onBusqueda        = (v: string)          => { setBusqueda(v);              setPaginaCartera(1) }
+  const onVendedorCartera = (v: string)          => { setVendedorCartera(v);       setPaginaCartera(1) }
+  const onPrioridad       = (v: FiltroPrioridad) => { setFiltroPrioridad(v);       setPaginaCartera(1) }
+  const onGestion         = (v: FiltroGestion)   => { setFiltroGestion(v);         setPaginaCartera(1) }
+
+  const onPageAgenda  = (p: number) => { setPaginaAgenda(p);  window.scrollTo({ top: 0, behavior: 'smooth' }) }
+  const onPageCartera = (p: number) => { setPaginaCartera(p); window.scrollTo({ top: 0, behavior: 'smooth' }) }
+
+  // ── Agenda: cómputos ───────────────────────────────────────────────────────
+  // Base: en_agenda + búsqueda + vendedor (SIN filtro de prioridad → para contar chips)
+  const agendaBase = useMemo(() => rows.filter(r => {
+    if (!r.en_agenda) return false
+    if (busquedaAgenda) {
+      const q = busquedaAgenda.toLowerCase()
+      if (!r.cliente_nombre.toLowerCase().includes(q) && !r.cliente_cod.toLowerCase().includes(q)) return false
     }
-    const filtered = rows.filter(match)
-    return {
-      agendaActivos: filtered.filter(r => !r.gestionado_hoy),
-      agendaHoy:     filtered.filter(r =>  r.gestionado_hoy),
-    }
-  }, [rows, busquedaAgenda])
+    if (vendedorAgenda && r.vendedor_nombre !== vendedorAgenda) return false
+    return true
+  }), [rows, busquedaAgenda, vendedorAgenda])
+
+  // Conteos por prioridad para los chips (contextuales al vendedor/búsqueda)
+  const cuentaPriAgenda = useMemo(() => {
+    const c: Record<Prioridad, number> = { critico: 0, urgente: 0, seguimiento: 0, rutina: 0 }
+    agendaBase.forEach(r => c[r.prioridad]++)
+    return c
+  }, [agendaBase])
+
+  // Aplicar filtro de prioridad
+  const agendaFiltrada = useMemo(() => {
+    if (prioridadAgenda === 'todos') return agendaBase
+    return agendaBase.filter(r => r.prioridad === prioridadAgenda)
+  }, [agendaBase, prioridadAgenda])
+
+  const agendaActivosTodos = useMemo(() => agendaFiltrada.filter(r => !r.gestionado_hoy), [agendaFiltrada])
+  const agendaHoy          = useMemo(() => agendaFiltrada.filter(r =>  r.gestionado_hoy), [agendaFiltrada])
+
+  const totalPaginasAgenda = Math.max(1, Math.ceil(agendaActivosTodos.length / ITEMS_PER_PAGE))
+  const agendaActivosPag   = useMemo(() => {
+    const start = (paginaAgenda - 1) * ITEMS_PER_PAGE
+    return agendaActivosTodos.slice(start, start + ITEMS_PER_PAGE)
+  }, [agendaActivosTodos, paginaAgenda])
 
   const totalAgenda = useMemo(() => rows.filter(r => r.en_agenda).length, [rows])
 
-  // ── Mi Cartera Completa ────────────────────────────────────────────
-  const rowsFiltradas = useMemo(() => {
-    return rows.filter(r => {
-      if (busqueda) {
-        const q = busqueda.toLowerCase()
-        if (
-          !r.cliente_nombre.toLowerCase().includes(q) &&
-          !r.cliente_cod.toLowerCase().includes(q)
-        ) return false
-      }
-      if (filtroPrioridad !== 'todos' && r.prioridad !== filtroPrioridad) return false
-      if (filtroGestion === 'pendientes' && r.gestionado_hoy)  return false
-      if (filtroGestion === 'hoy'        && !r.gestionado_hoy) return false
-      return true
-    })
-  }, [rows, busqueda, filtroPrioridad, filtroGestion])
+  // ── Cartera completa: cómputos ──────────────────────────────────────────────
+  // Base: filtrado por vendedor (para contar chips y toggle)
+  const carteraBase = useMemo(() => {
+    if (!vendedorCartera) return rows
+    return rows.filter(r => r.vendedor_nombre === vendedorCartera)
+  }, [rows, vendedorCartera])
 
-  const cuentaPri = useMemo(() => {
+  const cuentaPriCartera = useMemo(() => {
     const c: Record<Prioridad, number> = { critico: 0, urgente: 0, seguimiento: 0, rutina: 0 }
-    rows.forEach(r => c[r.prioridad]++)
+    carteraBase.forEach(r => c[r.prioridad]++)
     return c
-  }, [rows])
+  }, [carteraBase])
 
   const cuentaGes = useMemo(() => ({
-    pendientes: rows.filter(r => !r.gestionado_hoy).length,
-    hoy:        rows.filter(r =>  r.gestionado_hoy).length,
-  }), [rows])
+    pendientes: carteraBase.filter(r => !r.gestionado_hoy).length,
+    hoy:        carteraBase.filter(r =>  r.gestionado_hoy).length,
+  }), [carteraBase])
 
-  // ── Render ─────────────────────────────────────────────────────────
+  // Filtrado completo
+  const rowsFiltradas = useMemo(() => carteraBase.filter(r => {
+    if (busqueda) {
+      const q = busqueda.toLowerCase()
+      if (!r.cliente_nombre.toLowerCase().includes(q) && !r.cliente_cod.toLowerCase().includes(q)) return false
+    }
+    if (filtroPrioridad !== 'todos' && r.prioridad !== filtroPrioridad) return false
+    if (filtroGestion === 'pendientes' && r.gestionado_hoy)  return false
+    if (filtroGestion === 'hoy'        && !r.gestionado_hoy) return false
+    return true
+  }), [carteraBase, busqueda, filtroPrioridad, filtroGestion])
+
+  const totalPaginasCartera = Math.max(1, Math.ceil(rowsFiltradas.length / ITEMS_PER_PAGE))
+  const rowsPaginadas = useMemo(() => {
+    const start = (paginaCartera - 1) * ITEMS_PER_PAGE
+    return rowsFiltradas.slice(start, start + ITEMS_PER_PAGE)
+  }, [rowsFiltradas, paginaCartera])
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ backgroundColor: '#f0f4f8', minHeight: '100%' }}>
       <div className="px-5 py-5 space-y-4">
@@ -176,8 +236,8 @@ export default function MiCarteraView({ rows, kpis }: Props) {
               onClick={() => setTab(id)}
               className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[12px] font-semibold transition-all whitespace-nowrap"
               style={{
-                backgroundColor: tab === id ? 'white'       : 'transparent',
-                color:           tab === id ? '#1e293b'     : '#94a3b8',
+                backgroundColor: tab === id ? 'white'   : 'transparent',
+                color:           tab === id ? '#1e293b' : '#94a3b8',
                 boxShadow:       tab === id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               }}
             >
@@ -202,11 +262,22 @@ export default function MiCarteraView({ rows, kpis }: Props) {
         ════════════════════════════════ */}
         {tab === 'agenda' && (
           <AgendaTab
-            activos={agendaActivos}
-            hoy={agendaHoy}
-            busqueda={busquedaAgenda}
-            onBusqueda={setBusquedaAgenda}
-            totalRows={rows.length}
+            activosPag       = {agendaActivosPag}
+            totalActivos     = {agendaActivosTodos.length}
+            hoy              = {agendaHoy}
+            pagina           = {paginaAgenda}
+            totalPaginas     = {totalPaginasAgenda}
+            onPage           = {onPageAgenda}
+            busqueda         = {busquedaAgenda}
+            onBusqueda       = {onBusquedaAgenda}
+            vendedor         = {vendedorAgenda}
+            onVendedor       = {onVendedorAgenda}
+            vendedores       = {vendedores}
+            prioridad        = {prioridadAgenda}
+            onPrioridad      = {onPrioridadAgenda}
+            cuentaPri        = {cuentaPriAgenda}
+            totalBase        = {agendaBase.length}
+            totalRows        = {rows.length}
           />
         )}
 
@@ -215,16 +286,24 @@ export default function MiCarteraView({ rows, kpis }: Props) {
         ════════════════════════════════ */}
         {tab === 'cartera' && (
           <CarteraTab
-            rows={rows}
-            rowsFiltradas={rowsFiltradas}
-            busqueda={busqueda}
-            onBusqueda={setBusqueda}
-            filtroPrioridad={filtroPrioridad}
-            onFiltroPrioridad={setFiltroPrioridad}
-            filtroGestion={filtroGestion}
-            onFiltroGestion={setFiltroGestion}
-            cuentaPri={cuentaPri}
-            cuentaGes={cuentaGes}
+            totalBase        = {carteraBase.length}
+            rowsFiltradas    = {rowsFiltradas}
+            rowsPaginadas    = {rowsPaginadas}
+            pagina           = {paginaCartera}
+            totalPaginas     = {totalPaginasCartera}
+            onPage           = {onPageCartera}
+            busqueda         = {busqueda}
+            onBusqueda       = {onBusqueda}
+            vendedor         = {vendedorCartera}
+            onVendedor       = {onVendedorCartera}
+            vendedores       = {vendedores}
+            filtroPrioridad  = {filtroPrioridad}
+            onFiltroPrioridad= {onPrioridad}
+            filtroGestion    = {filtroGestion}
+            onFiltroGestion  = {onGestion}
+            cuentaPri        = {cuentaPriCartera}
+            cuentaGes        = {cuentaGes}
+            totalRows        = {rows.length}
           />
         )}
 
@@ -233,19 +312,35 @@ export default function MiCarteraView({ rows, kpis }: Props) {
   )
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // TAB: AGENDA DEL DÍA
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 function AgendaTab({
-  activos, hoy, busqueda, onBusqueda, totalRows,
+  activosPag, totalActivos, hoy,
+  pagina, totalPaginas, onPage,
+  busqueda, onBusqueda,
+  vendedor, onVendedor, vendedores,
+  prioridad, onPrioridad, cuentaPri, totalBase,
+  totalRows,
 }: {
-  activos:    CarteraRow[]
-  hoy:        CarteraRow[]
-  busqueda:   string
-  onBusqueda: (v: string) => void
-  totalRows:  number
+  activosPag:   CarteraRow[]
+  totalActivos: number
+  hoy:          CarteraRow[]
+  pagina:       number
+  totalPaginas: number
+  onPage:       (p: number) => void
+  busqueda:     string
+  onBusqueda:   (v: string) => void
+  vendedor:     string
+  onVendedor:   (v: string) => void
+  vendedores:   string[]
+  prioridad:    FiltroPrioridad
+  onPrioridad:  (v: FiltroPrioridad) => void
+  cuentaPri:    Record<Prioridad, number>
+  totalBase:    number
+  totalRows:    number
 }) {
-  const totalAgenda = activos.length + hoy.length
+  const totalAgenda = totalActivos + hoy.length
 
   if (totalRows === 0) {
     return (
@@ -259,9 +354,14 @@ function AgendaTab({
 
   return (
     <div className="space-y-3">
-      {/* Barra de búsqueda + conteo */}
-      <div className="flex items-center gap-3">
-        <div className="relative" style={{ flex: '1 1 220px', maxWidth: '280px' }}>
+
+      {/* ── Barra de filtros ──────────────────────────────────────── */}
+      <div
+        className="bg-white rounded-xl border shadow-sm px-4 py-3 flex flex-wrap gap-3 items-center"
+        style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
+      >
+        {/* Búsqueda */}
+        <div className="relative" style={{ flex: '1 1 160px', minWidth: '140px' }}>
           <Search
             size={12}
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
@@ -270,40 +370,89 @@ function AgendaTab({
             type="text"
             value={busqueda}
             onChange={e => onBusqueda(e.target.value)}
-            placeholder="Buscar en la agenda…"
+            placeholder="Buscar cliente o código…"
             className="w-full rounded-lg border pl-8 pr-3 py-1.5 text-[12px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-200 focus:border-blue-300 transition"
             style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
           />
         </div>
-        {totalAgenda > 0 && (
-          <span className="text-[11px] text-gray-400">
-            {activos.length} pendiente{activos.length !== 1 ? 's' : ''}
-            {hoy.length > 0
-              ? ` · ${hoy.length} gestionado${hoy.length !== 1 ? 's' : ''} hoy`
-              : ''}
-          </span>
-        )}
+
+        {/* Vendedor */}
+        <VendedorSelect value={vendedor} onChange={onVendedor} vendedores={vendedores} />
+
+        {/* Separador visual */}
+        <div
+          className="hidden sm:block flex-shrink-0 self-stretch"
+          style={{ width: '1px', backgroundColor: '#f1f5f9' }}
+        />
+
+        {/* Chips de prioridad */}
+        <div className="flex gap-1.5 flex-wrap">
+          {(['todos', 'critico', 'urgente', 'seguimiento', 'rutina'] as const).map(p => {
+            const cfg    = p !== 'todos' ? PRIORIDAD_CFG[p] : null
+            const count  = p === 'todos' ? totalBase : cuentaPri[p]
+            const active = prioridad === p
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPrioridad(p)}
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all whitespace-nowrap"
+                style={{
+                  backgroundColor: active ? (cfg?.bg ?? 'rgba(0,158,227,0.12)') : '#f1f5f9',
+                  color:           active ? (cfg?.text ?? '#009ee3')             : '#94a3b8',
+                  border:          active
+                    ? `1px solid ${cfg?.border ?? 'rgba(0,158,227,0.3)'}`
+                    : '1px solid transparent',
+                }}
+              >
+                {cfg && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: cfg.dot }}
+                  />
+                )}
+                {p === 'todos' ? 'Todos' : cfg!.label}
+                <span className="ml-0.5 opacity-50">({count})</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
+      {/* ── Contenido ─────────────────────────────────────────────── */}
       {totalAgenda === 0 ? (
-        <EmptyState
-          icon={<CheckCircle2 size={40} />}
-          title="¡Agenda del día completada!"
-          sub="No hay clientes que requieran gestión prioritaria hoy"
-          success
-        />
+        totalBase === 0
+          ? <EmptyState
+              icon={<CheckCircle2 size={40} />}
+              title="¡Agenda del día completada!"
+              sub="No hay clientes que requieran gestión prioritaria hoy"
+              success
+            />
+          : <EmptyState
+              icon={<Target size={40} />}
+              title="Sin resultados para estos filtros"
+              sub="Probá con otro vendedor o categoría de prioridad"
+            />
       ) : (
         <>
-          {/* Cards pendientes */}
-          {activos.length > 0 && (
+          {/* Cards activos (paginados) */}
+          {activosPag.length > 0 && (
             <div className="space-y-2">
-              {activos.map(row => (
+              {activosPag.map(row => (
                 <AgendaCard key={row.cliente_cod} row={row} />
               ))}
             </div>
           )}
 
-          {/* Separador + cards gestionados hoy */}
+          {/* Paginación (solo si hay más de 1 página) */}
+          <PaginationBar
+            pagina      = {pagina}
+            totalPaginas= {totalPaginas}
+            totalItems  = {totalActivos}
+            onPage      = {onPage}
+          />
+
+          {/* Separador + gestionados hoy */}
           {hoy.length > 0 && (
             <>
               <div className="flex items-center gap-3 py-1">
@@ -326,7 +475,7 @@ function AgendaTab({
   )
 }
 
-// ── Tarjeta de agenda ────────────────────────────────────────────────────
+// ── Tarjeta de agenda ──────────────────────────────────────────────────────
 function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: boolean }) {
   const priCfg   = PRIORIDAD_CFG[row.prioridad]
   const tramoCfg = TRAMO_CFG[row.tramo_peor] ?? TRAMO_CFG['Al día']
@@ -399,15 +548,8 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
               borderLeft:      `3px solid ${priCfg.bar}`,
             }}
           >
-            <Zap
-              size={11}
-              className="flex-shrink-0 mt-px"
-              style={{ color: priCfg.bar }}
-            />
-            <span
-              className="text-[11px] font-medium leading-tight"
-              style={{ color: priCfg.text }}
-            >
+            <Zap size={11} className="flex-shrink-0 mt-px" style={{ color: priCfg.bar }} />
+            <span className="text-[11px] font-medium leading-tight" style={{ color: priCfg.text }}>
               {row.motivo}
             </span>
           </div>
@@ -415,9 +557,7 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
 
         {/* Fila 4: stats + botón */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          {/* Stats */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Mora */}
             <StatChip label="Mora">
               <span
                 className="text-[11px] font-semibold tabular-nums"
@@ -426,10 +566,7 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
                 {row.mora_total > 0 ? fmtCRC(row.mora_total) : '—'}
               </span>
             </StatChip>
-
             <Divider />
-
-            {/* Tramo */}
             <StatChip label="Tramo">
               <span
                 className="inline-block text-[10px] font-semibold rounded px-1.5 py-0.5"
@@ -438,17 +575,12 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
                 {row.tramo_peor}
               </span>
             </StatChip>
-
             <Divider />
-
-            {/* Último contacto */}
             <StatChip label="Últ. contacto">
               <span className="text-[11px] font-semibold" style={{ color: uc.color }}>
                 {uc.label}
               </span>
             </StatChip>
-
-            {/* Promesa (si existe) */}
             {row.promesa_activa && row.promesa_fecha && (
               <>
                 <Divider />
@@ -460,8 +592,6 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
               </>
             )}
           </div>
-
-          {/* Botón acción (oculto si ya fue gestionado hoy) */}
           {!gestionadoHoy && (
             <Link
               href={`/clientes/${encodeURIComponent(row.cliente_cod)}?from=mi-cartera`}
@@ -478,36 +608,47 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
   )
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // TAB: MI CARTERA COMPLETA
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 function CarteraTab({
-  rows, rowsFiltradas, busqueda, onBusqueda,
+  totalBase, rowsFiltradas, rowsPaginadas,
+  pagina, totalPaginas, onPage,
+  busqueda, onBusqueda,
+  vendedor, onVendedor, vendedores,
   filtroPrioridad, onFiltroPrioridad,
   filtroGestion, onFiltroGestion,
-  cuentaPri, cuentaGes,
+  cuentaPri, cuentaGes, totalRows,
 }: {
-  rows:              CarteraRow[]
+  totalBase:         number
   rowsFiltradas:     CarteraRow[]
+  rowsPaginadas:     CarteraRow[]
+  pagina:            number
+  totalPaginas:      number
+  onPage:            (p: number) => void
   busqueda:          string
   onBusqueda:        (v: string) => void
+  vendedor:          string
+  onVendedor:        (v: string) => void
+  vendedores:        string[]
   filtroPrioridad:   FiltroPrioridad
   onFiltroPrioridad: (v: FiltroPrioridad) => void
   filtroGestion:     FiltroGestion
   onFiltroGestion:   (v: FiltroGestion) => void
   cuentaPri:         Record<Prioridad, number>
   cuentaGes:         { pendientes: number; hoy: number }
+  totalRows:         number
 }) {
   return (
     <div className="space-y-3">
 
-      {/* ── Barra de filtros ──────────────────────────────────── */}
+      {/* ── Barra de filtros ──────────────────────────────────────── */}
       <div
         className="bg-white rounded-xl border shadow-sm px-4 py-3 flex flex-wrap gap-3 items-center"
         style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
       >
         {/* Búsqueda */}
-        <div className="relative" style={{ flex: '1 1 180px', minWidth: '160px' }}>
+        <div className="relative" style={{ flex: '1 1 160px', minWidth: '140px' }}>
           <Search
             size={12}
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
@@ -522,11 +663,20 @@ function CarteraTab({
           />
         </div>
 
+        {/* Vendedor */}
+        <VendedorSelect value={vendedor} onChange={onVendedor} vendedores={vendedores} />
+
+        {/* Separador visual */}
+        <div
+          className="hidden sm:block flex-shrink-0 self-stretch"
+          style={{ width: '1px', backgroundColor: '#f1f5f9' }}
+        />
+
         {/* Pills de prioridad */}
         <div className="flex gap-1.5 flex-wrap">
           {(['todos', 'critico', 'urgente', 'seguimiento', 'rutina'] as const).map(p => {
             const cfg    = p !== 'todos' ? PRIORIDAD_CFG[p] : null
-            const count  = p === 'todos' ? rows.length : cuentaPri[p]
+            const count  = p === 'todos' ? totalBase : cuentaPri[p]
             const active = filtroPrioridad === p
             return (
               <button
@@ -543,10 +693,7 @@ function CarteraTab({
                 }}
               >
                 {cfg && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: cfg.dot }}
-                  />
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.dot }} />
                 )}
                 {p === 'todos' ? 'Todos' : cfg!.label}
                 <span className="ml-0.5 opacity-50">({count})</span>
@@ -556,10 +703,7 @@ function CarteraTab({
         </div>
 
         {/* Toggle gestión */}
-        <div
-          className="flex gap-0.5 rounded-lg p-0.5"
-          style={{ backgroundColor: '#f1f5f9' }}
-        >
+        <div className="flex gap-0.5 rounded-lg p-0.5" style={{ backgroundColor: '#f1f5f9' }}>
           {([
             { val: 'todos'      as FiltroGestion, label: 'Todos'                                },
             { val: 'pendientes' as FiltroGestion, label: `Pendientes (${cuentaGes.pendientes})` },
@@ -571,11 +715,9 @@ function CarteraTab({
               onClick={() => onFiltroGestion(val)}
               className="rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all whitespace-nowrap"
               style={{
-                backgroundColor: filtroGestion === val ? 'white'       : 'transparent',
-                color:           filtroGestion === val ? '#374151'     : '#94a3b8',
-                boxShadow:       filtroGestion === val
-                  ? '0 1px 2px rgba(0,0,0,0.06)'
-                  : 'none',
+                backgroundColor: filtroGestion === val ? 'white'   : 'transparent',
+                color:           filtroGestion === val ? '#374151' : '#94a3b8',
+                boxShadow:       filtroGestion === val ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               }}
             >
               {label}
@@ -584,165 +726,264 @@ function CarteraTab({
         </div>
       </div>
 
-      {/* ── Tabla ────────────────────────────────────────────────── */}
+      {/* ── Tabla ─────────────────────────────────────────────────── */}
       {rowsFiltradas.length === 0 ? (
         <EmptyState
           icon={<Target size={40} />}
           title={
-            rows.length === 0
+            totalRows === 0
               ? 'No hay clientes asignados a tu cartera'
               : 'Sin resultados para estos filtros'
           }
           sub={
-            rows.length === 0
+            totalRows === 0
               ? 'Contactá al coordinador para revisar la asignación'
               : 'Probá ampliando los criterios de búsqueda'
           }
         />
       ) : (
-        <div
-          className="bg-white rounded-xl border shadow-sm overflow-hidden"
-          style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
-        >
-          {/* Sub-header */}
+        <>
           <div
-            className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between"
-            style={{ backgroundColor: '#f8fafc' }}
+            className="bg-white rounded-xl border shadow-sm overflow-hidden"
+            style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
           >
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              {rowsFiltradas.length} cliente{rowsFiltradas.length !== 1 ? 's' : ''}
-            </span>
-            <span className="text-[11px] text-gray-400 italic">
-              Orden: urgencia → mora
-            </span>
-          </div>
+            {/* Sub-header */}
+            <div
+              className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between"
+              style={{ backgroundColor: '#f8fafc' }}
+            >
+              <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                {rowsFiltradas.length} cliente{rowsFiltradas.length !== 1 ? 's' : ''}
+              </span>
+              <span className="text-[11px] text-gray-400 italic">Orden: urgencia → mora</span>
+            </div>
 
-          {/* Encabezados de columna */}
-          <div
-            className="grid items-center px-4 py-2 border-b border-gray-100"
-            style={{ gridTemplateColumns: GRID, gap: '10px', backgroundColor: '#f8fafc' }}
-          >
-            <div />
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente</span>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right">Mora total</span>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tramo aging</span>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-center">ICP</span>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Último contacto</span>
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right">Acción</span>
-          </div>
+            {/* Encabezados */}
+            <div
+              className="grid items-center px-4 py-2 border-b border-gray-100"
+              style={{ gridTemplateColumns: GRID, gap: '10px', backgroundColor: '#f8fafc' }}
+            >
+              <div />
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cliente</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right">Mora total</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Tramo aging</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-center">ICP</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Último contacto</span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider text-right">Acción</span>
+            </div>
 
-          {/* Filas */}
-          <div className="divide-y divide-gray-50">
-            {rowsFiltradas.map(row => {
-              const priCfg   = PRIORIDAD_CFG[row.prioridad]
-              const tramoCfg = TRAMO_CFG[row.tramo_peor] ?? TRAMO_CFG['Al día']
-              const uc       = labelContacto(row.dias_sin_gestion)
+            {/* Filas paginadas */}
+            <div className="divide-y divide-gray-50">
+              {rowsPaginadas.map(row => {
+                const priCfg   = PRIORIDAD_CFG[row.prioridad]
+                const tramoCfg = TRAMO_CFG[row.tramo_peor] ?? TRAMO_CFG['Al día']
+                const uc       = labelContacto(row.dias_sin_gestion)
 
-              return (
-                <div
-                  key={row.cliente_cod}
-                  className="grid items-center px-4 py-3 transition-colors hover:bg-slate-50/60"
-                  style={{
-                    gridTemplateColumns: GRID,
-                    gap:                 '10px',
-                    backgroundColor:     row.gestionado_hoy ? '#f0fdf4'   : undefined,
-                    opacity:             row.gestionado_hoy ? 0.7          : 1,
-                  }}
-                >
-                  {/* Indicador de prioridad */}
-                  <div className="flex items-center justify-center">
-                    <div
-                      className="rounded-full flex-shrink-0"
-                      title={priCfg.label}
-                      style={{ width: '8px', height: '8px', backgroundColor: priCfg.dot }}
-                    />
-                  </div>
-
-                  {/* Nombre + código */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[13px] font-semibold text-gray-800 truncate leading-tight">
-                        {row.cliente_nombre}
+                return (
+                  <div
+                    key={row.cliente_cod}
+                    className="grid items-center px-4 py-3 transition-colors hover:bg-slate-50/60"
+                    style={{
+                      gridTemplateColumns: GRID,
+                      gap:             '10px',
+                      backgroundColor: row.gestionado_hoy ? '#f0fdf4' : undefined,
+                      opacity:         row.gestionado_hoy ? 0.7       : 1,
+                    }}
+                  >
+                    <div className="flex items-center justify-center">
+                      <div
+                        className="rounded-full flex-shrink-0"
+                        title={priCfg.label}
+                        style={{ width: '8px', height: '8px', backgroundColor: priCfg.dot }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[13px] font-semibold text-gray-800 truncate leading-tight">
+                          {row.cliente_nombre}
+                        </span>
+                        {row.gestionado_hoy && (
+                          <CheckCircle2 size={12} className="flex-shrink-0" style={{ color: '#22c55e' }} />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-gray-400 font-mono">{row.cliente_cod}</span>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className="text-[12px] font-semibold tabular-nums"
+                        style={{ color: row.mora_total > 0 ? '#1e293b' : '#d1d5db' }}
+                      >
+                        {row.mora_total > 0 ? fmtCRC(row.mora_total) : '—'}
                       </span>
-                      {row.gestionado_hoy && (
-                        <CheckCircle2 size={12} className="flex-shrink-0" style={{ color: '#22c55e' }} />
+                    </div>
+                    <div>
+                      <span
+                        className="inline-block text-[11px] font-semibold rounded px-2 py-0.5 whitespace-nowrap"
+                        style={{ backgroundColor: tramoCfg.bg, color: tramoCfg.text }}
+                      >
+                        {row.tramo_peor}
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[12px] font-semibold" style={{ color: '#d1d5db' }} title="Sin datos históricos aún">—</span>
+                    </div>
+                    <div>
+                      <span className="text-[12px] font-semibold leading-tight" style={{ color: uc.color }}>
+                        {uc.label}
+                      </span>
+                      {row.promesa_activa && row.promesa_fecha && (
+                        <p className="text-[10px] mt-0.5 font-medium" style={{ color: '#d97706' }}>
+                          Promesa: {fmtFechaCorta(row.promesa_fecha)}
+                        </p>
                       )}
                     </div>
-                    <span className="text-[11px] text-gray-400 font-mono">{row.cliente_cod}</span>
+                    <div className="flex justify-end">
+                      <Link
+                        href={`/clientes/${encodeURIComponent(row.cliente_cod)}?from=mi-cartera`}
+                        className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-85 whitespace-nowrap"
+                        style={{ backgroundColor: '#009ee3', color: 'white' }}
+                      >
+                        Ver ficha
+                        <ChevronRight size={10} />
+                      </Link>
+                    </div>
                   </div>
-
-                  {/* Mora total */}
-                  <div className="text-right">
-                    <span
-                      className="text-[12px] font-semibold tabular-nums"
-                      style={{ color: row.mora_total > 0 ? '#1e293b' : '#d1d5db' }}
-                    >
-                      {row.mora_total > 0 ? fmtCRC(row.mora_total) : '—'}
-                    </span>
-                  </div>
-
-                  {/* Tramo aging */}
-                  <div>
-                    <span
-                      className="inline-block text-[11px] font-semibold rounded px-2 py-0.5 whitespace-nowrap"
-                      style={{ backgroundColor: tramoCfg.bg, color: tramoCfg.text }}
-                    >
-                      {row.tramo_peor}
-                    </span>
-                  </div>
-
-                  {/* ICP */}
-                  <div className="text-center">
-                    <span
-                      className="text-[12px] font-semibold"
-                      style={{ color: '#d1d5db' }}
-                      title="Sin datos históricos aún"
-                    >
-                      —
-                    </span>
-                  </div>
-
-                  {/* Último contacto */}
-                  <div>
-                    <span
-                      className="text-[12px] font-semibold leading-tight"
-                      style={{ color: uc.color }}
-                    >
-                      {uc.label}
-                    </span>
-                    {row.promesa_activa && row.promesa_fecha && (
-                      <p className="text-[10px] mt-0.5 font-medium" style={{ color: '#d97706' }}>
-                        Promesa: {fmtFechaCorta(row.promesa_fecha)}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Acción */}
-                  <div className="flex justify-end">
-                    <Link
-                      href={`/clientes/${encodeURIComponent(row.cliente_cod)}?from=mi-cartera`}
-                      className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold transition hover:opacity-85 whitespace-nowrap"
-                      style={{ backgroundColor: '#009ee3', color: 'white' }}
-                    >
-                      Ver ficha
-                      <ChevronRight size={10} />
-                    </Link>
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
 
+          {/* Paginación */}
+          <PaginationBar
+            pagina      = {pagina}
+            totalPaginas= {totalPaginas}
+            totalItems  = {rowsFiltradas.length}
+            onPage      = {onPage}
+          />
+        </>
+      )}
     </div>
   )
 }
 
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 // COMPONENTES UTILITARIOS
-// ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
+// ── Dropdown de vendedor ────────────────────────────────────────────────────
+function VendedorSelect({
+  value, onChange, vendedores,
+}: {
+  value:     string
+  onChange:  (v: string) => void
+  vendedores: string[]
+}) {
+  if (vendedores.length === 0) return null
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="rounded-lg border px-3 py-1.5 text-[12px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-200 focus:border-blue-300 transition bg-white appearance-none cursor-pointer"
+      style={{
+        borderColor: '#e2e8f0',
+        borderWidth: '0.5px',
+        color: value ? '#374151' : '#94a3b8',
+        minWidth: '160px',
+        maxWidth: '220px',
+      }}
+    >
+      <option value="">Todos los vendedores</option>
+      {vendedores.map(v => (
+        <option key={v} value={v}>{v}</option>
+      ))}
+    </select>
+  )
+}
+
+// ── Barra de paginación ─────────────────────────────────────────────────────
+function PaginationBar({
+  pagina, totalPaginas, totalItems, onPage,
+}: {
+  pagina:       number
+  totalPaginas: number
+  totalItems:   number
+  onPage:       (p: number) => void
+}) {
+  if (totalPaginas <= 1) return null
+
+  const inicio   = (pagina - 1) * ITEMS_PER_PAGE + 1
+  const fin      = Math.min(pagina * ITEMS_PER_PAGE, totalItems)
+  const pageNums = getPageNums(pagina, totalPaginas)
+
+  return (
+    <div
+      className="bg-white rounded-xl border flex items-center justify-between px-4 py-2.5"
+      style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
+    >
+      {/* Contador */}
+      <span className="text-[11px] text-gray-400 whitespace-nowrap">
+        Mostrando {inicio}–{fin} de {totalItems} clientes
+      </span>
+
+      {/* Controles */}
+      <div className="flex items-center gap-1">
+        {/* Anterior */}
+        <button
+          type="button"
+          disabled={pagina === 1}
+          onClick={() => onPage(pagina - 1)}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          style={{
+            color:  pagina === 1 ? '#d1d5db' : '#374151',
+            cursor: pagina === 1 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <ChevronLeft size={12} />
+          Anterior
+        </button>
+
+        {/* Números de página */}
+        {pageNums.map((p, i) =>
+          p === '…' ? (
+            <span key={`e${i}`} className="px-1 text-[11px] text-gray-300 select-none">…</span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPage(p as number)}
+              className="rounded-lg text-[11px] font-semibold transition"
+              style={{
+                width:           '28px',
+                height:          '28px',
+                backgroundColor: pagina === p ? '#009ee3' : 'transparent',
+                color:           pagina === p ? 'white'   : '#374151',
+              }}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        {/* Siguiente */}
+        <button
+          type="button"
+          disabled={pagina === totalPaginas}
+          onClick={() => onPage(pagina + 1)}
+          className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          style={{
+            color:  pagina === totalPaginas ? '#d1d5db' : '#374151',
+            cursor: pagina === totalPaginas ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Siguiente
+          <ChevronRight size={12} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── StatChip / Divider / EmptyState ─────────────────────────────────────────
 function StatChip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-1">
@@ -781,7 +1022,7 @@ function EmptyState({
   )
 }
 
-// ── KpiCard ──────────────────────────────────────────────────────────────
+// ── KpiCard ──────────────────────────────────────────────────────────────────
 function KpiCard({
   label, valor, sub, color, icon, muted,
 }: {
@@ -804,10 +1045,7 @@ function KpiCard({
         </span>
         <span style={{ color: displayColor }}>{icon}</span>
       </div>
-      <p
-        className="text-[20px] font-bold tabular-nums leading-tight"
-        style={{ color: displayColor }}
-      >
+      <p className="text-[20px] font-bold tabular-nums leading-tight" style={{ color: displayColor }}>
         {valor}
       </p>
       <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>
