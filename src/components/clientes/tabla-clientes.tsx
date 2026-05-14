@@ -413,9 +413,9 @@ export default function TablaClientes({
                   Equipo
                 </th>
 
-                {/* CONDICIONES */}
-                <th className="px-3 py-3 text-left w-[9%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
-                  Condiciones
+                {/* PLAZO */}
+                <th className="px-3 py-3 text-left w-[8%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
+                  Plazo
                 </th>
 
                 {/* DIMENSIÓN */}
@@ -424,7 +424,7 @@ export default function TablaClientes({
                 </th>
 
                 {/* RANGO MORA */}
-                <th className="px-3 py-3 text-left w-[8%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider">
+                <th className="pl-5 pr-2 py-3 text-left w-[9%] font-semibold text-gray-500 text-[11px] uppercase tracking-wider whitespace-nowrap">
                   Rango Mora
                 </th>
 
@@ -443,7 +443,7 @@ export default function TablaClientes({
                 </th>
 
                 {/* RIESGO ACTUAL */}
-                <th className="px-3 py-3 text-left w-[13%]">
+                <th className="pl-6 pr-3 py-3 text-left w-[13%]">
                   <button className={thBtnCls} onClick={() => navegarSort('dias_sin_gestion')}>
                     Riesgo Actual <SortIcon activo={filtros.sort === 'dias_sin_gestion'} dir={filtros.dir} />
                   </button>
@@ -508,13 +508,10 @@ export default function TablaClientes({
                       </p>
                     </td>
 
-                    {/* CONDICIONES */}
+                    {/* PLAZO */}
                     <td className="px-3 py-3">
                       {r.condicion_pago ? (
-                        <span
-                          className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
-                          style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}
-                        >
+                        <span className="text-[12px] font-medium text-gray-600 whitespace-nowrap">
                           {r.condicion_pago}
                         </span>
                       ) : (
@@ -534,7 +531,7 @@ export default function TablaClientes({
                     </td>
 
                     {/* RANGO MORA */}
-                    <td className="px-3 py-3">
+                    <td className="pl-5 pr-2 py-3">
                       <span
                         className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap"
                         style={{ backgroundColor: tramoBadge.bg, color: tramoBadge.text }}
@@ -564,7 +561,7 @@ export default function TablaClientes({
                     </td>
 
                     {/* RIESGO ACTUAL */}
-                    <td className="px-3 py-3">
+                    <td className="pl-6 pr-3 py-3">
                       <div className="flex items-center gap-1.5">
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0"
