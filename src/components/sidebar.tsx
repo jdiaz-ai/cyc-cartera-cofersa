@@ -287,14 +287,10 @@ export default function Sidebar({
             backgroundColor: 'white',
           }}
         />
-        <div className="mt-2 text-center">
-          <p style={{ color: '#009ee3', fontSize: '15px', fontWeight: 700, lineHeight: 1.2 }}>
-            SIC
-          </p>
-          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 400, marginTop: '2px' }}>
-            Cofersa
-          </p>
-        </div>
+        <p className="mt-2 text-center" style={{ fontSize: '12px' }}>
+          <span style={{ color: '#009ee3', fontWeight: 700 }}>SIC</span>
+          <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}> · Cofersa</span>
+        </p>
       </div>
 
       {/* ── Nav ──────────────────────────────────────────────── */}
