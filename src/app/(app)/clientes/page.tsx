@@ -82,28 +82,10 @@ export default async function ClientesPage({ searchParams }: PageProps) {
   const esCoordinador =
     ((usuarioRow as { rol: string } | null)?.rol ?? 'ANALISTA') === 'COORDINADOR'
 
-  // ── Scope: analista solo ve su cartera ────────────────────────────
-  let codigosFiltro: string[] | null = null
-  if (!esCoordinador) {
-    const { data: misClientes } = await supabase
-      .from('maestro_clientes')
-      .select('cliente_cod')
-      .eq('analista_email', userEmail)
-    const codigos = ((misClientes ?? []) as Pick<MaestroCliente, 'cliente_cod'>[])
-      .map(c => c.cliente_cod)
-    if (codigos.length === 0) {
-      return (
-        <TablaClientes
-          rows={[]}
-          kpis={{ carteraFiltrada: 0, moraFiltrada: 0, pctMorosidad: null, totalClientes: 0 }}
-          totalRows={0} page={1} totalPages={1}
-          filtros={filtros} esCoordinador={false}
-          analistas={[]} vendedores={[]} userEmail={userEmail}
-        />
-      )
-    }
-    codigosFiltro = codigos
-  }
+  // Visibilidad total: todos los usuarios autenticados ven la cartera completa.
+  // El filtro por analista se aplica opcionalmente desde la UI (dropdown),
+  // nunca como restricción automática de scope.
+  const codigosFiltro: string[] | null = null
 
   // ── Sync más reciente ─────────────────────────────────────────────
   const { data: syncRefData } = await supabase

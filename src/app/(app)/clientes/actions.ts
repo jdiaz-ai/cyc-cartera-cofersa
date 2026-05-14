@@ -27,16 +27,8 @@ export async function fetchTodosLosClientes(
   const esCoordinador =
     ((usuarioRow as { rol: string } | null)?.rol ?? 'ANALISTA') === 'COORDINADOR'
 
-  // ── Scope ─────────────────────────────────────────────────────────
-  let codigosFiltro: string[] | null = null
-  if (!esCoordinador) {
-    const { data: misClientes } = await supabase
-      .from('maestro_clientes').select('cliente_cod').eq('analista_email', userEmail)
-    const codigos = ((misClientes ?? []) as Pick<MaestroCliente, 'cliente_cod'>[])
-      .map(c => c.cliente_cod)
-    if (codigos.length === 0) return []
-    codigosFiltro = codigos
-  }
+  // Visibilidad total: todos los usuarios autenticados exportan la cartera completa.
+  const codigosFiltro: string[] | null = null
 
   // ── Sync más reciente ─────────────────────────────────────────────
   const { data: syncRefData } = await supabase
