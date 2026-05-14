@@ -82,14 +82,22 @@ export interface Gestion {
   id: string
   cliente_cod: string
   contribuyente: string
-  analista_email: string
+  analista_email: string        // quién registró la gestión
   fecha: string
   hora: string
   tipo: string
   resultado: string
   nota: string
-  promesa_fecha: string
-  promesa_monto: number
+  // ── campos legacy (mantener para compatibilidad) ──────────────────
+  promesa_fecha: string | null
+  promesa_monto: number | null
+  // ── campos nuevos Sprint Gestiones v2 ─────────────────────────────
+  proxima_accion:       string | null   // 'esperar_pago' | 'recontactar' | 'escalar' | 'crear_solicitud' | 'sin_seguimiento'
+  proxima_accion_fecha: string | null   // DATE en America/Costa_Rica
+  promesa_id:           string | null   // FK a promesas.id
+  metadata:             Record<string, unknown> | null  // JSONB libre por resultado
+  archived:             boolean         // para sprint de archivado futuro
+  legacy:               boolean         // marca registros pre-v2
   created_at: string
   activo?: boolean
 }

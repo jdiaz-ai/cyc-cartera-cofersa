@@ -11,7 +11,8 @@ import {
 import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
-import ModalGestion from './modal-gestion'
+import FormNuevaGestion    from './form-nueva-gestion'
+import TimelineGestionesV2  from './timeline-gestiones-v2'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
 const TABS = [
@@ -512,6 +513,7 @@ export default function FichaCliente({
         {tab === 'Gestiones' && (
           <TabGestiones
             gestiones      = {gestiones}
+            promesas       = {promesas}
             userEmail      = {userEmail}
             esCoordinador  = {esCoordinador}
             onNuevaGestion = {() => setModalGestion(true)}
@@ -577,15 +579,15 @@ export default function FichaCliente({
         </div>
       )}
 
-      {/* ── Modal Registrar Gestión ──────────────────────────────── */}
+      {/* ── Modal Registrar Gestión (Sprint v2) ─────────────────── */}
       {modalGestion && (
-        <ModalGestion
+        <FormNuevaGestion
           clienteCod    = {cartera.cliente_cod}
           clienteNombre = {cartera.cliente_nombre}
           contribuyente = {cartera.contribuyente}
-          analistaEmail = {userEmail}
+          facturas      = {facturas}
           onClose       = {() => setModalGestion(false)}
-          onSuccess     = {() => { setModalGestion(false); if (backHref) router.push(backHref); else router.refresh() }}
+          onSuccess     = {() => { setModalGestion(false); router.refresh() }}
         />
       )}
 
@@ -1812,6 +1814,7 @@ function ModalEditarGestion({ gestion, onClose, onSuccess }: {
 // ══════════════════════════════════════════════════════════════════════
 function TabGestiones({
   gestiones,
+  promesas,
   userEmail,
   esCoordinador,
   onNuevaGestion,
@@ -1819,6 +1822,7 @@ function TabGestiones({
   onRefresh,
 }: {
   gestiones:      Gestion[]
+  promesas:       Promesa[]
   userEmail:      string
   esCoordinador:  boolean
   onNuevaGestion: () => void
@@ -1832,7 +1836,6 @@ function TabGestiones({
   const [busqueda,        setBusqueda]        = useState('')
   const [visibles,        setVisibles]        = useState(10)
   const [editando,        setEditando]        = useState<Gestion | null>(null)
-  const [loadingDel,      setLoadingDel]      = useState<string | null>(null)
 
   // Todos ven la bitácora completa del cliente.
   // Editar/eliminar se controla por fila (puedeEditar / puedeEliminar).
@@ -1873,19 +1876,6 @@ function TabGestiones({
 
   const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.tipo)))], [visiblesBase])
   const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.resultado)))], [visiblesBase])
-
-  async function eliminar(id: string) {
-    if (!window.confirm('¿Eliminar esta gestión? Esta acción no se puede deshacer.')) return
-    setLoadingDel(id)
-    const res = await fetch('/api/clientes/gestiones', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
-    setLoadingDel(null)
-    if (res.ok) { onToast('Gestión eliminada'); onRefresh() }
-    else { const d = await res.json(); onToast(d.error ?? 'Error al eliminar') }
-  }
 
   const hayFiltros = filtroTipo !== 'Todos' || filtroResultado !== 'Todos' || filtroPeriodo !== 'Todo' || !!busqueda
 
@@ -1981,107 +1971,36 @@ function TabGestiones({
         )}
       </div>
 
-      {/* ── Fila 3: Tabla ────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        {filtradas.length === 0 ? (
+      {/* ── Fila 3: Timeline ─────────────────────────────────── */}
+      {filtradas.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <EmptyState icon={<ClipboardList size={32} />}
             texto={total === 0 ? 'Sin gestiones registradas.' : 'No hay gestiones con esos filtros.'} />
-        ) : (
-          <>
-            <table className="w-full">
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <Th>Fecha</Th>
-                  <Th>Tipo</Th>
-                  <Th>Resultado</Th>
-                  <Th>Nota</Th>
-                  <Th>Analista</Th>
-                  <Th></Th>
-                </tr>
-              </thead>
-              <tbody>
-                {mostradas.map((g, i) => {
-                  const resSty  = RESULTADO_COLORS[g.resultado] ?? { bg: '#f1f5f9', text: '#64748b' }
-                  const tipoSty = TIPO_COLORES[g.tipo]          ?? { bg: '#f1f5f9', text: '#64748b' }
-                  // Puede editar: propio analista o coordinador
-                  const puedeEditar  = esCoordinador || g.analista_email === userEmail
-                  const puedeEliminar = esCoordinador
-                  return (
-                    <tr key={g.id}
-                      className="border-t border-gray-50 hover:bg-blue-50/30 transition-colors"
-                      style={{ backgroundColor: i % 2 === 0 ? undefined : '#fafbfc' }}
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <p className="text-[13px] font-semibold text-gray-700">{fmtFecha(g.fecha)}</p>
-                        <p className="text-[11px] text-gray-400">{g.hora?.slice(0, 5) || ''}</p>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold rounded-full px-2.5 py-1"
-                          style={{ backgroundColor: tipoSty.bg, color: tipoSty.text }}>
-                          {TIPO_ICONOS[g.tipo]}
-                          {g.tipo}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="inline-block text-[11px] font-bold rounded-full px-2.5 py-1"
-                          style={{ backgroundColor: resSty.bg, color: resSty.text }}>
-                          {g.resultado}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3" style={{ maxWidth: '300px' }}>
-                        <p className="text-[13px] text-gray-600 leading-snug line-clamp-2">
-                          {g.nota || <span className="text-gray-300 italic">Sin nota</span>}
-                        </p>
-                        {g.promesa_fecha && (
-                          <p className="text-[11px] font-semibold mt-0.5" style={{ color: '#0369a1' }}>
-                            Promesa: {fmtFecha(g.promesa_fecha)}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <p className="text-[12px] text-gray-500">{g.analista_email?.split('@')[0] ?? '—'}</p>
-                      </td>
-                      {/* Acciones */}
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <div className="flex gap-1.5">
-                          {puedeEditar && (
-                            <button type="button" onClick={() => setEditando(g)}
-                              className="text-[11px] font-semibold px-2 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 transition">
-                              Editar
-                            </button>
-                          )}
-                          {puedeEliminar && (
-                            <button type="button"
-                              onClick={() => eliminar(g.id)}
-                              disabled={loadingDel === g.id}
-                              className="text-[11px] font-semibold px-2 py-1 rounded-md border border-red-100 text-red-400 hover:bg-red-50 transition disabled:opacity-50"
-                              title="Solo coordinador puede eliminar">
-                              {loadingDel === g.id ? '...' : 'Eliminar'}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+        </div>
+      ) : (
+        <>
+          <TimelineGestionesV2
+            gestiones     = {mostradas}
+            promesas      = {promesas}
+            userEmail     = {userEmail}
+            esCoordinador = {esCoordinador}
+            onEdit        = {setEditando}
+          />
 
-            {/* Ver más */}
-            {filtradas.length > visibles && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-                <span className="text-[12px] text-gray-400">
-                  Mostrando {mostradas.length} de {filtradas.length}
-                </span>
-                <button type="button" onClick={() => setVisibles(v => v + 10)}
-                  className="text-[12px] font-bold text-blue-500 hover:text-blue-700 transition">
-                  Ver más ↓
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          {/* Ver más / eliminar paginado */}
+          {filtradas.length > visibles && (
+            <div className="flex items-center justify-between px-2 py-3">
+              <span className="text-[12px] text-gray-400">
+                Mostrando {mostradas.length} de {filtradas.length}
+              </span>
+              <button type="button" onClick={() => setVisibles(v => v + 20)}
+                className="text-[12px] font-bold text-[#009ee3] hover:text-[#0080c0] transition">
+                Ver más ↓
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Modal editar */}
       {editando && (
