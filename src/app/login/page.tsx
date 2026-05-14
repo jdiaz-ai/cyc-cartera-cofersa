@@ -300,7 +300,7 @@ export default function LoginPage() {
           className="mt-6 text-center"
           style={{ fontSize: '11px', color: 'rgba(255,255,255,0.30)' }}
         >
-          © 2026 COFERSA — Sistema CxC
+          SIC — Sistema Inteligente de Cobranza · Cofersa © 2026
         </p>
       </div>
     </div>

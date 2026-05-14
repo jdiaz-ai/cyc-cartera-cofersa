@@ -64,7 +64,7 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
   const match = Object.entries(PAGE_LABELS)
     .sort((a, b) => b[0].length - a[0].length)   // más específico primero
     .find(([key]) => pathname.startsWith(key))
-  const page = match?.[1] ?? { title: 'CYC Cofersa', sub: 'Gestión de Cartera' }
+  const page = match?.[1] ?? { title: 'SIC', sub: 'Sistema Inteligente de Cobranza' }
 
   // ── Estado del dropdown de notificaciones ─────────────────────
   const [open, setOpen]     = useState(false)
