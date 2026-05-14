@@ -10,8 +10,8 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "CYC Cofersa — Gestión de Cartera",
-  description: "Plataforma de Crédito y Cobro — Cofersa",
+  title: "SIC | Sistema Inteligente de Cobranza — Cofersa",
+  description: "Sistema Inteligente de Cobranza — Cofersa",
 };
 
 export default function RootLayout({

@@ -129,6 +129,12 @@ export default async function AppLayout({
           usuarioId={usuarioId}
         />
         <main className="flex-1 overflow-y-auto">{children}</main>
+        <footer
+          className="text-center shrink-0"
+          style={{ fontSize: '11px', fontWeight: 400, color: '#94a3b8', padding: '5px 0' }}
+        >
+          SIC — Sistema Inteligente de Cobranza · Cofersa © 2026
+        </footer>
       </div>
     </div>
   )

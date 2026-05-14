@@ -287,12 +287,14 @@ export default function Sidebar({
             backgroundColor: 'white',
           }}
         />
-        <p
-          className="text-center mt-2 font-bold uppercase tracking-widest"
-          style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', letterSpacing: '0.12em' }}
-        >
-          Crédito y Cobro
-        </p>
+        <div className="mt-2 text-center">
+          <p style={{ color: '#009ee3', fontSize: '15px', fontWeight: 700, lineHeight: 1.2 }}>
+            SIC
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px', fontWeight: 400, marginTop: '2px' }}>
+            Cofersa
+          </p>
+        </div>
       </div>
 
       {/* ── Nav ──────────────────────────────────────────────── */}

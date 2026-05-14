@@ -134,20 +134,30 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* 2. Crédito y Cobro */}
+          {/* 2. SIC */}
           <p
-            className="text-center font-bold uppercase tracking-widest mb-2"
-            style={{ fontSize: '15px', color: '#009ee3', letterSpacing: '0.12em' }}
+            className="text-center"
+            style={{ fontSize: '52px', fontWeight: 800, color: '#009ee3',
+                     letterSpacing: '-0.02em', lineHeight: 1, marginBottom: '6px' }}
           >
-            Crédito y Cobro
+            SIC
           </p>
 
-          {/* 3. Subtítulo */}
+          {/* 3. Sistema Inteligente de Cobranza */}
           <p
-            className="text-center mb-7"
-            style={{ fontSize: '15px', color: '#64748b', fontWeight: 500 }}
+            className="text-center mb-2"
+            style={{ fontSize: '14px', color: '#64748b', fontWeight: 400 }}
           >
-            Plataforma de Gestión de Cartera
+            Sistema Inteligente de Cobranza
+          </p>
+
+          {/* 4. Powered by Cofersa */}
+          <p
+            className="text-center mb-6"
+            style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 300,
+                     letterSpacing: '0.12em' }}
+          >
+            Powered by Cofersa
           </p>
 
           {/* 4. Divisor */}
