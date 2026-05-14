@@ -121,15 +121,15 @@ export default function LoginPage() {
             <div
               style={{
                 backgroundImage: "url('/logo-cofersa.png')",
-                backgroundSize: '115% auto',
-                backgroundPosition: '50% center',
+                backgroundSize: 'contain',
+                backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 backgroundColor: '#f8f9fa',
                 width: '180px',
-                height: '60px',
+                height: '68px',
                 borderRadius: '12px',
                 border: '0.5px solid #e5e7eb',
-                padding: '8px 20px',
+                padding: '10px 22px',
               }}
             />
           </div>

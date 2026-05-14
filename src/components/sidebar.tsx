@@ -271,26 +271,31 @@ export default function Sidebar({
       className="flex flex-col flex-shrink-0 h-screen"
       style={{ width: '210px', backgroundColor: '#003B5C' }}
     >
-      {/* ── Logo ──────────────────────────────────────────────── */}
-      <div className="px-3 pt-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      {/* ── Logo + Brand ──────────────────────────────────────── */}
+      <div className="px-3 pt-4 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
           className="rounded-xl"
           role="img"
           aria-label="Cofersa"
           style={{
             width: '100%',
-            height: '68px',
+            height: '78px',
             backgroundImage: "url('/logo-cofersa.png')",
-            backgroundSize: '125% auto',
-            backgroundPosition: '50% center',
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             backgroundColor: 'white',
+            padding: '10px 18px',
           }}
         />
-        <p className="mt-2 text-center" style={{ fontSize: '12px' }}>
-          <span style={{ color: '#009ee3', fontWeight: 700 }}>SIC</span>
-          <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}> · Cofersa</span>
-        </p>
+        <div className="mt-3 text-center">
+          <p style={{ color: 'white', fontSize: '22px', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.01em' }}>
+            SIC
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.50)', fontSize: '10px', fontWeight: 500, marginTop: '5px', letterSpacing: '0.18em' }}>
+            COFERSA
+          </p>
+        </div>
       </div>
 
       {/* ── Nav ──────────────────────────────────────────────── */}
