@@ -271,30 +271,38 @@ export default function Sidebar({
       className="flex flex-col flex-shrink-0 h-screen"
       style={{ width: '210px', backgroundColor: '#003B5C' }}
     >
-      {/* ── Logo + Brand ──────────────────────────────────────── */}
+      {/* ── Header: logo + identidad SIC ──────────────────────── */}
       <div className="px-3 pt-4 pb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div
-          className="rounded-xl"
-          role="img"
-          aria-label="Cofersa"
-          style={{
-            width: '100%',
-            height: '78px',
-            backgroundImage: "url('/logo-cofersa.png')",
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            backgroundColor: 'white',
-            padding: '10px 18px',
-          }}
-        />
-        <div className="mt-3 text-center">
-          <p style={{ color: 'white', fontSize: '22px', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.01em' }}>
+        {/* FILA 1 — Logo Cofersa rectangular */}
+        <div className="flex justify-center">
+          <div
+            role="img"
+            aria-label="Cofersa"
+            style={{
+              width: '130px',
+              height: '40px',
+              borderRadius: '10px',
+              backgroundImage: "url('/logo-cofersa.png')",
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              backgroundColor: 'white',
+              padding: '4px 10px',
+            }}
+          />
+        </div>
+
+        {/* FILA 2 — SIC | Powered by Cofersa */}
+        <div className="flex items-center justify-center mt-3" style={{ gap: '6px' }}>
+          <span style={{ color: '#009ee3', fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>
             SIC
-          </p>
-          <p style={{ color: 'rgba(255,255,255,0.50)', fontSize: '10px', fontWeight: 500, marginTop: '5px', letterSpacing: '0.18em' }}>
-            COFERSA
-          </p>
+          </span>
+          <span style={{ color: 'rgba(255,255,255,0.25)', fontWeight: 400, fontSize: '13px', lineHeight: 1 }}>
+            |
+          </span>
+          <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 400, fontSize: '10px', letterSpacing: '0.06em' }}>
+            Powered by Cofersa
+          </span>
         </div>
       </div>
 

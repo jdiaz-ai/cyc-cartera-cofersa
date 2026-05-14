@@ -116,8 +116,8 @@ export default function LoginPage() {
             }}
           />
 
-          {/* 1. Logo */}
-          <div className="flex justify-center mb-4">
+          {/* 1. Logo Cofersa (+44%) */}
+          <div className="flex justify-center mb-3">
             <div
               style={{
                 backgroundImage: "url('/logo-cofersa.png')",
@@ -125,11 +125,11 @@ export default function LoginPage() {
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 backgroundColor: '#f8f9fa',
-                width: '180px',
-                height: '68px',
+                width: '260px',
+                height: '98px',
                 borderRadius: '12px',
                 border: '0.5px solid #e5e7eb',
-                padding: '10px 22px',
+                padding: '14px 28px',
               }}
             />
           </div>
@@ -138,14 +138,14 @@ export default function LoginPage() {
           <p
             className="text-center"
             style={{ fontSize: '52px', fontWeight: 800, color: '#009ee3',
-                     letterSpacing: '-0.02em', lineHeight: 1, marginBottom: '6px' }}
+                     letterSpacing: '-0.02em', lineHeight: 1, marginBottom: '2px' }}
           >
             SIC
           </p>
 
           {/* 3. Sistema Inteligente de Cobranza */}
           <p
-            className="text-center mb-2"
+            className="text-center mb-0.5"
             style={{ fontSize: '14px', color: '#64748b', fontWeight: 400 }}
           >
             Sistema Inteligente de Cobranza
@@ -153,16 +153,16 @@ export default function LoginPage() {
 
           {/* 4. Powered by Cofersa */}
           <p
-            className="text-center mb-6"
+            className="text-center mb-4"
             style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 300,
                      letterSpacing: '0.12em' }}
           >
             Powered by Cofersa
           </p>
 
-          {/* 4. Divisor */}
+          {/* 5. Divisor */}
           <div
-            className="mb-6"
+            className="mb-4"
             style={{ height: '0.5px', backgroundColor: '#e5e7eb' }}
           />
 
