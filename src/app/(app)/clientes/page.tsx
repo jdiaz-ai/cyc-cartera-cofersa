@@ -114,8 +114,8 @@ export default async function ClientesPage({ searchParams }: PageProps) {
   const latestSyncId =
     ((syncRefData ?? [])[0] as { sync_id: string } | undefined)?.sync_id ?? ''
 
-  // ── Cartera completa (FIX CRÍTICO: limit 2000, antes se cortaba a 1000)
-  let carteraQuery = supabase.from('cartera').select('*').limit(2000)
+  // ── Cartera completa — limit 5000 cubre holgadamente los ~1,359 clientes activos
+  let carteraQuery = supabase.from('cartera').select('*').limit(5000)
   if (latestSyncId)  carteraQuery = carteraQuery.eq('sync_id', latestSyncId)
   if (codigosFiltro) carteraQuery = carteraQuery.in('cliente_cod', codigosFiltro)
   const { data: carteraRaw } = await carteraQuery

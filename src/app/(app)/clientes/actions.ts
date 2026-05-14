@@ -45,7 +45,7 @@ export async function fetchTodosLosClientes(
     ((syncRefData ?? [])[0] as { sync_id: string } | undefined)?.sync_id ?? ''
 
   // ── Cartera completa ──────────────────────────────────────────────
-  let carteraQuery = supabase.from('cartera').select('*').limit(2000)
+  let carteraQuery = supabase.from('cartera').select('*').limit(5000)
   if (latestSyncId)  carteraQuery = carteraQuery.eq('sync_id', latestSyncId)
   if (codigosFiltro) carteraQuery = carteraQuery.in('cliente_cod', codigosFiltro)
   const { data: carteraRaw } = await carteraQuery

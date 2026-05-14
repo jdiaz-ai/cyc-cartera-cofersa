@@ -32,10 +32,18 @@ const TRAMO_BADGE: Record<string, { bg: string; text: string }> = {
   'Al día':  { bg: '#f1f5f9', text: '#64748b' },
 }
 
-function calcRiesgo(diasMora: number): { label: string; color: string } {
-  if (diasMora > 120) return { label: 'Riesgo alto',  color: '#dc2626' }
-  if (diasMora >= 31) return { label: 'Riesgo medio', color: '#f97316' }
-  return                     { label: 'Al día',        color: '#22c55e' }
+/**
+ * FIX: dias_mora no es populado por el GAS en Supabase (siempre llega en 0).
+ * La función ahora deriva el riesgo del tramo de mora (mismo campo que el badge
+ * "Rango Mora"), garantizando que ambas columnas nunca se contradigan.
+ */
+function calcRiesgoDesdeTramo(tramo: string): { label: string; color: string } {
+  if (tramo === '+120d')   return { label: 'Mora crítica',  color: '#dc2626' }
+  if (tramo === '91-120d') return { label: 'Mora alta',     color: '#f97316' }
+  if (tramo === '61-90d')  return { label: 'Mora alta',     color: '#f97316' }
+  if (tramo === '31-60d')  return { label: 'Mora media',    color: '#f59e0b' }
+  if (tramo === '1-30d')   return { label: 'Mora reciente', color: '#22c55e' }
+  return                          { label: 'Al día',         color: '#94a3b8' }
 }
 
 // ── Paginación ────────────────────────────────────────────────────────
@@ -151,7 +159,8 @@ export default function TablaClientes({
     setExportando(true)
     try {
       const allRows = await fetchTodosLosClientes(filtros)
-      const XLSX    = (await import('xlsx')).default
+      // FIX: xlsx v0.18 no garantiza `default` en ESM — usar named exports directamente
+      const xlsxMod = await import('xlsx')
       const fecha   = new Date().toISOString().split('T')[0]
 
       const dataRows = allRows.map(r => ({
@@ -168,17 +177,18 @@ export default function TablaClientes({
         'Días sin Gestión':  r.dias_sin_gestion >= 999 ? 'Sin gestión' : String(r.dias_sin_gestion),
       }))
 
-      const ws = XLSX.utils.json_to_sheet(dataRows)
+      const ws = xlsxMod.utils.json_to_sheet(dataRows)
       ws['!cols'] = [
         { wch: 45 }, { wch: 14 }, { wch: 12 }, { wch: 25 },
         { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 10 },
         { wch: 18 }, { wch: 18 }, { wch: 15 },
       ]
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Clientes')
-      XLSX.writeFile(wb, `Clientes_CYC_${fecha}.xlsx`)
+      const wb = xlsxMod.utils.book_new()
+      xlsxMod.utils.book_append_sheet(wb, ws, 'Clientes')
+      xlsxMod.writeFile(wb, `Clientes_CYC_${fecha}.xlsx`)
       showToast(`${allRows.length} clientes exportados ✓`)
-    } catch {
+    } catch (err) {
+      console.error('[Export Excel]', err)
       showToast('Error al exportar — intentar de nuevo')
     } finally {
       setExportando(false)
@@ -458,7 +468,7 @@ export default function TablaClientes({
               {rows.map((r, i) => {
                 const tramo      = tramoPeor(r)
                 const tramoBadge = TRAMO_BADGE[tramo] ?? { bg: '#f1f5f9', text: '#64748b' }
-                const riesgo     = calcRiesgo(r.dias_mora)
+                const riesgo     = calcRiesgoDesdeTramo(tramo)  // misma fuente que RANGO MORA
 
                 const diasStr =
                   r.dias_sin_gestion >= 999 ? 'Sin gestión' :
