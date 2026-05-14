@@ -1834,11 +1834,11 @@ function TabGestiones({
   const [editando,        setEditando]        = useState<Gestion | null>(null)
   const [loadingDel,      setLoadingDel]      = useState<string | null>(null)
 
-  // Filtro de permisos: analista solo ve sus gestiones
+  // Todos ven la bitácora completa del cliente.
+  // Editar/eliminar se controla por fila (puedeEditar / puedeEliminar).
   const visiblesBase = useMemo(() =>
-    esCoordinador ? gestiones.filter(g => g.activo !== false)
-                  : gestiones.filter(g => g.activo !== false && g.analista_email === userEmail),
-    [gestiones, esCoordinador, userEmail]
+    gestiones.filter(g => g.activo !== false),
+    [gestiones]
   )
 
   // Filtro de período
@@ -1897,7 +1897,7 @@ function TabGestiones({
         <div className="flex flex-wrap gap-6">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-              {esCoordinador ? 'Total gestiones' : 'Mis gestiones'}
+              Total gestiones
             </p>
             <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
           </div>
