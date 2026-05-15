@@ -33,7 +33,7 @@ export default function LoginPage() {
           access_type: 'offline',
           // 'consent' fuerza la pantalla de permisos aunque el usuario
           // ya haya autorizado antes, garantizando el refresh_token
-          prompt: 'consent',
+          prompt: 'select_account',
         },
       },
     })
