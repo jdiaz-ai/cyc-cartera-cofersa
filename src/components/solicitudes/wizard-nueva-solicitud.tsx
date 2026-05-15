@@ -12,6 +12,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   UserCheck, Building2, Truck, MoreHorizontal,
   Upload, Mail, Plus, ChevronRight, X,
@@ -787,6 +788,11 @@ export default function WizardNuevaSolicitud({
     if (!justif.trim()) { setError('La justificación o descripción es obligatoria'); return }
     setLoading(true); setError('')
     try {
+      // Obtener provider_token para Gmail API — viene de la sesión OAuth de Google
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const providerToken = session?.provider_token ?? null
+
       const res = await fetch('/api/solicitudes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -797,10 +803,12 @@ export default function WizardNuevaSolicitud({
           datos,
           monto_actual:     limiteActual > 0 ? limiteActual : undefined,
           monto_solicitado: datos['limite_solicitado'] ? parseFloat(datos['limite_solicitado']) : undefined,
+          providerToken,
         }),
       })
       if (res.ok) {
         const d = await res.json()
+        if (d.email_error) setError(`Solicitud guardada, pero el correo no se envió: ${d.email_error}`)
         setSuccessInfo({ emailSent: d.email_sent ?? false, emailTo: d.email_to ?? null })
       } else {
         const d = await res.json(); setError(d.error ?? 'Error al enviar la solicitud')

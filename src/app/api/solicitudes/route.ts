@@ -21,13 +21,15 @@ export async function POST(req: NextRequest) {
     motivo_nota?: string
     documento_ref?: string
     fecha_limite?: string
+    providerToken?: string | null
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
   const { tipo, destinatario, cliente_cod, cliente_nombre, justificacion,
     para_email, cc_emails, datos,
-    monto_actual, monto_solicitado, monto, motivo_nota, documento_ref, fecha_limite } = body
+    monto_actual, monto_solicitado, monto, motivo_nota, documento_ref, fecha_limite,
+    providerToken } = body
 
   if (!tipo || !cliente_cod || !justificacion?.trim()) {
     return NextResponse.json({ error: 'tipo, cliente_cod y justificacion son requeridos' }, { status: 400 })
@@ -99,40 +101,46 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // ── Email via Resend (opcional — solo si RESEND_API_KEY está configurado) ──
+  // ── Email via Gmail API usando el provider_token del usuario ──────────────
   let emailSent = false
   let emailTo:   string | null = null
+  let emailError: string | null = null
 
-  const resendKey  = process.env.RESEND_API_KEY
-  const emailFrom  = process.env.EMAIL_FROM ?? 'CYC Cofersa <cyc@cofersa.cr>'
+  // provider_token es el access token de Google OAuth del usuario autenticado.
+  // El cliente lo obtiene de supabase.auth.getSession() y lo pasa en el body.
+  if (!providerToken) {
+    return NextResponse.json(
+      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.' },
+      { status: 401 }
+    )
+  }
+
   const coordEmail = process.env.EMAIL_COORDINADOR ?? 'jdiaz@cofersa.cr'
+  const toEmail    = para_email?.trim() || coordEmail
+  const ccList     = cc_emails?.length ? cc_emails : []
 
-  // Destinatario del correo: para_email (si el analista lo especificó) o el coordinador por defecto
-  const toEmail = para_email?.trim() || coordEmail
+  const tipoLabel = tipo.replace(/_/g, ' ')
+    .replace(/\b\w/g, (c: string) => c.toUpperCase())
 
-  if (resendKey) {
-    const tipoLabel = tipo.replace(/_/g, ' ')
-      .replace(/\b\w/g, (c: string) => c.toUpperCase())
-    const ccList = cc_emails?.length ? cc_emails : []
+  // Obtener nombre del analista desde usuarios para el campo From
+  const { data: solicitanteRow } = await supabase
+    .from('usuarios').select('nombre').eq('id', solicitanteId).single()
+  const nombreSolicitante = (solicitanteRow as { nombre: string } | null)?.nombre ?? user.email!
 
-    const htmlBody = `
-<!DOCTYPE html>
+  // ── Cuerpo HTML del correo ───────────────────────────────────────────────
+  const htmlBody = `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Nunito',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-
-        <!-- Header -->
         <tr>
           <td style="background:#003B5C;padding:20px 32px;text-align:left;">
-            <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA CYC · COFERSA</p>
+            <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
             <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:800;">Nueva solicitud interna</h1>
           </td>
         </tr>
-
-        <!-- Tipo badge -->
         <tr>
           <td style="padding:24px 32px 0;">
             <span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:700;border-radius:999px;padding:5px 14px;text-transform:uppercase;letter-spacing:0.05em;">
@@ -140,8 +148,6 @@ export async function POST(req: NextRequest) {
             </span>
           </td>
         </tr>
-
-        <!-- Cliente -->
         <tr>
           <td style="padding:16px 32px 0;">
             <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Cliente</p>
@@ -149,8 +155,6 @@ export async function POST(req: NextRequest) {
             <p style="margin:2px 0 0;font-size:12px;color:#94a3b8;font-family:monospace;">${cliente_cod}</p>
           </td>
         </tr>
-
-        <!-- Justificación -->
         <tr>
           <td style="padding:16px 32px 0;">
             <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Justificación</p>
@@ -159,16 +163,12 @@ export async function POST(req: NextRequest) {
             </div>
           </td>
         </tr>
-
-        <!-- Solicitante -->
         <tr>
           <td style="padding:16px 32px 0;">
             <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Solicitante</p>
-            <p style="margin:0;font-size:13px;color:#334155;">${user.email}</p>
+            <p style="margin:0;font-size:13px;color:#334155;">${nombreSolicitante} &lt;${user.email}&gt;</p>
           </td>
         </tr>
-
-        <!-- CTA -->
         <tr>
           <td style="padding:24px 32px 32px;">
             <a href="${process.env.NEXT_PUBLIC_APP_URL ?? 'https://cyc-cartera-cofersa.vercel.app'}/solicitudes"
@@ -177,45 +177,75 @@ export async function POST(req: NextRequest) {
             </a>
           </td>
         </tr>
-
-        <!-- Footer -->
         <tr>
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
-            <p style="margin:0;font-size:11px;color:#94a3b8;">CYC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
+            <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
 </body>
 </html>`
 
-    try {
-      const emailRes = await fetch('https://api.resend.com/emails', {
+  // ── Construir email en formato RFC 2822 y codificar en base64url ─────────
+  const ccHeader = ccList.length > 0 ? `Cc: ${ccList.join(', ')}\r\n` : ''
+  const rawEmail = [
+    `From: ${nombreSolicitante} <${user.email}>`,
+    `To: ${toEmail}`,
+    ccHeader.trimEnd(),
+    `Subject: [SIC Cofersa] ${tipoLabel} — ${cliente_nombre ?? cliente_cod}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    htmlBody,
+  ].filter(line => line !== '').join('\r\n')
+
+  const encodedEmail = Buffer.from(rawEmail)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+
+  // ── Llamada a Gmail API ──────────────────────────────────────────────────
+  try {
+    const gmailRes = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+      {
         method:  'POST',
         headers: {
-          'Authorization': `Bearer ${resendKey}`,
+          'Authorization': `Bearer ${providerToken}`,
           'Content-Type':  'application/json',
         },
-        body: JSON.stringify({
-          from:    emailFrom,
-          to:      [toEmail],
-          ...(ccList.length > 0 && { cc: ccList }),
-          subject: `[${tipoLabel}] — ${cliente_nombre ?? cliente_cod} · CYC Cofersa`,
-          html:    htmlBody,
-        }),
-      })
-      if (emailRes.ok) { emailSent = true; emailTo = toEmail }
-    } catch {
-      // El email es best-effort — no fallar la solicitud si el correo falla
+        body: JSON.stringify({ raw: encodedEmail }),
+      }
+    )
+
+    if (gmailRes.ok) {
+      emailSent = true
+      emailTo   = toEmail
+    } else {
+      const gmailErr = await gmailRes.json().catch(() => ({}))
+      const status   = gmailRes.status
+
+      if (status === 401) {
+        emailError = 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.'
+      } else if (status === 403) {
+        emailError = 'Sin permiso para enviar correos. Cerrá sesión y volvé a ingresar para otorgar acceso a Gmail.'
+      } else {
+        emailError = (gmailErr as { error?: { message?: string } })?.error?.message ?? `Error Gmail API (${status})`
+      }
     }
+  } catch (err) {
+    emailError = 'Error de red al contactar Gmail API.'
+    console.error('[solicitudes] Gmail API error:', err)
   }
 
   return NextResponse.json({
-    ok:         true,
-    id:         (nuevaSolicitud as { id: string })?.id,
-    email_sent: emailSent,
-    email_to:   emailTo,
+    ok:          true,
+    id:          (nuevaSolicitud as { id: string })?.id,
+    email_sent:  emailSent,
+    email_to:    emailTo,
+    email_error: emailError,
   })
 }

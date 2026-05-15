@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   ArrowLeft, X, UserCheck, Building2, Truck, MoreHorizontal,
   Upload, Mail, Plus, ChevronRight,
@@ -825,6 +826,11 @@ export default function ModalNuevaSolicitud({
     setError('')
 
     try {
+      // Obtener provider_token para Gmail API — viene de la sesión OAuth de Google
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const providerToken = session?.provider_token ?? null
+
       const res = await fetch('/api/solicitudes', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -836,16 +842,18 @@ export default function ModalNuevaSolicitud({
           justificacion: justif,
           para_email:   para.trim() || null,
           cc_emails:    cc.length > 0 ? cc : null,
-          datos:        datos,           // JSON completo de todos los campos
-          // Compatibilidad con campos legacy
+          datos:        datos,
           monto_actual:     limiteActual > 0 ? limiteActual : undefined,
           monto_solicitado: datos['limite_solicitado']
             ? parseFloat(datos['limite_solicitado']) : undefined,
+          providerToken,
         }),
       })
 
       if (res.ok) {
-        onSuccess()
+        const d = await res.json()
+        if (d.email_error) setError(`Solicitud guardada, pero el correo no se envió: ${d.email_error}`)
+        else onSuccess()
       } else {
         const d = await res.json()
         setError(d.error ?? 'Error al enviar la solicitud')
