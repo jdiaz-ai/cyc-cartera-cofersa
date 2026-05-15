@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import FormNuevaGestion    from './form-nueva-gestion'
 import TimelineGestionesV2  from './timeline-gestiones-v2'
+import TabReportarPago      from './tab-reportar-pago'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
 const TABS = [
@@ -557,16 +558,13 @@ export default function FichaCliente({
 
         {/* ── TAB: REPORTAR PAGO ───────────────────────────────── */}
         {tab === 'Reportar Pago' && (
-          <div className="max-w-2xl">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <EmptyState
-                icon={<FileText size={32} />}
-                texto="Reportar pago recibido"
-                sub="Aquí podrás registrar pagos con comprobante, aplicar contra facturas específicas y notificar al coordinador automáticamente. Próximamente."
-                comingSoon
-              />
-            </div>
-          </div>
+          <TabReportarPago
+            clienteCod    = {cartera.cliente_cod}
+            contribuyente = {cartera.contribuyente}
+            facturas      = {facturas}
+            onSuccess     = {() => { router.refresh() }}
+            onToast       = {showToast}
+          />
         )}
 
       </div>
