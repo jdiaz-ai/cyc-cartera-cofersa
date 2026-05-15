@@ -190,17 +190,27 @@ export async function POST(req: NextRequest) {
 </html>`
 
   // ── Construir email en formato RFC 2822 y codificar en base64url ─────────
-  const ccHeader = ccList.length > 0 ? `Cc: ${ccList.join(', ')}\r\n` : ''
+  // Los headers From y Subject deben usar encoded-word (RFC 2047) para
+  // caracteres no-ASCII (tildes, ñ, etc.) — de lo contrario los MTA los
+  // corrompen a Latin-1 mostrando "DÃƒÂaz" en vez de "Díaz".
+  const encodeHeader = (str: string) =>
+    `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
+
+  const subject = `[SIC Cofersa] ${tipoLabel} — ${cliente_nombre ?? cliente_cod}`
+
+  // Nota: se usa null como centinela para la línea Cc opcional.
+  // El filter excluye null pero CONSERVA '' (línea en blanco separadora
+  // de headers y body — obligatoria en RFC 2822, sin ella el body no se parsea).
   const rawEmail = [
-    `From: ${nombreSolicitante} <${user.email}>`,
+    `From: ${encodeHeader(nombreSolicitante)} <${user.email}>`,
     `To: ${toEmail}`,
-    ccHeader.trimEnd(),
-    `Subject: [SIC Cofersa] ${tipoLabel} — ${cliente_nombre ?? cliente_cod}`,
+    ccList.length > 0 ? `Cc: ${ccList.join(', ')}` : null,
+    `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
-    '',
+    '',        // ← línea en blanco obligatoria entre headers y body
     htmlBody,
-  ].filter(line => line !== '').join('\r\n')
+  ].filter((line): line is string => line !== null).join('\r\n')
 
   const encodedEmail = Buffer.from(rawEmail)
     .toString('base64')
