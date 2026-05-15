@@ -2,12 +2,14 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
-import { Bell, RefreshCw, CheckCheck, ClipboardList, Handshake, AlertTriangle, RefreshCwIcon, Info } from 'lucide-react'
+import {
+  Bell, RefreshCw, CheckCheck, ClipboardList, Handshake,
+  AlertTriangle, RefreshCwIcon, Info, ChevronDown, User, LogOut,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Notificacion, TipoNotif } from '@/types/database'
 
 // ── Etiquetas de página ────────────────────────────────────────────
-
 const PAGE_LABELS: Record<string, { title: string; sub: string }> = {
   '/dashboard':                        { title: 'Dashboard',              sub: 'Resumen ejecutivo de cartera' },
   '/mi-cartera':                       { title: 'Mi Cartera',             sub: 'Tu cartera asignada' },
@@ -27,7 +29,6 @@ const PAGE_LABELS: Record<string, { title: string; sub: string }> = {
 }
 
 // ── Config visual por tipo de notificación ────────────────────────
-
 const TIPO_CFG: Record<TipoNotif, { icon: React.ReactNode; color: string; bg: string }> = {
   SOLICITUD: { icon: <ClipboardList  size={13} />, color: '#009ee3', bg: '#e0f2fe' },
   PROMESA:   { icon: <Handshake      size={13} />, color: '#f59e0b', bg: '#fef9c3' },
@@ -45,45 +46,69 @@ function timeAgo(dateStr: string): string {
   return `hace ${Math.floor(hrs / 24)}d`
 }
 
-// ── Props ─────────────────────────────────────────────────────────
+// ── Trunca nombre a "Nombre Apellido" (máx 2 palabras) ────────────
+function nombreCorto(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/)
+  return partes.slice(0, 2).join(' ')
+}
 
+// ── Props ─────────────────────────────────────────────────────────
 interface TopbarProps {
   notiCount:      number
   fechaCorte?:    string
   notificaciones: Notificacion[]
   usuarioId:      string
+  // Chip de usuario
+  nombre:         string
+  iniciales:      string
+  color:          string
+  avatarUrl?:     string | null
 }
 
 // ── Componente ────────────────────────────────────────────────────
-
-export default function Topbar({ notiCount, fechaCorte, notificaciones: init, usuarioId }: TopbarProps) {
+export default function Topbar({
+  // notiCount ya no se usa: el conteo se recalcula desde `notis` localmente
+  fechaCorte,
+  notificaciones: init,
+  usuarioId,
+  nombre,
+  iniciales,
+  color,
+  avatarUrl,
+}: TopbarProps) {
   const pathname = usePathname()
   const router   = useRouter()
 
   // Título de página — busca la ruta más específica primero
   const match = Object.entries(PAGE_LABELS)
-    .sort((a, b) => b[0].length - a[0].length)   // más específico primero
+    .sort((a, b) => b[0].length - a[0].length)
     .find(([key]) => pathname.startsWith(key))
   const page = match?.[1] ?? { title: 'SIC', sub: 'Sistema Inteligente de Cobranza' }
 
-  // ── Estado del dropdown de notificaciones ─────────────────────
-  const [open, setOpen]     = useState(false)
-  const [notis, setNotis]   = useState<Notificacion[]>(init)
-  const panelRef            = useRef<HTMLDivElement>(null)
-  const noLeidas            = notis.filter(n => !n.leida).length
+  // ── Estado: dropdown notificaciones ──────────────────────────
+  const [notiOpen, setNotiOpen] = useState(false)
+  const [notis, setNotis]       = useState<Notificacion[]>(init)
+  const notiRef                 = useRef<HTMLDivElement>(null)
+  const noLeidas                = notis.filter(n => !n.leida).length
 
-  // Cerrar al hacer clic fuera
+  // ── Estado: dropdown usuario ──────────────────────────────────
+  const [userOpen, setUserOpen] = useState(false)
+  const userRef                 = useRef<HTMLDivElement>(null)
+
+  // ── Estado: error de avatar ───────────────────────────────────
+  const [avatarErr, setAvatarErr] = useState(false)
+
+  // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+    function handleClick(e: MouseEvent) {
+      if (notiRef.current && !notiRef.current.contains(e.target as Node)) setNotiOpen(false)
+      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false)
     }
-    if (open) document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open])
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
-  // ── Marcar una como leída ─────────────────────────────────────
+  // ── Marcar una notificación como leída ────────────────────────
   async function marcarLeida(id: string) {
     setNotis(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
     const supabase = createClient()
@@ -106,15 +131,25 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
   // ── Click en notificación ─────────────────────────────────────
   async function handleNotiClick(n: Notificacion) {
     if (!n.leida) await marcarLeida(n.id)
-    if (n.link) { setOpen(false); router.push(n.link) }
+    if (n.link) { setNotiOpen(false); router.push(n.link) }
   }
+
+  // ── Cerrar sesión ─────────────────────────────────────────────
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  // Determinar si mostrar foto o iniciales
+  const showAvatar = Boolean(avatarUrl) && !avatarErr
 
   return (
     <header
       className="flex items-center justify-between px-6 flex-shrink-0"
       style={{ height: '52px', background: 'white', borderBottom: '1px solid #E2E8F0' }}
     >
-      {/* Título de página */}
+      {/* ── Título de página ─────────────────────────────────── */}
       <div>
         <h1 className="font-bold text-gray-900 leading-tight" style={{ fontSize: '15px' }}>
           {page.title}
@@ -124,8 +159,9 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
         </p>
       </div>
 
-      {/* Derecha: chip de sync + campana */}
+      {/* ── Derecha ──────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
+
         {/* Chip de sincronización */}
         <div className="hidden sm:flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
@@ -137,12 +173,12 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
 
         <div className="hidden sm:block w-px h-5 bg-gray-100" />
 
-        {/* ── Campana con dropdown ───────────────────────────── */}
-        <div className="relative" ref={panelRef}>
+        {/* ── Campana de notificaciones ────────────────────── */}
+        <div className="relative" ref={notiRef}>
           <button
-            onClick={() => setOpen(v => !v)}
+            onClick={() => { setNotiOpen(v => !v); setUserOpen(false) }}
             className="relative flex items-center justify-center rounded-lg hover:bg-gray-50 transition-colors"
-            style={{ width: '34px', height: '34px', color: open ? '#009ee3' : '#64748b' }}
+            style={{ width: '34px', height: '34px', color: notiOpen ? '#009ee3' : '#64748b' }}
             title={noLeidas > 0 ? `${noLeidas} notificaciones sin leer` : 'Notificaciones'}
           >
             <Bell size={18} />
@@ -151,10 +187,10 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
                 className="absolute top-0 right-0 flex items-center justify-center rounded-full text-white font-black"
                 style={{
                   background: '#dc2626',
-                  fontSize: '9px',
-                  minWidth: '15px',
-                  height: '15px',
-                  padding: '0 3px',
+                  fontSize:   '9px',
+                  minWidth:   '15px',
+                  height:     '15px',
+                  padding:    '0 3px',
                   lineHeight: 1,
                 }}
               >
@@ -163,19 +199,18 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
             )}
           </button>
 
-          {/* Dropdown panel */}
-          {open && (
+          {/* Dropdown notificaciones */}
+          {notiOpen && (
             <div
               className="absolute right-0 mt-2 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
               style={{
-                width: '340px',
+                width:     '340px',
                 maxHeight: '480px',
-                border: '1px solid #e2e8f0',
-                zIndex: 100,
-                top: '100%',
+                border:    '1px solid #e2e8f0',
+                zIndex:    100,
+                top:       '100%',
               }}
             >
-              {/* Header del dropdown */}
               <div
                 className="flex items-center justify-between px-4 py-3 flex-shrink-0"
                 style={{ borderBottom: '1px solid #f1f5f9' }}
@@ -203,7 +238,6 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
                 )}
               </div>
 
-              {/* Lista */}
               <div className="overflow-y-auto flex-1">
                 {notis.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
@@ -219,9 +253,7 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
                 ) : (
                   notis.map((n, i) => {
                     const cfg = TIPO_CFG[n.tipo] ?? {
-                      icon: <Info size={13} />,
-                      color: '#64748b',
-                      bg: '#f1f5f9',
+                      icon: <Info size={13} />, color: '#64748b', bg: '#f1f5f9',
                     }
                     return (
                       <button
@@ -229,31 +261,20 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
                         onClick={() => handleNotiClick(n)}
                         className="w-full flex items-start gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
                         style={{
-                          borderBottom: i < notis.length - 1 ? '1px solid #f8fafc' : 'none',
+                          borderBottom:    i < notis.length - 1 ? '1px solid #f8fafc' : 'none',
                           backgroundColor: n.leida ? 'transparent' : '#f8fbff',
                         }}
                       >
-                        {/* Ícono tipo */}
                         <div
                           className="flex items-center justify-center rounded-lg flex-shrink-0 mt-0.5"
-                          style={{
-                            width: '28px',
-                            height: '28px',
-                            backgroundColor: cfg.bg,
-                            color: cfg.color,
-                          }}
+                          style={{ width: '28px', height: '28px', backgroundColor: cfg.bg, color: cfg.color }}
                         >
                           {cfg.icon}
                         </div>
-
-                        {/* Contenido */}
                         <div className="flex-1 min-w-0">
                           <p
                             className="text-[12px] leading-snug"
-                            style={{
-                              fontWeight: n.leida ? 500 : 700,
-                              color: n.leida ? '#64748b' : '#1e293b',
-                            }}
+                            style={{ fontWeight: n.leida ? 500 : 700, color: n.leida ? '#64748b' : '#1e293b' }}
                           >
                             {n.titulo}
                           </p>
@@ -266,13 +287,8 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
                             {timeAgo(n.created_at)}
                           </p>
                         </div>
-
-                        {/* Punto no leído */}
                         {!n.leida && (
-                          <div
-                            className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                            style={{ backgroundColor: '#009ee3' }}
-                          />
+                          <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: '#009ee3' }} />
                         )}
                       </button>
                     )
@@ -282,6 +298,92 @@ export default function Topbar({ notiCount, fechaCorte, notificaciones: init, us
             </div>
           )}
         </div>
+
+        {/* Separador */}
+        <div className="w-px h-5 bg-gray-100" />
+
+        {/* ── Chip de usuario ──────────────────────────────── */}
+        <div className="relative" ref={userRef}>
+          <button
+            onClick={() => { setUserOpen(v => !v); setNotiOpen(false) }}
+            className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-gray-50"
+            style={{ border: '1px solid #E2E8F0' }}
+          >
+            {/* Avatar */}
+            {showAvatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl!}
+                alt={nombre}
+                onError={() => setAvatarErr(true)}
+                style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+              />
+            ) : (
+              <div
+                className="flex items-center justify-center rounded-full text-white font-bold flex-shrink-0"
+                style={{ width: '28px', height: '28px', backgroundColor: color, fontSize: '11px' }}
+              >
+                {iniciales}
+              </div>
+            )}
+
+            {/* Nombre */}
+            <span
+              className="hidden sm:block font-semibold text-gray-700 leading-none"
+              style={{ fontSize: '12px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {nombreCorto(nombre)}
+            </span>
+
+            {/* Chevron */}
+            <ChevronDown
+              size={13}
+              className="text-gray-400 flex-shrink-0 transition-transform"
+              style={{ transform: userOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            />
+          </button>
+
+          {/* Dropdown usuario */}
+          {userOpen && (
+            <div
+              className="absolute right-0 mt-2 bg-white rounded-xl shadow-xl overflow-hidden"
+              style={{
+                width:   '180px',
+                border:  '1px solid #e2e8f0',
+                zIndex:  100,
+                top:     '100%',
+              }}
+            >
+              {/* Cabecera del dropdown */}
+              <div className="px-4 py-3" style={{ borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                <p className="text-[12px] font-bold text-gray-800 truncate">{nombre}</p>
+              </div>
+
+              {/* Mi perfil (sin funcionalidad por ahora) */}
+              <button
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
+                style={{ color: '#374151', fontSize: '13px' }}
+                onClick={() => setUserOpen(false)}
+              >
+                <User size={14} className="text-gray-400 flex-shrink-0" />
+                <span className="font-medium">Mi perfil</span>
+              </button>
+
+              <div style={{ height: '1px', background: '#f1f5f9' }} />
+
+              {/* Cerrar sesión */}
+              <button
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors hover:bg-red-50"
+                style={{ color: '#dc2626', fontSize: '13px' }}
+                onClick={handleLogout}
+              >
+                <LogOut size={14} className="flex-shrink-0" />
+                <span className="font-medium">Cerrar sesión</span>
+              </button>
+            </div>
+          )}
+        </div>
+
       </div>
     </header>
   )

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Usuario, Notificacion } from '@/types/database'
+import TipoCambio from '@/components/tipo-cambio'
 
 // ── Tipos ─────────────────────────────────────────────────────────
 
@@ -359,6 +360,9 @@ export default function Sidebar({
           )
         })}
       </nav>
+
+      {/* ── Widget Tipo de Cambio BCCR ────────────────────────── */}
+      <TipoCambio />
 
       {/* ── Footer: usuario + logout ──────────────────────────── */}
       {/* Notificaciones removidas del sidebar — ahora están en el header */}

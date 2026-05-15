@@ -10,6 +10,7 @@ import DashboardResumen from '@/components/analista/DashboardResumen'
 import CalendarioNotas from '@/components/analista/CalendarioNotas'
 import { fetchCalendarEvents } from '@/lib/services/googleCalendarService'
 import type { CalendarEvent } from '@/lib/services/googleCalendarService'
+import SaludoDashboard from '@/components/dashboard/saludo-dashboard'
 
 // ── Tipos compartidos ─────────────────────────────────────────────────
 interface CarteraRow {
@@ -50,25 +51,33 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const userEmail = user?.email ?? ''
 
-  // Rol del usuario actual
+  // Rol y nombre del usuario actual
   let rolUsuario: 'COORDINADOR' | 'ANALISTA' = 'ANALISTA'
+  let nombreUsuario = user?.user_metadata?.full_name ?? ''
   try {
-    const { data } = await supabase.from('usuarios').select('rol').eq('email', userEmail).single()
-    rolUsuario = ((data as { rol: string } | null)?.rol ?? 'ANALISTA') as 'COORDINADOR' | 'ANALISTA'
+    const { data } = await supabase
+      .from('usuarios')
+      .select('rol, nombre')
+      .eq('email', userEmail)
+      .single()
+    const row = data as { rol: string; nombre: string } | null
+    rolUsuario    = (row?.rol    ?? 'ANALISTA') as 'COORDINADOR' | 'ANALISTA'
+    nombreUsuario = row?.nombre ?? nombreUsuario
   } catch {}
 
   if (rolUsuario === 'COORDINADOR') {
-    return <DashboardCoordinador supabase={supabase} hoyStr={hoyStr} />
+    return <DashboardCoordinador supabase={supabase} hoyStr={hoyStr} nombre={nombreUsuario} />
   }
-  return <DashboardAnalista supabase={supabase} hoyStr={hoyStr} userEmail={userEmail} />
+  return <DashboardAnalista supabase={supabase} hoyStr={hoyStr} userEmail={userEmail} nombre={nombreUsuario} />
 }
 
 // ══════════════════════════════════════════════════════════════════════
 // DASHBOARD COORDINADOR
 // ══════════════════════════════════════════════════════════════════════
-async function DashboardCoordinador({ supabase, hoyStr }: {
+async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
   supabase: Awaited<ReturnType<typeof createClient>>
   hoyStr: string
+  nombre: string
 }) {
   // ── Cartera — agregación server-side via RPC ──────────────────────────
   // IMPORTANTE: NO usar .range(0, N) + suma en JS porque Supabase PostgREST
@@ -188,6 +197,9 @@ async function DashboardCoordinador({ supabase, hoyStr }: {
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
       <div className="px-6 pt-5 pb-6 space-y-5">
+
+        {/* Saludo dinámico */}
+        <SaludoDashboard nombre={nombre} />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
@@ -343,10 +355,11 @@ async function DashboardCoordinador({ supabase, hoyStr }: {
 // ══════════════════════════════════════════════════════════════════════
 // DASHBOARD ANALISTA
 // ══════════════════════════════════════════════════════════════════════
-async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
+async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   supabase: Awaited<ReturnType<typeof createClient>>
   hoyStr: string
   userEmail: string
+  nombre: string
 }) {
   // ── Clientes asignados al analista ────────────────────────────────────
   let clientesOpts: ClienteOpt[] = []
@@ -438,6 +451,12 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail }: {
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
       <div className="px-4 sm:px-6 pt-5 pb-6">
+
+        {/* Saludo dinámico */}
+        <div className="mb-5">
+          <SaludoDashboard nombre={nombre} />
+        </div>
+
         {/*
           Layout 2 columnas:
           - Desktop (>1024px): izquierda 60% / derecha 40%

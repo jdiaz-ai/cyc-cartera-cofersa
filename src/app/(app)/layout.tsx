@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/sidebar'
 import type { BadgeCounts } from '@/components/sidebar'
 import Topbar from '@/components/topbar'
+import ClientWrapper from '@/components/layout/client-wrapper'
 import type { Usuario, Notificacion } from '@/types/database'
 
 export default async function AppLayout({
@@ -96,6 +97,9 @@ export default async function AppLayout({
     } catch { /* badges no críticos */ }
   }
 
+  // Avatar URL desde Google OAuth (metadata del user)
+  const avatarUrl: string | null = user.user_metadata?.avatar_url ?? null
+
   // Fecha del último corte Softland (para el topbar)
   let fechaCorte = ''
   try {
@@ -127,8 +131,14 @@ export default async function AppLayout({
           fechaCorte={fechaCorte}
           notificaciones={notificaciones}
           usuarioId={usuarioId}
+          nombre={perfil.nombre}
+          iniciales={perfil.iniciales}
+          color={perfil.color}
+          avatarUrl={avatarUrl}
         />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto">
+          <ClientWrapper>{children}</ClientWrapper>
+        </main>
         <footer
           className="text-center shrink-0"
           style={{ fontSize: '11px', fontWeight: 400, color: '#94a3b8', padding: '5px 0' }}
