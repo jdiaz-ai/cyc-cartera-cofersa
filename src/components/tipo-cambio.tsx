@@ -71,16 +71,16 @@ export default function TipoCambio() {
     <div
       style={{
         margin:       '0 10px 12px',
-        background:   '#162032',
+        background:   'transparent',
         borderRadius: '9px',
-        border:       '0.5px solid rgba(255,255,255,0.10)',
+        border:       '0.5px solid rgba(255,255,255,0.12)',
         overflow:     'hidden',
       }}
     >
       {/* ── Header franja ────────────────────────────────────────── */}
       <div
         style={{
-          background:     '#1c2c42',
+          background:     'rgba(255,255,255,0.05)',
           padding:        '9px 11px',
           display:        'flex',
           alignItems:     'center',
