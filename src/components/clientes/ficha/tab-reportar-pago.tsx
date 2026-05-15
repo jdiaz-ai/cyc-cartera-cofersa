@@ -14,7 +14,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
-  Landmark, Hash, Calendar, CreditCard,
+  Landmark, Hash, Calendar,
   CheckSquare, Square, AlertCircle, CheckCircle2,
   ChevronDown, Loader2, Upload, X,
   Sparkles, AlertTriangle,
@@ -682,8 +682,8 @@ export default function TabReportarPago({
               <button type="button" onClick={toggleTodas}
                 className="text-gray-400 hover:text-[#009ee3] transition">
                 {seleccion.size === facturasConSaldo.length
-                  ? <CheckSquare size={14} className="text-[#009ee3]" />
-                  : <Square size={14} />
+                  ? <CheckSquare size={18} className="text-[#009ee3]" />
+                  : <Square size={18} />
                 }
               </button>
               <span className="text-[11px] font-bold text-gray-700">Facturas vencidas</span>
@@ -708,20 +708,20 @@ export default function TabReportarPago({
               return (
                 <div
                   key={f.id}
-                  className="flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-3 py-2.5 cursor-pointer transition-colors"
                   style={{ backgroundColor: checked ? '#f0f9ff' : undefined }}
                   onClick={() => toggleFactura(f)}
                 >
                   {/* Checkbox */}
                   {checked
-                    ? <CheckSquare size={14} className="flex-shrink-0 text-[#009ee3]" />
-                    : <Square      size={14} className="flex-shrink-0 text-gray-300" />
+                    ? <CheckSquare size={18} className="flex-shrink-0 text-[#009ee3]" />
+                    : <Square      size={18} className="flex-shrink-0 text-gray-300" />
                   }
 
                   {/* Documento + fecha vencimiento */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 leading-none">
-                      <span className="text-[11px] font-bold text-gray-800 truncate">{f.documento}</span>
+                      <span className="text-[13px] font-bold text-gray-800 truncate">{f.documento}</span>
                       <span
                         className="text-[8px] font-black rounded-full px-1 py-0.5 flex-shrink-0"
                         style={{ backgroundColor: clr.bg, color: clr.text }}
@@ -729,7 +729,7 @@ export default function TabReportarPago({
                         {dias}d
                       </span>
                     </div>
-                    <p className="text-[9px] text-gray-400 mt-0.5 leading-none">
+                    <p className="text-[11px] text-gray-500 mt-0.5 leading-none">
                       {fmtFecha(f.fecha_vencimiento)}
                     </p>
                   </div>
@@ -737,7 +737,7 @@ export default function TabReportarPago({
                   {/* Monto o input editable */}
                   <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
                     {!checked ? (
-                      <span className="text-[11px] font-bold text-gray-600">{fmtCRC(f.saldo)}</span>
+                      <span className="text-[13px] font-bold text-gray-600">{fmtCRC(f.saldo)}</span>
                     ) : (
                       <div className="flex flex-col items-end gap-0.5">
                         <input
@@ -747,10 +747,10 @@ export default function TabReportarPago({
                           max={f.saldo ?? undefined}
                           step={1}
                           onChange={e => cambiarMontoAplicado(f.id, e.target.value)}
-                          className="border border-[#009ee3] rounded-lg text-[10px] font-bold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]/40"
-                          style={{ width: '76px', padding: '3px 5px' }}
+                          className="border border-[#009ee3] rounded-lg text-[13px] font-semibold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]/40"
+                          style={{ width: '90px', padding: '5px 8px' }}
                         />
-                        <span className="text-[8px] text-gray-400">máx {fmtCRC(f.saldo)}</span>
+                        <span className="text-[10px] text-gray-500">máx {fmtCRC(f.saldo)}</span>
                       </div>
                     )}
                   </div>
@@ -801,27 +801,30 @@ export default function TabReportarPago({
 
           <div className="flex-1 p-4 space-y-3.5">
 
-            {/* ── TIPO DE PAGO ─────────────────────────────────── */}
+            {/* ── TIPO DE PAGO — segmented control ─────────────── */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                 Tipo de pago<span className="text-red-400 ml-0.5">*</span>
               </label>
-              <div className="relative">
-                <CreditCard size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <select
-                  value={tipoPago}
-                  onChange={e => {
-                    setTipoPago(e.target.value as TipoPago)
-                    // Al cambiar tipo, limpiar archivo previo para evitar confusión
-                    quitarArchivo()
-                  }}
-                  className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
-                  style={{ padding: '8px 32px 8px 32px', backgroundColor: 'white' }}
-                >
-                  <option value="" disabled>Seleccionar tipo…</option>
-                  {TIPOS_PAGO.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+                {TIPOS_PAGO.map(t => {
+                  const active = tipoPago === t
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => { setTipoPago(t); quitarArchivo() }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold transition-all"
+                      style={{
+                        backgroundColor: active ? '#009ee3' : '#f8fafc',
+                        color:           active ? 'white'   : '#64748b',
+                        borderRight:     t === 'Transferencia' ? '1px solid #e2e8f0' : undefined,
+                      }}
+                    >
+                      {t === 'Transferencia' ? '⚡' : '🎫'}{' '}{t}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
