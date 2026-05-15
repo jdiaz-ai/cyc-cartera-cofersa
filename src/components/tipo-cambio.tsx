@@ -39,16 +39,8 @@ export default function TipoCambio() {
     )
   }
 
-  // ── Error o sin credenciales ─────────────────────────────────────────
-  if (data.error || !data.compra || !data.venta) {
-    return (
-      <div style={{ padding: '8px 12px', textAlign: 'center' }}>
-        <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '10px' }}>
-          Tipo de cambio no disponible
-        </p>
-      </div>
-    )
-  }
+  // ── Error o sin credenciales → ocultar completamente ───────────────
+  if (data.error || !data.compra || !data.venta) return null
 
   // ── Convertidor bidireccional ────────────────────────────────────────
   function handleColones(val: string) {

@@ -1,9 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { usePathname }  from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -13,7 +11,6 @@ import {
   BarChart3,
   Settings,
   Package,
-  LogOut,
   FileText,
   PieChart,
   Target,
@@ -253,17 +250,7 @@ export default function Sidebar({
   badgeCounts = {},
 }: SidebarProps) {
   const pathname = usePathname()
-  const router   = useRouter()
   const rol: Rol = (usuario?.rol as Rol) ?? 'ANALISTA'
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  const iniciales = usuario?.iniciales || usuario?.nombre?.slice(0, 2).toUpperCase() || '??'
-  const color     = usuario?.color || '#009ee3'
 
   const seccionesFiltradas = NAV_SECTIONS.filter(s => s.roles.includes(rol))
 
@@ -364,43 +351,6 @@ export default function Sidebar({
       {/* ── Widget Tipo de Cambio BCCR ────────────────────────── */}
       <TipoCambio />
 
-      {/* ── Footer: usuario + logout ──────────────────────────── */}
-      {/* Notificaciones removidas del sidebar — ahora están en el header */}
-      <div
-        className="px-2 pb-3 pt-3"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
-      >
-        {/* Usuario */}
-        <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg mb-1">
-          <div
-            className="flex items-center justify-center rounded-full text-white font-bold flex-shrink-0"
-            style={{ backgroundColor: color, width: '28px', height: '28px', fontSize: '11px' }}
-          >
-            {iniciales}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p
-              className="font-bold truncate leading-tight"
-              style={{ color: 'white', fontSize: '12px' }}
-            >
-              {usuario?.nombre || 'Usuario'}
-            </p>
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '10px' }}>
-              {rol === 'COORDINADOR' ? 'Coordinador' : 'Analista'}
-            </p>
-          </div>
-        </div>
-
-        {/* Cerrar sesión */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-white/10"
-          style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}
-        >
-          <LogOut size={15} className="flex-shrink-0" />
-          <span className="font-semibold">Cerrar sesión</span>
-        </button>
-      </div>
     </aside>
   )
 }

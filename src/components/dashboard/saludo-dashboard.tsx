@@ -52,20 +52,12 @@ export default function SaludoDashboard({ nombre }: Props) {
   if (!saludo) return null
 
   return (
-    <div
-      style={{
-        background:   'linear-gradient(135deg, #003B5C 0%, #005080 55%, #0083c1 100%)',
-        borderRadius: '16px',
-        padding:      '18px 24px',
-        boxShadow:    '0 4px 20px rgba(0,59,92,0.20)',
-        marginBottom: '0',           // el padre maneja el gap
-      }}
-    >
+    <div style={{ paddingBottom: '4px' }}>
       <h2
         style={{
           fontSize:   '20px',
           fontWeight: 500,
-          color:      'white',
+          color:      '#1e293b',
           lineHeight: 1.2,
           margin:     0,
         }}
@@ -74,9 +66,9 @@ export default function SaludoDashboard({ nombre }: Props) {
       </h2>
       <p
         style={{
-          fontSize:  '13px',
-          color:     'rgba(255,255,255,0.55)',
-          marginTop: '4px',
+          fontSize:   '13px',
+          color:      '#64748b',
+          marginTop:  '3px',
           lineHeight: 1,
         }}
       >
