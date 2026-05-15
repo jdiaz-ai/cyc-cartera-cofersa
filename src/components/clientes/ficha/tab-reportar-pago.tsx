@@ -1,13 +1,15 @@
 'use client'
 
 /**
- * TabReportarPago — Módulo de reporte de pago con OCR
+ * TabReportarPago — Módulo de reporte de pago con OCR y compresión
  *
- * Pipeline:
- *   Dropzone → (PDF→canvas) → Tesseract.js → parsear texto → auto-fill form
- *   Submit   → Supabase Storage upload → POST /api/clientes/pagos/reportar
+ * Pipeline completo:
+ *   Dropzone → (PDF→canvas) → comprimirImagen() → Tesseract.js → auto-fill form
+ *   Submit   → Supabase Storage (imagen comprimida) → POST /api/clientes/pagos/reportar
  *
- * OCR: tesseract.js v7  |  PDF render: pdfjs-dist v5
+ * Compresión: Canvas API nativa — max 1280px, 65% calidad, WebP preferido
+ * OCR: tesseract.js v7   |  PDF render: pdfjs-dist v5
+ * Objetivo: comprobantes < 300 KB en Storage
  */
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
@@ -56,8 +58,17 @@ interface OcrResultado {
 type OcrFase =
   | { fase: 'idle' }
   | { fase: 'procesando'; label: string; progreso: number }
-  | { fase: 'listo';      resultado: OcrResultado; previewUrl: string; fileName: string }
-  | { fase: 'error';      mensaje: string }
+  | {
+      fase:          'listo'
+      resultado:     OcrResultado
+      previewUrl:    string
+      fileName:      string
+      // ── stats de compresión ───────────────────────────────────────
+      originalKB:    number    // tamaño del archivo/blob de entrada
+      compressedKB:  number    // tamaño tras compresión
+      formato:       'webp' | 'jpeg'   // formato de salida
+    }
+  | { fase: 'error'; mensaje: string }
 
 interface Props {
   clienteCod:    string
@@ -123,6 +134,82 @@ async function runOCR(
     },
   })
   return text
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COMPRESIÓN DE IMAGEN — Canvas API nativa
+// Objetivo: < 300 KB, max 1280 px, 65 % calidad, preferencia WebP
+// ═══════════════════════════════════════════════════════════════════════
+
+interface ImagenComprimida {
+  blob:       Blob
+  formato:    'webp' | 'jpeg'
+  originalKB: number
+  finalKB:    number
+}
+
+/**
+ * Comprime una imagen (File | Blob) redimensionándola a max 1280 px
+ * y codificándola en WebP (con fallback a JPEG al 65 % de calidad).
+ *
+ * - Usa `createImageBitmap` (no necesita <img> onload).
+ * - Solo reduce: nunca amplía imágenes pequeñas.
+ * - Si el resultado comprimido es mayor que el original lo descarta
+ *   y devuelve el original en JPEG para garantizar formato estándar.
+ */
+async function comprimirImagen(source: File | Blob): Promise<ImagenComprimida> {
+  const MAX_PX  = 1280
+  const QUALITY = 0.65
+  const originalKB = Math.round(source.size / 1024)
+
+  // Detectar soporte WebP en el navegador
+  const webpOK = (() => {
+    const c = document.createElement('canvas')
+    c.width = c.height = 1
+    return c.toDataURL('image/webp').startsWith('data:image/webp')
+  })()
+
+  const mime: string = webpOK ? 'image/webp' : 'image/jpeg'
+
+  // createImageBitmap soporta File y Blob directamente, sin callbacks
+  const bitmap = await createImageBitmap(source)
+
+  let w = bitmap.width
+  let h = bitmap.height
+
+  // Redimensionar manteniendo proporción (solo hacia abajo)
+  if (w > MAX_PX || h > MAX_PX) {
+    if (w >= h) { h = Math.round(h * MAX_PX / w); w = MAX_PX }
+    else        { w = Math.round(w * MAX_PX / h); h = MAX_PX }
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width  = w
+  canvas.height = h
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()   // liberar memoria del bitmap
+
+  const compressed = await new Promise<Blob | null>(res =>
+    canvas.toBlob(res, mime, QUALITY),
+  )
+
+  if (!compressed) throw new Error('Canvas toBlob devolvió null')
+
+  // Si la compresión empeoró el tamaño, usar JPEG del original
+  if (compressed.size >= source.size) {
+    const fallback = await new Promise<Blob | null>(res =>
+      canvas.toBlob(res, 'image/jpeg', QUALITY),
+    )
+    const blob = fallback ?? compressed
+    return { blob, formato: 'jpeg', originalKB, finalKB: Math.round(blob.size / 1024) }
+  }
+
+  return {
+    blob:       compressed,
+    formato:    webpOK ? 'webp' : 'jpeg',
+    originalKB,
+    finalKB:    Math.round(compressed.size / 1024),
+  }
 }
 
 // ── Parseo de monto en formato CRC (punto miles, coma decimal) ──────────
@@ -263,10 +350,11 @@ export default function TabReportarPago({
   const [notas,  setNotas]  = useState('')
 
   // ── Estado OCR ────────────────────────────────────────────────────
-  const [ocrFase,  setOcrFase]  = useState<OcrFase>({ fase: 'idle' })
-  const [ocrFile,  setOcrFile]  = useState<File | null>(null)
-  const [ocrFilled, setOcrFilled] = useState<Set<'monto' | 'referencia' | 'fecha'>>(new Set())
-  const [dragOver, setDragOver] = useState(false)
+  const [ocrFase,           setOcrFase]           = useState<OcrFase>({ fase: 'idle' })
+  const [ocrFile,           setOcrFile]           = useState<File | null>(null)
+  const [archivoComprimido, setArchivoComprimido] = useState<Blob | null>(null)
+  const [ocrFilled,         setOcrFilled]         = useState<Set<'monto' | 'referencia' | 'fecha'>>(new Set())
+  const [dragOver,          setDragOver]          = useState(false)
 
   // ── Estado facturas ───────────────────────────────────────────────
   const [seleccion, setSeleccion] = useState<Map<number, FacturaSeleccionada>>(new Map())
@@ -310,36 +398,51 @@ export default function TabReportarPago({
     setOcrFase({ fase: 'procesando', label: 'Preparando…', progreso: 0 })
 
     try {
-      let source: File | Blob = file
-
-      // PDFs → renderizar primera página como imagen
+      // ── PASO 1: renderizar PDF si aplica ────────────────────────────
+      let imagenFuente: File | Blob = file
       if (file.type === 'application/pdf') {
         setOcrFase({ fase: 'procesando', label: 'Procesando PDF…', progreso: 5 })
-        source = await pdfToBlob(file)
+        imagenFuente = await pdfToBlob(file)
       }
 
-      // Ejecutar OCR
-      const texto = await runOCR(source, (label, progreso) => {
-        setOcrFase({ fase: 'procesando', label, progreso })
+      // ── PASO 2: comprimir imagen (Canvas → WebP/JPEG, max 1280px) ───
+      setOcrFase({ fase: 'procesando', label: 'Comprimiendo imagen…', progreso: 12 })
+      const comprimida = await comprimirImagen(imagenFuente)
+
+      // Guardar el blob comprimido — es exactamente lo que se subirá al Storage
+      setArchivoComprimido(comprimida.blob)
+
+      // ── PASO 3: OCR sobre la imagen comprimida ─────────────────────
+      // (la misma imagen que se guardará = coherencia total)
+      const texto = await runOCR(comprimida.blob, (label, progreso) => {
+        // OCR ocupa el 20–100 % del progreso visual
+        setOcrFase({ fase: 'procesando', label, progreso: 20 + Math.round(progreso * 0.80) })
       })
 
-      // Parsear resultado
-      const resultado   = parsearTexto(texto)
-      const previewUrl  = URL.createObjectURL(source)
+      // ── PASO 4: parsear y auto-fill ─────────────────────────────────
+      const resultado  = parsearTexto(texto)
+      const previewUrl = URL.createObjectURL(comprimida.blob)
 
-      setOcrFase({ fase: 'listo', resultado, previewUrl, fileName: file.name })
+      setOcrFase({
+        fase:         'listo',
+        resultado,
+        previewUrl,
+        fileName:     file.name,
+        originalKB:   comprimida.originalKB,
+        compressedKB: comprimida.finalKB,
+        formato:      comprimida.formato,
+      })
 
-      // Auto-fill campos
       const filled = new Set<'monto' | 'referencia' | 'fecha'>()
-      if (resultado.monto)      { setMonto(String(Math.round(resultado.monto)));   filled.add('monto') }
-      if (resultado.referencia) { setRef(resultado.referencia);                    filled.add('referencia') }
-      if (resultado.fecha)      { setFecha(resultado.fecha);                       filled.add('fecha') }
+      if (resultado.monto)      { setMonto(String(Math.round(resultado.monto))); filled.add('monto') }
+      if (resultado.referencia) { setRef(resultado.referencia);                  filled.add('referencia') }
+      if (resultado.fecha)      { setFecha(resultado.fecha);                     filled.add('fecha') }
       setOcrFilled(filled)
 
     } catch (err) {
-      console.error('[OCR]', err)
+      console.error('[OCR/Compresión]', err)
       setOcrFase({
-        fase: 'error',
+        fase:    'error',
         mensaje: 'No se pudo procesar el archivo. Se adjuntará sin OCR.',
       })
     }
@@ -349,6 +452,7 @@ export default function TabReportarPago({
     if (ocrFase.fase === 'listo') URL.revokeObjectURL(ocrFase.previewUrl)
     setOcrFase({ fase: 'idle' })
     setOcrFile(null)
+    setArchivoComprimido(null)
     setOcrFilled(new Set())
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -420,14 +524,21 @@ export default function TabReportarPago({
 
     setSubmitting(true)
     try {
-      // ── 1. Upload comprobante a Supabase Storage ─────────────────
+      // ── 1. Upload comprobante comprimido a Supabase Storage ─────────
       let urlComprobante: string | undefined
-      if (ocrFile) {
-        const safeName = ocrFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const path     = `${clienteCod}/${Date.now()}_${safeName}`
+      if (archivoComprimido && ocrFile) {
+        // Usar la extensión del formato comprimido (webp / jpg)
+        const ext      = ocrFase.fase === 'listo' ? ocrFase.formato : 'jpg'
+        const baseName = ocrFile.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
+        const path     = `${clienteCod}/${Date.now()}_${baseName}.${ext}`
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: stData, error: stErr } = await (supabase as any)
-          .storage.from('comprobantes-pago').upload(path, ocrFile, { cacheControl: '3600', upsert: false })
+          .storage.from('comprobantes-pago').upload(path, archivoComprimido, {
+            contentType:  ext === 'webp' ? 'image/webp' : 'image/jpeg',
+            cacheControl: '31536000',   // 1 año — imágenes son inmutables
+            upsert:       false,
+          })
 
         if (!stErr && stData) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -721,15 +832,36 @@ export default function TabReportarPago({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-bold text-green-800 truncate">{ocrFase.fileName}</p>
+                    {/* OCR detectados */}
                     <p className="text-[10px] text-green-600 mt-0.5 flex items-center gap-1">
                       <Sparkles size={9} />
                       {ocrFase.resultado.detectados.length > 0
                         ? `Detectado: ${ocrFase.resultado.detectados.map(d =>
                             ({ monto: 'Monto', referencia: 'Referencia', fecha: 'Fecha' }[d])
                           ).join(', ')}`
-                        : 'Archivo adjunto (sin datos detectados)'
+                        : 'Sin datos detectados — adjunto igualmente'
                       }
                     </p>
+                    {/* Stats de compresión */}
+                    {(() => {
+                      const ahorroPct = ocrFase.originalKB > 0
+                        ? Math.round((1 - ocrFase.compressedKB / ocrFase.originalKB) * 100)
+                        : 0
+                      const bajo300  = ocrFase.compressedKB < 300
+                      return (
+                        <p className="text-[9px] mt-1 font-semibold flex items-center gap-1"
+                          style={{ color: bajo300 ? '#15803d' : '#a16207' }}>
+                          <span>📦</span>
+                          {ocrFase.originalKB} KB → {ocrFase.compressedKB} KB
+                          {' · '}{ocrFase.formato.toUpperCase()}
+                          {ahorroPct > 0 && ` · −${ahorroPct}%`}
+                          {bajo300
+                            ? <span className="ml-0.5 font-black text-green-700">✓</span>
+                            : <span className="ml-0.5" style={{ color: '#a16207' }}>⚠ &gt;300KB</span>
+                          }
+                        </p>
+                      )
+                    })()}
                   </div>
                   <button type="button" onClick={quitarArchivo}
                     className="flex-shrink-0 text-green-400 hover:text-green-700 transition">
@@ -912,8 +1044,10 @@ export default function TabReportarPago({
             </button>
             <p className="mt-1.5 text-center text-[10px] text-gray-400">
               El coordinador recibirá una notificación ·{' '}
-              {ocrFile
-                ? <span className="text-green-600 font-semibold">Comprobante adjunto</span>
+              {archivoComprimido && ocrFase.fase === 'listo'
+                ? <span className="text-green-600 font-semibold">
+                    Comprobante {ocrFase.formato.toUpperCase()} · {ocrFase.compressedKB} KB
+                  </span>
                 : <span>Sin comprobante</span>
               }
             </p>
