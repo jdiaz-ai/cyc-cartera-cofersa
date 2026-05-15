@@ -31,9 +31,8 @@ export default function LoginPage() {
           // 'offline' es crítico: sin él Google no emite refresh_token
           // y el provider_token expira en 1 hora sin posibilidad de renovarlo
           access_type: 'offline',
-          // 'consent' fuerza la pantalla de permisos aunque el usuario
-          // ya haya autorizado antes, garantizando el refresh_token
-          prompt: 'select_account',
+          // Sin 'prompt': Google entra directo si ya hay sesión activa y
+          // la app fue autorizada antes. Solo muestra pantalla en el primer login.
         },
       },
     })
