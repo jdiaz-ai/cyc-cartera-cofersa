@@ -18,7 +18,24 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        // Scopes adicionales para Gmail (envío) y Calendar (eventos)
+        scopes: [
+          'email',
+          'profile',
+          'https://www.googleapis.com/auth/gmail.send',
+          'https://www.googleapis.com/auth/calendar.events',
+        ].join(' '),
+        queryParams: {
+          // 'offline' es crítico: sin él Google no emite refresh_token
+          // y el provider_token expira en 1 hora sin posibilidad de renovarlo
+          access_type: 'offline',
+          // 'consent' fuerza la pantalla de permisos aunque el usuario
+          // ya haya autorizado antes, garantizando el refresh_token
+          prompt: 'consent',
+        },
+      },
     })
     if (error) {
       setError('Error al iniciar sesión con Google. Intente de nuevo.')
