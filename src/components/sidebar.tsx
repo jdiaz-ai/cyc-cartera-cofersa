@@ -348,8 +348,10 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* ── Widget Tipo de Cambio BCCR ────────────────────────── */}
-      <TipoCambio />
+      {/* ── Widget Tipo de Cambio BCCR — pegado al fondo ────── */}
+      <div style={{ marginTop: 'auto' }}>
+        <TipoCambio />
+      </div>
 
     </aside>
   )
