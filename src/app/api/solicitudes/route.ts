@@ -37,10 +37,11 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  // Obtener solicitante_id
-  const { data: usuarioRow } = await supabase
-    .from('usuarios').select('id').eq('email', user.email!).limit(1).single()
-  const solicitanteId = (usuarioRow as { id: string } | null)?.id ?? null
+  // user.id proveniente de auth.getUser() ES auth.uid() — satisface el WITH CHECK
+  // de la política RLS sin necesidad de un lookup adicional a la tabla usuarios.
+  // El lookup por email puede retornar null si hay diferencia de capitalización
+  // o si el usuario aún no tiene fila en usuarios, causando el error RLS.
+  const solicitanteId = user.id
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: nuevaSolicitud, error } = await (supabase as any).from('solicitudes').insert({
