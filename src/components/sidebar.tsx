@@ -346,12 +346,12 @@ export default function Sidebar({
             </div>
           )
         })}
-      </nav>
 
-      {/* ── Widget Tipo de Cambio BCCR — tras la navegación ─── */}
-      <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.07)', paddingTop: '10px' }}>
-        <TipoCambio />
-      </div>
+        {/* ── Widget Tipo de Cambio — dentro del nav, tras el último ítem ── */}
+        <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
+          <TipoCambio />
+        </div>
+      </nav>
 
     </aside>
   )
