@@ -57,6 +57,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Verificar provider_token ANTES del INSERT — si el token expiró no queremos
+  // guardar la solicitud y que el usuario crea que falló (causaría duplicados).
+  if (!providerToken) {
+    return NextResponse.json(
+      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.' },
+      { status: 401 }
+    )
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: nuevaSolicitud, error } = await (supabase as any).from('solicitudes').insert({
     tipo,
@@ -102,18 +111,10 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Email via Gmail API usando el provider_token del usuario ──────────────
+  // (providerToken ya fue validado arriba — si llegamos aquí, existe)
   let emailSent = false
   let emailTo:   string | null = null
   let emailError: string | null = null
-
-  // provider_token es el access token de Google OAuth del usuario autenticado.
-  // El cliente lo obtiene de supabase.auth.getSession() y lo pasa en el body.
-  if (!providerToken) {
-    return NextResponse.json(
-      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.' },
-      { status: 401 }
-    )
-  }
 
   const coordEmail = process.env.EMAIL_COORDINADOR ?? 'jdiaz@cofersa.cr'
   const toEmail    = para_email?.trim() || coordEmail
