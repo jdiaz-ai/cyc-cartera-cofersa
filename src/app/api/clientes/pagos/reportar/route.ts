@@ -21,7 +21,8 @@ export interface ReportarPagoBody {
   }[]
 
   // Opcional
-  notas?: string
+  notas?:           string
+  url_comprobante?: string   // URL pública en Supabase Storage
 }
 
 /**
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
   const {
     cliente_cod, contribuyente,
     banco_origen, referencia, monto_transferido, fecha_transferencia,
-    detalles, notas,
+    detalles, notas, url_comprobante,
   } = body
 
   // ── Validaciones básicas ───────────────────────────────────────────
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
       referencia:          referencia.trim(),
       monto_transferido:   Number(monto_transferido),
       fecha_transferencia,
+      url_comprobante:     url_comprobante ?? null,
       notas:               notas?.trim() ?? null,
       estado:              'pendiente',
     })

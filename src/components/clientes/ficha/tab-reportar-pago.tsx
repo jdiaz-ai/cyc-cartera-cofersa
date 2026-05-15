@@ -1,247 +1,446 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+/**
+ * TabReportarPago — Módulo de reporte de pago con OCR
+ *
+ * Pipeline:
+ *   Dropzone → (PDF→canvas) → Tesseract.js → parsear texto → auto-fill form
+ *   Submit   → Supabase Storage upload → POST /api/clientes/pagos/reportar
+ *
+ * OCR: tesseract.js v7  |  PDF render: pdfjs-dist v5
+ */
+
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   Landmark, Hash, Calendar, DollarSign,
   CheckSquare, Square, AlertCircle, CheckCircle2,
-  ChevronDown, Loader2, StickyNote,
+  ChevronDown, Loader2, Upload, X,
+  Sparkles, AlertTriangle,
 } from 'lucide-react'
 import { fmtCRC, fmtFecha, hoyISO } from '@/lib/utils/formato'
+import { createClient } from '@/lib/supabase/client'
 import type { Factura } from '@/types/database'
 
-// ── Constantes ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// CONSTANTES
+// ═══════════════════════════════════════════════════════════════════════
 
 const BANCOS = [
-  { value: 'BAC',       label: 'BAC Credomatic' },
-  { value: 'BN',        label: 'Banco Nacional' },
-  { value: 'BCR',       label: 'Banco de Costa Rica' },
+  { value: 'BAC',        label: 'BAC Credomatic' },
+  { value: 'BN',         label: 'Banco Nacional' },
+  { value: 'BCR',        label: 'Banco de Costa Rica' },
   { value: 'DAVIVIENDA', label: 'Davivienda' },
 ] as const
 
 type BancoValue = typeof BANCOS[number]['value']
+const MAX_MB = 8
 
-// ── Tipos internos ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// TIPOS
+// ═══════════════════════════════════════════════════════════════════════
 
 interface FacturaSeleccionada {
   factura_id:    number
   documento:     string
-  saldo_max:     number      // saldo original de la factura
-  monto_aplicado: number     // lo que el analista ingresó (parcial o total)
+  saldo_max:     number
+  monto_aplicado: number
 }
 
-// ── Props ───────────────────────────────────────────────────────────────
+interface OcrResultado {
+  monto?:      number
+  referencia?: string
+  fecha?:      string   // YYYY-MM-DD
+  detectados:  ('monto' | 'referencia' | 'fecha')[]
+}
+
+type OcrFase =
+  | { fase: 'idle' }
+  | { fase: 'procesando'; label: string; progreso: number }
+  | { fase: 'listo';      resultado: OcrResultado; previewUrl: string; fileName: string }
+  | { fase: 'error';      mensaje: string }
 
 interface Props {
   clienteCod:    string
   contribuyente: string
-  facturas:      Factura[]   // todas las facturas del cliente
+  facturas:      Factura[]
   onSuccess:     () => void
   onToast:       (msg: string) => void
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// OCR — PIPELINE COMPLETO
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Renderiza la primera página de un PDF en un Blob PNG (escala 2×) */
+async function pdfToBlob(file: File): Promise<Blob> {
+  const pdfjs = await import('pdfjs-dist')
+
+  // Worker via URL del módulo — funciona con webpack/turbopack en Next.js
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url,
+    ).toString()
+  }
+
+  const buf = await file.arrayBuffer()
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise
+  const page = await pdf.getPage(1)
+  const vp = page.getViewport({ scale: 2.0 })
+
+  const canvas = document.createElement('canvas')
+  canvas.width  = vp.width
+  canvas.height = vp.height
+
+  // pdfjs-dist v5: usa `canvas` directamente (canvasContext es legacy)
+  await page.render({ canvas, viewport: vp }).promise
+
+  return new Promise((res, rej) =>
+    canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png'),
+  )
+}
+
+/** Ejecuta Tesseract.js sobre una imagen/blob y reporta progreso */
+async function runOCR(
+  source: File | Blob,
+  onProg: (label: string, pct: number) => void,
+): Promise<string> {
+  // Import dinámico — se carga solo cuando el usuario sube un archivo
+  const Tesseract = await import('tesseract.js')
+
+  const LABELS: Record<string, string> = {
+    'loading tesseract core':     'Cargando motor OCR…',
+    'loading language traineddata': 'Cargando idioma…',
+    'initializing api':           'Inicializando…',
+    'recognizing text':           'Reconociendo texto…',
+  }
+
+  const { data: { text } } = await Tesseract.recognize(source, 'spa+eng', {
+    logger: (m: { status: string; progress: number }) => {
+      const pct   = Math.round((m.progress ?? 0) * 100)
+      const label = LABELS[m.status] ?? m.status
+      onProg(label, pct)
+    },
+  })
+  return text
+}
+
+// ── Parseo de monto en formato CRC (punto miles, coma decimal) ──────────
+function parsearMonto(s: string): number | null {
+  const c = s.replace(/[₡¢\s]/g, '').trim()
+  // 75.000,50  (formato CR)
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(c))
+    return parseFloat(c.replace(/\./g, '').replace(',', '.'))
+  // 75,000.50  (formato US — algunos bancos CR)
+  if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(c))
+    return parseFloat(c.replace(/,/g, ''))
+  // número plano
+  const n = parseFloat(c.replace(',', '.'))
+  return isNaN(n) ? null : n
+}
+
+// ── Extrae monto / referencia / fecha del texto OCR ─────────────────────
+function parsearTexto(texto: string): OcrResultado {
+  const t = texto.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ')
+  const resultado: OcrResultado = { detectados: [] }
+
+  // ── MONTO ────────────────────────────────────────────────────────────
+  const montos: number[] = []
+
+  // Patrón 1: símbolo ₡ o ¢
+  for (const m of t.matchAll(/[₡¢]\s*([\d.,]+)/g)) {
+    const n = parsearMonto(m[1])
+    if (n && n > 500) montos.push(n)
+  }
+  // Patrón 2: CRC prefix
+  const crcM = t.match(/CRC[\s:]*([\d.,]+)/i)
+  if (crcM) { const n = parsearMonto(crcM[1]); if (n && n > 500) montos.push(n) }
+
+  // Patrón 3: keyword MONTO / TOTAL / IMPORTE
+  const kwM = t.match(/(?:MONTO|TOTAL|IMPORTE|VALOR|AMOUNT)[\s:]+([\d₡¢.,]+)/i)
+  if (kwM) { const n = parsearMonto(kwM[1].replace(/[₡¢]/g, '')); if (n && n > 500) montos.push(n) }
+
+  if (montos.length > 0) {
+    resultado.monto = Math.max(...montos)   // tomamos el mayor (total de la transferencia)
+    resultado.detectados.push('monto')
+  }
+
+  // ── REFERENCIA ───────────────────────────────────────────────────────
+  // Patrón 1: keyword + 6-15 dígitos
+  const refKw = t.match(
+    /(?:REF(?:ERENCIA)?|N[ÚúUu][Mm](?:ERO)?|TRANSACCI[ÓóOo]N|COMPROBANTE|AUTORIZACI[ÓóOo]N|VOUCHER|SINPE|AUTENTICACI[ÓóOo]N)[\s:#Nº°.]*([0-9]{6,15})/i,
+  )
+  if (refKw) {
+    resultado.referencia = refKw[1]
+    resultado.detectados.push('referencia')
+  }
+  // Patrón 2: número standalone de 12-15 dígitos (SINPE)
+  if (!resultado.referencia) {
+    const largo = t.match(/\b([0-9]{12,15})\b/)
+    if (largo) { resultado.referencia = largo[1]; resultado.detectados.push('referencia') }
+  }
+
+  // ── FECHA ────────────────────────────────────────────────────────────
+  // Patrón 1: DD/MM/YYYY
+  const dmy = t.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/)
+  if (dmy) {
+    const [, dd, mm, yyyy] = dmy
+    resultado.fecha = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+    resultado.detectados.push('fecha')
+  }
+  // Patrón 2: YYYY-MM-DD
+  if (!resultado.fecha) {
+    const ymd = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/)
+    if (ymd) { resultado.fecha = ymd[0]; resultado.detectados.push('fecha') }
+  }
+  // Patrón 3: DD-MM-YYYY
+  if (!resultado.fecha) {
+    const dmy2 = t.match(/\b(\d{2})-(\d{2})-(\d{4})\b/)
+    if (dmy2) {
+      const [, dd, mm, yyyy] = dmy2
+      resultado.fecha = `${yyyy}-${mm}-${dd}`
+      resultado.detectados.push('fecha')
+    }
+  }
+
+  return resultado
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HELPERS UI
+// ═══════════════════════════════════════════════════════════════════════
 
 function facturasVencidas(facturas: Factura[]): Factura[] {
   const hoy = hoyISO()
-  return facturas.filter(f =>
-    (f.saldo ?? 0) > 0 &&
-    f.fecha_vencimiento &&
-    f.fecha_vencimiento < hoy
-  ).sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento)) // más antigua primero
+  return facturas
+    .filter(f => (f.saldo ?? 0) > 0 && f.fecha_vencimiento && f.fecha_vencimiento < hoy)
+    .sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento))
 }
 
 function diasVencida(fechaVenc: string): number {
   const hoy = hoyISO()
-  return Math.max(0, Math.floor(
-    (new Date(hoy).getTime() - new Date(fechaVenc).getTime()) / 86400000
-  ))
+  return Math.max(0, Math.floor((new Date(hoy).getTime() - new Date(fechaVenc).getTime()) / 86400000))
 }
 
-function colorDias(dias: number): { bg: string; text: string } {
-  if (dias > 120) return { bg: '#fee2e2', text: '#dc2626' }
-  if (dias > 60)  return { bg: '#fee2e2', text: '#dc2626' }
-  if (dias > 30)  return { bg: '#ffedd5', text: '#c2410c' }
-  if (dias > 0)   return { bg: '#fef9c3', text: '#a16207' }
-  return { bg: '#dcfce7', text: '#15803d' }
+function colorDias(d: number): { bg: string; text: string } {
+  if (d > 120) return { bg: '#fee2e2', text: '#991b1b' }
+  if (d > 60)  return { bg: '#fee2e2', text: '#dc2626' }
+  if (d > 30)  return { bg: '#ffedd5', text: '#c2410c' }
+  return            { bg: '#fef9c3', text: '#a16207' }
 }
 
-// ── Subcomponentes ──────────────────────────────────────────────────────
-
-function InputField({
-  label, value, onChange, type = 'text', placeholder, icon, required, disabled, hint,
-}: {
-  label:       string
-  value:       string
-  onChange:    (v: string) => void
-  type?:       string
-  placeholder?: string
-  icon?:       React.ReactNode
-  required?:   boolean
-  disabled?:   boolean
-  hint?:       string
-}) {
+/** Badge "✦ OCR" junto al label del campo — click lo limpia */
+function OcrBadge({ onClear }: { onClear: () => void }) {
   return (
-    <div>
-      <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-      </label>
-      <div className="relative">
-        {icon && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-            {icon}
-          </div>
-        )}
-        <input
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          className="w-full border border-gray-200 rounded-xl text-[13px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-[#009ee3] transition disabled:bg-gray-50 disabled:text-gray-400"
-          style={{ padding: icon ? '9px 12px 9px 34px' : '9px 12px' }}
-        />
-      </div>
-      {hint && <p className="mt-1 text-[10px] text-gray-400">{hint}</p>}
-    </div>
+    <button
+      type="button"
+      onClick={onClear}
+      title="Valor detectado por OCR — click para limpiar"
+      className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-black transition hover:opacity-70"
+      style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}
+    >
+      <Sparkles size={8} />OCR
+    </button>
   )
 }
 
-function BancoSelector({
-  value, onChange,
-}: {
-  value:    BancoValue | ''
-  onChange: (v: BancoValue) => void
-}) {
-  return (
-    <div>
-      <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-        Banco origen<span className="text-red-400 ml-0.5">*</span>
-      </label>
-      <div className="relative">
-        <Landmark size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value as BancoValue)}
-          className="w-full border border-gray-200 rounded-xl text-[13px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
-          style={{ padding: '9px 32px 9px 34px', backgroundColor: 'white' }}
-        >
-          <option value="" disabled>Seleccionar banco…</option>
-          {BANCOS.map(b => (
-            <option key={b.value} value={b.value}>{b.label}</option>
-          ))}
-        </select>
-        <ChevronDown size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-      </div>
-    </div>
-  )
-}
-
-// ── Componente principal ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// COMPONENTE PRINCIPAL
+// ═══════════════════════════════════════════════════════════════════════
 
 export default function TabReportarPago({
   clienteCod, contribuyente, facturas, onSuccess, onToast,
 }: Props) {
+  const supabase = createClient()
+  const dropRef  = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ── Estado: lado derecho (datos del pago) ─────────────────────────
-  const [banco,   setBanco]   = useState<BancoValue | ''>('')
-  const [ref,     setRef]     = useState('')
-  const [fecha,   setFecha]   = useState(hoyISO())
-  const [monto,   setMonto]   = useState('')
-  const [notas,   setNotas]   = useState('')
+  // ── Estado formulario ────────────────────────────────────────────
+  const [banco,  setBanco]  = useState<BancoValue | ''>('')
+  const [ref,    setRef]    = useState('')
+  const [fecha,  setFecha]  = useState(hoyISO())
+  const [monto,  setMonto]  = useState('')
+  const [notas,  setNotas]  = useState('')
 
-  // ── Estado: lado izquierdo (selección de facturas) ────────────────
+  // ── Estado OCR ────────────────────────────────────────────────────
+  const [ocrFase,  setOcrFase]  = useState<OcrFase>({ fase: 'idle' })
+  const [ocrFile,  setOcrFile]  = useState<File | null>(null)
+  const [ocrFilled, setOcrFilled] = useState<Set<'monto' | 'referencia' | 'fecha'>>(new Set())
+  const [dragOver, setDragOver] = useState(false)
+
+  // ── Estado facturas ───────────────────────────────────────────────
   const [seleccion, setSeleccion] = useState<Map<number, FacturaSeleccionada>>(new Map())
 
-  // ── Estado del submit ─────────────────────────────────────────────
+  // ── Estado submit ─────────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
-  // ── Facturas vencidas (las únicas que aplican a un pago en mora) ──
+  // ── Derivados ────────────────────────────────────────────────────
   const facturasConSaldo = useMemo(() => facturasVencidas(facturas), [facturas])
 
-  // ── Totalizador dinámico ──────────────────────────────────────────
-  const totalSeleccion = useMemo(() =>
-    Array.from(seleccion.values()).reduce((acc, f) => acc + f.monto_aplicado, 0),
-    [seleccion]
+  const totalSeleccion = useMemo(
+    () => Array.from(seleccion.values()).reduce((a, f) => a + f.monto_aplicado, 0),
+    [seleccion],
   )
 
-  const montoNum = parseFloat(monto.replace(/[^0-9.]/g, '')) || 0
-
-  // ── Diferencia entre monto ingresado y suma facturas ─────────────
+  const montoNum   = parseFloat(monto.replace(/[^0-9.]/g, '')) || 0
   const diferencia = Math.abs(montoNum - totalSeleccion)
   const cuadra     = seleccion.size > 0 && montoNum > 0 && diferencia <= 1
 
-  // ── Toggle de factura ─────────────────────────────────────────────
+  // ── Limpiar preview URL al desmontar ────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (ocrFase.fase === 'listo') URL.revokeObjectURL(ocrFase.previewUrl)
+    }
+  }, [ocrFase])
+
+  // ── OCR: procesar archivo ────────────────────────────────────────
+  async function procesarArchivo(file: File) {
+    const tiposAceptados = ['image/jpeg', 'image/png', 'application/pdf']
+    if (!tiposAceptados.includes(file.type)) {
+      setOcrFase({ fase: 'error', mensaje: 'Formato no válido. Use JPG, PNG o PDF.' })
+      return
+    }
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setOcrFase({ fase: 'error', mensaje: `El archivo supera ${MAX_MB}MB.` })
+      return
+    }
+
+    setOcrFile(file)
+    setOcrFase({ fase: 'procesando', label: 'Preparando…', progreso: 0 })
+
+    try {
+      let source: File | Blob = file
+
+      // PDFs → renderizar primera página como imagen
+      if (file.type === 'application/pdf') {
+        setOcrFase({ fase: 'procesando', label: 'Procesando PDF…', progreso: 5 })
+        source = await pdfToBlob(file)
+      }
+
+      // Ejecutar OCR
+      const texto = await runOCR(source, (label, progreso) => {
+        setOcrFase({ fase: 'procesando', label, progreso })
+      })
+
+      // Parsear resultado
+      const resultado   = parsearTexto(texto)
+      const previewUrl  = URL.createObjectURL(source)
+
+      setOcrFase({ fase: 'listo', resultado, previewUrl, fileName: file.name })
+
+      // Auto-fill campos
+      const filled = new Set<'monto' | 'referencia' | 'fecha'>()
+      if (resultado.monto)      { setMonto(String(Math.round(resultado.monto)));   filled.add('monto') }
+      if (resultado.referencia) { setRef(resultado.referencia);                    filled.add('referencia') }
+      if (resultado.fecha)      { setFecha(resultado.fecha);                       filled.add('fecha') }
+      setOcrFilled(filled)
+
+    } catch (err) {
+      console.error('[OCR]', err)
+      setOcrFase({
+        fase: 'error',
+        mensaje: 'No se pudo procesar el archivo. Se adjuntará sin OCR.',
+      })
+    }
+  }
+
+  function quitarArchivo() {
+    if (ocrFase.fase === 'listo') URL.revokeObjectURL(ocrFase.previewUrl)
+    setOcrFase({ fase: 'idle' })
+    setOcrFile(null)
+    setOcrFilled(new Set())
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function limpiarCampoOCR(campo: 'monto' | 'referencia' | 'fecha') {
+    setOcrFilled(prev => { const s = new Set(prev); s.delete(campo); return s })
+    if (campo === 'monto')      setMonto('')
+    if (campo === 'referencia') setRef('')
+    if (campo === 'fecha')      setFecha(hoyISO())
+  }
+
+  // ── Drag & Drop ─────────────────────────────────────────────────
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) procesarArchivo(file)
+  }
+  function onFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) procesarArchivo(file)
+  }
+
+  // ── Facturas ────────────────────────────────────────────────────
   const toggleFactura = useCallback((f: Factura) => {
     setSeleccion(prev => {
       const next = new Map(prev)
       if (next.has(f.id)) {
         next.delete(f.id)
       } else {
-        next.set(f.id, {
-          factura_id:    f.id,
-          documento:     f.documento,
-          saldo_max:     f.saldo ?? 0,
-          monto_aplicado: f.saldo ?? 0,   // default = saldo completo
-        })
+        next.set(f.id, { factura_id: f.id, documento: f.documento, saldo_max: f.saldo ?? 0, monto_aplicado: f.saldo ?? 0 })
       }
       return next
     })
   }, [])
 
-  // ── Cambiar monto aplicado a una factura ──────────────────────────
-  const cambiarMontoAplicado = useCallback((facturaId: number, valor: string) => {
+  const cambiarMontoAplicado = useCallback((fid: number, valor: string) => {
     const num = parseFloat(valor.replace(/[^0-9.]/g, '')) || 0
     setSeleccion(prev => {
       const next = new Map(prev)
-      const item = next.get(facturaId)
+      const item = next.get(fid)
       if (!item) return prev
-      next.set(facturaId, { ...item, monto_aplicado: num })
+      next.set(fid, { ...item, monto_aplicado: num })
       return next
     })
   }, [])
 
-  // ── Seleccionar / deseleccionar todas ────────────────────────────
   function toggleTodas() {
     if (seleccion.size === facturasConSaldo.length) {
       setSeleccion(new Map())
     } else {
       const next = new Map<number, FacturaSeleccionada>()
       facturasConSaldo.forEach(f => {
-        next.set(f.id, {
-          factura_id:    f.id,
-          documento:     f.documento,
-          saldo_max:     f.saldo ?? 0,
-          monto_aplicado: f.saldo ?? 0,
-        })
+        next.set(f.id, { factura_id: f.id, documento: f.documento, saldo_max: f.saldo ?? 0, monto_aplicado: f.saldo ?? 0 })
       })
       setSeleccion(next)
     }
   }
 
-  // ── Submit ────────────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-
-    if (!banco) { setError('Seleccione el banco de origen'); return }
-    if (!ref.trim()) { setError('Ingrese el número de referencia'); return }
-    if (!fecha) { setError('Ingrese la fecha de transferencia'); return }
-    if (!montoNum || montoNum <= 0) { setError('Ingrese un monto válido'); return }
-    if (seleccion.size === 0) { setError('Seleccione al menos una factura'); return }
-    if (!cuadra) { setError(`La suma de facturas (${fmtCRC(totalSeleccion)}) no coincide con el monto transferido (${fmtCRC(montoNum)})`); return }
+    if (!banco)                      { setError('Seleccione el banco de origen'); return }
+    if (!ref.trim())                 { setError('Ingrese el número de referencia'); return }
+    if (!fecha)                      { setError('Ingrese la fecha de transferencia'); return }
+    if (!montoNum || montoNum <= 0)  { setError('Ingrese un monto válido'); return }
+    if (seleccion.size === 0)        { setError('Seleccione al menos una factura'); return }
+    if (!cuadra)                     { setError(`Suma facturas (${fmtCRC(totalSeleccion)}) ≠ monto (${fmtCRC(montoNum)})`); return }
 
     setSubmitting(true)
-
-    const detalles = Array.from(seleccion.values()).map(d => ({
-      factura_id:    d.factura_id,
-      documento:     d.documento,
-      monto_aplicado: d.monto_aplicado,
-    }))
-
     try {
+      // ── 1. Upload comprobante a Supabase Storage ─────────────────
+      let urlComprobante: string | undefined
+      if (ocrFile) {
+        const safeName = ocrFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path     = `${clienteCod}/${Date.now()}_${safeName}`
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: stData, error: stErr } = await (supabase as any)
+          .storage.from('comprobantes-pago').upload(path, ocrFile, { cacheControl: '3600', upsert: false })
+
+        if (!stErr && stData) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: { publicUrl } } = (supabase as any)
+            .storage.from('comprobantes-pago').getPublicUrl(stData.path)
+          urlComprobante = publicUrl
+        }
+        // Upload no es bloqueante — si falla, continuamos sin URL
+      }
+
+      // ── 2. POST al API ────────────────────────────────────────────
       const res = await fetch('/api/clientes/pagos/reportar', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente_cod:         clienteCod,
@@ -250,16 +449,20 @@ export default function TabReportarPago({
           referencia:          ref.trim(),
           monto_transferido:   montoNum,
           fecha_transferencia: fecha,
-          detalles,
+          detalles: Array.from(seleccion.values()).map(d => ({
+            factura_id:    d.factura_id,
+            documento:     d.documento,
+            monto_aplicado: d.monto_aplicado,
+          })),
+          url_comprobante: urlComprobante,
           notas: notas.trim() || undefined,
         }),
       })
+
       const json = await res.json()
-      if (!res.ok) {
-        setError(json.error ?? 'Error desconocido')
-        return
-      }
-      onToast('Pago reportado correctamente')
+      if (!res.ok) { setError(json.error ?? 'Error desconocido'); return }
+
+      onToast('✓ Pago reportado — el coordinador recibirá una notificación')
       onSuccess()
     } catch {
       setError('Error de conexión. Intente de nuevo.')
@@ -268,59 +471,79 @@ export default function TabReportarPago({
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────
-
+  // ── Empty state: sin facturas vencidas ───────────────────────────
   if (facturasConSaldo.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 flex flex-col items-center justify-center text-center gap-3">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 flex flex-col items-center gap-3 text-center">
         <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#f0fdf4' }}>
           <CheckCircle2 size={24} className="text-green-500" />
         </div>
         <p className="text-[14px] font-semibold text-gray-700">Sin facturas vencidas</p>
         <p className="text-[12px] text-gray-400 max-w-xs">
-          Este cliente no tiene facturas vencidas pendientes de pago. No hay nada que reportar por el momento.
+          Este cliente no tiene facturas vencidas pendientes de pago.
         </p>
       </div>
     )
   }
 
+  // ── Colores semáforo monto ────────────────────────────────────────
+  const montoSemaforoBorder =
+    cuadra                              ? '#86efac' :
+    seleccion.size > 0 && montoNum > 0  ? '#fde68a' :
+    ocrFilled.has('monto')              ? '#bae6fd' : '#e2e8f0'
+
+  const montoSemaforoShadow =
+    cuadra                              ? '0 0 0 3px rgba(134,239,172,0.25)' :
+    seleccion.size > 0 && montoNum > 0  ? '0 0 0 3px rgba(253,230,138,0.25)' : 'none'
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <div className="grid gap-5" style={{ gridTemplateColumns: '1fr 1fr' }}>
+
+      {/* Input oculto para seleccionar archivo */}
+      <input
+        ref={fileInputRef} type="file"
+        accept=".jpg,.jpeg,.png,.pdf"
+        className="hidden"
+        onChange={onFileInput}
+      />
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: '5fr 7fr' }}>
 
         {/* ══════════════════════════════════════════════════════════
-            COLUMNA IZQUIERDA — Selección de facturas
+            COLUMNA IZQUIERDA — Facturas vencidas
         ══════════════════════════════════════════════════════════ */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
 
-          {/* Header de la tabla */}
+          {/* Header compacto */}
           <div
-            className="flex items-center justify-between px-4 py-3 border-b border-gray-100"
+            className="flex items-center justify-between px-3 py-2 border-b border-gray-100"
             style={{ backgroundColor: '#fafafa' }}
           >
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={toggleTodas} className="text-gray-400 hover:text-[#009ee3] transition">
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={toggleTodas}
+                className="text-gray-400 hover:text-[#009ee3] transition">
                 {seleccion.size === facturasConSaldo.length
-                  ? <CheckSquare size={15} className="text-[#009ee3]" />
-                  : <Square size={15} />
+                  ? <CheckSquare size={14} className="text-[#009ee3]" />
+                  : <Square size={14} />
                 }
               </button>
-              <span className="text-[12px] font-bold text-gray-700">
-                Facturas vencidas
-              </span>
-              <span className="text-[10px] font-semibold rounded-full px-2 py-0.5"
-                style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+              <span className="text-[11px] font-bold text-gray-700">Facturas vencidas</span>
+              <span
+                className="text-[9px] font-bold rounded-full px-1.5 py-0.5"
+                style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}
+              >
                 {facturasConSaldo.length}
               </span>
             </div>
-            <span className="text-[10px] text-gray-400">
-              {seleccion.size} seleccionadas
-            </span>
+            <span className="text-[10px] text-gray-400">{seleccion.size} sel.</span>
           </div>
 
-          {/* Tabla scrolleable */}
-          <div className="flex-1 overflow-y-auto" style={{ maxHeight: '380px' }}>
-            {facturasConSaldo.map((f, i) => {
+          {/* Filas compactas */}
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50/80" style={{ maxHeight: '420px' }}>
+            {facturasConSaldo.map(f => {
               const checked = seleccion.has(f.id)
               const item    = seleccion.get(f.id)
               const dias    = diasVencida(f.fecha_vencimiento)
@@ -329,47 +552,38 @@ export default function TabReportarPago({
               return (
                 <div
                   key={f.id}
-                  className="flex items-center gap-3 px-4 py-3 transition cursor-pointer"
-                  style={{
-                    borderBottom: i < facturasConSaldo.length - 1 ? '1px solid #f8fafc' : 'none',
-                    backgroundColor: checked ? '#f0f9ff' : 'transparent',
-                  }}
+                  className="flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors"
+                  style={{ backgroundColor: checked ? '#f0f9ff' : undefined }}
                   onClick={() => toggleFactura(f)}
                 >
                   {/* Checkbox */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    {checked
-                      ? <CheckSquare size={15} className="text-[#009ee3]" />
-                      : <Square      size={15} className="text-gray-300" />
-                    }
-                  </div>
+                  {checked
+                    ? <CheckSquare size={14} className="flex-shrink-0 text-[#009ee3]" />
+                    : <Square      size={14} className="flex-shrink-0 text-gray-300" />
+                  }
 
-                  {/* Datos de la factura */}
+                  {/* Documento + fecha vencimiento */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[12px] font-bold text-gray-800 truncate">
-                        {f.documento}
-                      </span>
+                    <div className="flex items-center gap-1 leading-none">
+                      <span className="text-[11px] font-bold text-gray-800 truncate">{f.documento}</span>
                       <span
-                        className="text-[9px] font-black rounded-full px-1.5 py-0.5 flex-shrink-0"
+                        className="text-[8px] font-black rounded-full px-1 py-0.5 flex-shrink-0"
                         style={{ backgroundColor: clr.bg, color: clr.text }}
                       >
                         {dias}d
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      Venció: {fmtFecha(f.fecha_vencimiento)}
+                    <p className="text-[9px] text-gray-400 mt-0.5 leading-none">
+                      {fmtFecha(f.fecha_vencimiento)}
                     </p>
                   </div>
 
-                  {/* Saldo + input de monto parcial */}
-                  <div className="flex-shrink-0 text-right" onClick={e => e.stopPropagation()}>
+                  {/* Monto o input editable */}
+                  <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
                     {!checked ? (
-                      <span className="text-[12px] font-bold text-gray-700">
-                        {fmtCRC(f.saldo)}
-                      </span>
+                      <span className="text-[11px] font-bold text-gray-600">{fmtCRC(f.saldo)}</span>
                     ) : (
-                      <div>
+                      <div className="flex flex-col items-end gap-0.5">
                         <input
                           type="number"
                           value={item?.monto_aplicado ?? f.saldo}
@@ -377,12 +591,10 @@ export default function TabReportarPago({
                           max={f.saldo ?? undefined}
                           step={1}
                           onChange={e => cambiarMontoAplicado(f.id, e.target.value)}
-                          className="border border-[#009ee3] rounded-lg text-[11px] font-bold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]"
-                          style={{ width: '96px', padding: '4px 8px', backgroundColor: 'white' }}
+                          className="border border-[#009ee3] rounded-lg text-[10px] font-bold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]/40"
+                          style={{ width: '76px', padding: '3px 5px' }}
                         />
-                        <p className="text-[9px] text-gray-400 mt-0.5 text-right">
-                          máx {fmtCRC(f.saldo)}
-                        </p>
+                        <span className="text-[8px] text-gray-400">máx {fmtCRC(f.saldo)}</span>
                       </div>
                     )}
                   </div>
@@ -391,30 +603,34 @@ export default function TabReportarPago({
             })}
           </div>
 
-          {/* Totalizador */}
-          <div
-            className="px-4 py-3 border-t"
-            style={{ borderColor: cuadra ? '#bbf7d0' : seleccion.size > 0 ? '#fde68a' : '#f1f5f9', backgroundColor: cuadra ? '#f0fdf4' : seleccion.size > 0 ? '#fffbeb' : '#fafafa' }}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Suma seleccionada
-              </span>
-              <span className="text-[15px] font-black" style={{ color: cuadra ? '#15803d' : seleccion.size > 0 ? '#a16207' : '#94a3b8' }}>
-                {fmtCRC(totalSeleccion)}
-              </span>
-            </div>
-            {seleccion.size > 0 && montoNum > 0 && !cuadra && (
-              <p className="text-[10px] mt-1 font-semibold" style={{ color: '#a16207' }}>
-                Diferencia: {fmtCRC(Math.abs(montoNum - totalSeleccion))} — ajuste los montos para que coincidan
-              </p>
-            )}
-            {cuadra && (
-              <p className="text-[10px] mt-1 font-semibold text-green-600 flex items-center gap-1">
-                <CheckCircle2 size={10} /> Los montos coinciden
-              </p>
-            )}
-          </div>
+          {/* ── Totalizador con semáforo ────────────────────────── */}
+          {(() => {
+            const hay = seleccion.size > 0
+            const bg  = cuadra ? '#f0fdf4' : hay ? '#fffbeb' : '#fafafa'
+            const bdr = cuadra ? '#bbf7d0' : hay ? '#fde68a' : '#f1f5f9'
+            const clr = cuadra ? '#15803d' : hay ? '#a16207' : '#94a3b8'
+            return (
+              <div className="px-3 py-2.5 border-t" style={{ backgroundColor: bg, borderColor: bdr }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Suma seleccionada</span>
+                  <span className="text-[14px] font-black tabular-nums" style={{ color: clr }}>
+                    {fmtCRC(totalSeleccion)}
+                  </span>
+                </div>
+                {hay && montoNum > 0 && !cuadra && (
+                  <p className="text-[9px] mt-1 font-semibold flex items-center gap-1" style={{ color: '#a16207' }}>
+                    <AlertTriangle size={9} />
+                    Diferencia: {fmtCRC(diferencia)}
+                  </p>
+                )}
+                {cuadra && (
+                  <p className="text-[9px] mt-1 font-semibold text-green-600 flex items-center gap-1">
+                    <CheckCircle2 size={9} /> Montos coinciden
+                  </p>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {/* ══════════════════════════════════════════════════════════
@@ -422,112 +638,288 @@ export default function TabReportarPago({
         ══════════════════════════════════════════════════════════ */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col">
 
-          <div
-            className="px-4 py-3 border-b border-gray-100"
-            style={{ backgroundColor: '#fafafa' }}
-          >
+          {/* Header */}
+          <div className="px-4 py-2.5 border-b border-gray-100" style={{ backgroundColor: '#fafafa' }}>
             <h3 className="text-[12px] font-bold text-gray-700">Datos del pago</h3>
           </div>
 
-          <div className="flex-1 p-4 space-y-4">
+          <div className="flex-1 p-4 space-y-3.5">
 
-            {/* Banco */}
-            <BancoSelector value={banco} onChange={setBanco} />
+            {/* ── DROPZONE ────────────────────────────────────── */}
 
-            {/* Referencia */}
-            <InputField
-              label="Número de referencia"
-              value={ref}
-              onChange={setRef}
-              placeholder="Ej: 789456123"
-              icon={<Hash size={13} />}
-              required
-              hint="Número de comprobante de la transferencia"
-            />
+            {/* Estado: idle — zona de arrastre */}
+            {ocrFase.fase === 'idle' && (
+              <div
+                ref={dropRef}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
+                style={{
+                  padding:         '16px',
+                  borderColor:     dragOver ? '#009ee3' : '#e2e8f0',
+                  backgroundColor: dragOver ? '#f0f9ff' : '#fafafa',
+                }}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+                  style={{ backgroundColor: dragOver ? '#e0f2fe' : '#f1f5f9' }}
+                >
+                  <Upload size={14} style={{ color: dragOver ? '#009ee3' : '#94a3b8' }} />
+                </div>
+                <p className="text-[11px] font-semibold text-center"
+                  style={{ color: dragOver ? '#009ee3' : '#64748b' }}>
+                  Arrastre el comprobante aquí
+                </p>
+                <p className="text-[10px] text-gray-400">JPG · PNG · PDF — máx {MAX_MB}MB</p>
+                <span
+                  className="text-[9px] font-bold rounded-full px-2 py-0.5 flex items-center gap-1 mt-0.5"
+                  style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}
+                >
+                  <Sparkles size={8} /> OCR activo — auto-completa el formulario
+                </span>
+              </div>
+            )}
 
-            {/* Fecha */}
-            <InputField
-              label="Fecha de transferencia"
-              value={fecha}
-              onChange={setFecha}
-              type="date"
-              icon={<Calendar size={13} />}
-              required
-            />
+            {/* Estado: procesando */}
+            {ocrFase.fase === 'procesando' && (
+              <div
+                className="rounded-xl border border-blue-100 flex flex-col items-center gap-2 py-4"
+                style={{ backgroundColor: '#f0f9ff' }}
+              >
+                <Loader2 size={20} className="text-[#009ee3] animate-spin" />
+                <div className="text-center">
+                  <p className="text-[12px] font-bold text-[#0369a1]">Procesando comprobante…</p>
+                  <p className="text-[10px] text-blue-400 mt-0.5">{ocrFase.label}</p>
+                </div>
+                {/* Barra de progreso */}
+                <div className="w-36 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.max(4, ocrFase.progreso)}%`, backgroundColor: '#009ee3' }}
+                  />
+                </div>
+                <p className="text-[10px] font-medium text-blue-400">{ocrFase.progreso}%</p>
+              </div>
+            )}
 
-            {/* Monto */}
+            {/* Estado: listo — miniatura + resumen OCR */}
+            {ocrFase.fase === 'listo' && (
+              <div
+                className="rounded-xl border border-green-200 overflow-hidden"
+                style={{ backgroundColor: '#f0fdf4' }}
+              >
+                <div className="flex items-center gap-2.5 px-3 py-2.5">
+                  {/* Miniatura del comprobante */}
+                  <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-green-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={ocrFase.previewUrl} alt="comprobante"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-bold text-green-800 truncate">{ocrFase.fileName}</p>
+                    <p className="text-[10px] text-green-600 mt-0.5 flex items-center gap-1">
+                      <Sparkles size={9} />
+                      {ocrFase.resultado.detectados.length > 0
+                        ? `Detectado: ${ocrFase.resultado.detectados.map(d =>
+                            ({ monto: 'Monto', referencia: 'Referencia', fecha: 'Fecha' }[d])
+                          ).join(', ')}`
+                        : 'Archivo adjunto (sin datos detectados)'
+                      }
+                    </p>
+                  </div>
+                  <button type="button" onClick={quitarArchivo}
+                    className="flex-shrink-0 text-green-400 hover:text-green-700 transition">
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Estado: error en OCR */}
+            {ocrFase.fase === 'error' && (
+              <div
+                className="rounded-xl border border-red-200 px-3 py-2.5 flex items-start gap-2"
+                style={{ backgroundColor: '#fff5f5' }}
+              >
+                <AlertCircle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="flex-1 text-[11px] font-semibold text-red-700 leading-snug">
+                  {ocrFase.mensaje}
+                </p>
+                <button type="button" onClick={quitarArchivo}
+                  className="flex-shrink-0 text-red-300 hover:text-red-600 transition">
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* ── BANCO ────────────────────────────────────────── */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                Monto transferido (CRC)<span className="text-red-400 ml-0.5">*</span>
+                Banco origen<span className="text-red-400 ml-0.5">*</span>
+              </label>
+              <div className="relative">
+                <Landmark size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <select
+                  value={banco}
+                  onChange={e => setBanco(e.target.value as BancoValue)}
+                  className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
+                  style={{ padding: '8px 32px 8px 32px', backgroundColor: 'white' }}
+                >
+                  <option value="" disabled>Seleccionar banco…</option>
+                  {BANCOS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+                </select>
+                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* ── GRID: Referencia + Fecha ──────────────────────── */}
+            <div className="grid grid-cols-2 gap-3">
+
+              {/* Referencia */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                  Referencia<span className="text-red-400">*</span>
+                  {ocrFilled.has('referencia') && <OcrBadge onClear={() => limpiarCampoOCR('referencia')} />}
+                </label>
+                <div className="relative">
+                  <Hash size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={ref}
+                    onChange={e => { setRef(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('referencia'); return s }) }}
+                    placeholder="123456789"
+                    className="w-full border rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-[#009ee3] transition"
+                    style={{
+                      padding:     '8px 10px 8px 26px',
+                      borderColor: ocrFilled.has('referencia') ? '#bae6fd' : '#e2e8f0',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Fecha */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                  Fecha<span className="text-red-400">*</span>
+                  {ocrFilled.has('fecha') && <OcrBadge onClear={() => limpiarCampoOCR('fecha')} />}
+                </label>
+                <div className="relative">
+                  <Calendar size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={fecha}
+                    onChange={e => { setFecha(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('fecha'); return s }) }}
+                    className="w-full border rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition"
+                    style={{
+                      padding:     '8px 10px 8px 26px',
+                      borderColor: ocrFilled.has('fecha') ? '#bae6fd' : '#e2e8f0',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── MONTO con semáforo visual ──────────────────────── */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                Monto transferido (CRC)<span className="text-red-400">*</span>
+                {ocrFilled.has('monto') && <OcrBadge onClear={() => limpiarCampoOCR('monto')} />}
               </label>
               <div className="relative">
                 <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 <input
                   type="number"
                   value={monto}
-                  onChange={e => setMonto(e.target.value)}
+                  onChange={e => { setMonto(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('monto'); return s }) }}
                   placeholder="0"
                   min={1}
                   step={1}
-                  className="w-full border border-gray-200 rounded-xl text-[13px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-[#009ee3] transition"
-                  style={{ padding: '9px 12px 9px 34px' }}
+                  className="w-full border rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none transition"
+                  style={{
+                    padding:     '8px 12px 8px 32px',
+                    borderColor: montoSemaforoBorder,
+                    boxShadow:   montoSemaforoShadow,
+                  }}
                 />
               </div>
               {montoNum > 0 && (
-                <p className="mt-1 text-[10px] text-gray-400 font-medium">
+                <p
+                  className="mt-1 text-[10px] font-semibold"
+                  style={{ color: cuadra ? '#15803d' : seleccion.size > 0 && montoNum > 0 ? '#a16207' : '#94a3b8' }}
+                >
                   {fmtCRC(montoNum)}
+                  {cuadra && ' · ✓ Coincide con las facturas'}
+                  {!cuadra && seleccion.size > 0 && montoNum > 0 && ` · Diferencia: ${fmtCRC(diferencia)}`}
                 </p>
               )}
             </div>
 
-            {/* Notas opcionales */}
+            {/* ── NOTAS ────────────────────────────────────────────── */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 flex items-center gap-1">
-                <StickyNote size={10} />
-                Notas <span className="font-normal text-gray-400 normal-case tracking-normal">(opcional)</span>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                Notas{' '}
+                <span className="font-normal normal-case tracking-normal text-gray-400">(opcional)</span>
               </label>
               <textarea
                 value={notas}
                 onChange={e => setNotas(e.target.value)}
-                placeholder="Observaciones del pago, acuerdo previo, etc."
+                placeholder="Observaciones, acuerdo previo, etc."
                 rows={2}
                 className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-[#009ee3] transition resize-none"
-                style={{ padding: '9px 12px' }}
+                style={{ padding: '8px 12px' }}
               />
             </div>
 
             {/* Error inline */}
             {error && (
-              <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold"
-                style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <div
+                className="flex items-start gap-2 rounded-xl px-3 py-2.5 text-[11px] font-semibold"
+                style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}
+              >
+                <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
             )}
 
           </div>
 
-          {/* Botón de envío */}
-          <div className="px-4 pb-4 pt-2">
+          {/* ── BOTÓN SUBMIT — semáforo verde cuando cuadra ──────── */}
+          <div className="px-4 pb-4 pt-1">
             <button
               type="submit"
               disabled={submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum}
-              className="w-full flex items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#009ee3', padding: '11px 16px' }}
-              onMouseEnter={e => { if (!submitting) e.currentTarget.style.backgroundColor = '#0080c0' }}
-              onMouseLeave={e => { if (!submitting) e.currentTarget.style.backgroundColor = '#009ee3' }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white transition-all"
+              style={{
+                padding:         '11px 16px',
+                backgroundColor: cuadra ? '#22c55e' : '#009ee3',
+                opacity:         (submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum)
+                                   ? 0.45 : 1,
+                cursor:          (submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum)
+                                   ? 'not-allowed' : 'pointer',
+                boxShadow:       cuadra
+                                   ? '0 4px 14px rgba(34,197,94,0.40)'
+                                   : 'none',
+              }}
             >
               {submitting
                 ? <><Loader2 size={14} className="animate-spin" /> Guardando…</>
                 : <><CheckCircle2 size={14} /> Reportar pago</>
               }
             </button>
-            <p className="mt-2 text-center text-[10px] text-gray-400">
-              Se notificará al coordinador para confirmar el pago
+            <p className="mt-1.5 text-center text-[10px] text-gray-400">
+              El coordinador recibirá una notificación ·{' '}
+              {ocrFile
+                ? <span className="text-green-600 font-semibold">Comprobante adjunto</span>
+                : <span>Sin comprobante</span>
+              }
             </p>
           </div>
-        </div>
 
+        </div>
       </div>
     </form>
   )
