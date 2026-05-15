@@ -14,7 +14,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
-  Landmark, Hash, Calendar, DollarSign,
+  Landmark, Hash, Calendar, CreditCard,
   CheckSquare, Square, AlertCircle, CheckCircle2,
   ChevronDown, Loader2, Upload, X,
   Sparkles, AlertTriangle,
@@ -29,11 +29,13 @@ import type { Factura } from '@/types/database'
 
 const BANCOS = [
   { value: 'BAC',        label: 'BAC Credomatic' },
-  { value: 'BN',         label: 'Banco Nacional' },
-  { value: 'BCR',        label: 'Banco de Costa Rica' },
+  { value: 'BNCR',       label: 'Banco Nacional (BNCR)' },
+  { value: 'BCR',        label: 'Banco de Costa Rica (BCR)' },
   { value: 'DAVIVIENDA', label: 'Davivienda' },
 ] as const
 
+const TIPOS_PAGO = ['Transferencia', 'Cheque'] as const
+type TipoPago   = typeof TIPOS_PAGO[number] | ''
 type BancoValue = typeof BANCOS[number]['value']
 const MAX_MB = 8
 
@@ -226,6 +228,17 @@ function parsearMonto(s: string): number | null {
   return isNaN(n) ? null : n
 }
 
+// ── Detecta banco por keywords del texto OCR ────────────────────────────
+function detectarBanco(texto: string): BancoValue | null {
+  const t = texto.toUpperCase()
+  if (/BAC|CREDOMATIC|MONTO TRANSFERIDO/.test(t))                    return 'BAC'
+  if (/BANCO NACIONAL|BNCR|TRANSACCI[OÓ]N PROCESADA|MONTO DEBITADO/.test(t)) return 'BNCR'
+  if (/BANCO DE COSTA RICA|COMPROBANTE DE TRANSFERENCIA/.test(t))    return 'BCR'
+  if (/(?<!\w)BCR(?!\w)/.test(t) && !/BANCO DE COSTA RICA/.test(t)) return 'BCR'
+  if (/DAVIVIENDA/.test(t))                                          return 'DAVIVIENDA'
+  return null
+}
+
 // ── Extrae monto / referencia / fecha del texto OCR ─────────────────────
 function parsearTexto(texto: string): OcrResultado {
   const t = texto.replace(/\n/g, ' ').replace(/\s{2,}/g, ' ')
@@ -243,9 +256,22 @@ function parsearTexto(texto: string): OcrResultado {
   const crcM = t.match(/CRC[\s:]*([\d.,]+)/i)
   if (crcM) { const n = parsearMonto(crcM[1]); if (n && n > 500) montos.push(n) }
 
-  // Patrón 3: keyword MONTO / TOTAL / IMPORTE
-  const kwM = t.match(/(?:MONTO|TOTAL|IMPORTE|VALOR|AMOUNT)[\s:]+([\d₡¢.,]+)/i)
-  if (kwM) { const n = parsearMonto(kwM[1].replace(/[₡¢]/g, '')); if (n && n > 500) montos.push(n) }
+  // Patrón 3: keyword MONTO / TOTAL / IMPORTE / TRANSFERIDO / DEBITADO
+  // Busca el número en los siguientes 40 caracteres después del keyword
+  const kwM = t.match(/(?:MONTO|TOTAL|IMPORTE|VALOR|AMOUNT|TRANSFERIDO|DEBITADO)[\s\S]{0,40}?(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d{4,}(?:[.,]\d{1,2})?)/i)
+  if (kwM) {
+    const limpio = kwM[1].replace(/[^\d.,]/g, '')
+    const n = parsearMonto(limpio)
+    if (n && n > 500) montos.push(n)
+  }
+
+  // Patrón 4: número en formato 100,000.00 o 100.000,00 seguido de "Colones"
+  const colonesM = t.match(/([\d]{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\s*(?:colones|COLONES)/i)
+  if (colonesM) { const n = parsearMonto(colonesM[1]); if (n && n > 500) montos.push(n) }
+
+  // Patrón 5: keyword inline con número (sin separador de línea)
+  const kwInline = t.match(/(?:MONTO|TOTAL|IMPORTE|VALOR|AMOUNT)[\s:₡¢]+([\d.,]+)/i)
+  if (kwInline) { const n = parsearMonto(kwInline[1].replace(/[₡¢]/g, '')); if (n && n > 500) montos.push(n) }
 
   if (montos.length > 0) {
     resultado.monto = Math.max(...montos)   // tomamos el mayor (total de la transferencia)
@@ -343,11 +369,12 @@ export default function TabReportarPago({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Estado formulario ────────────────────────────────────────────
-  const [banco,  setBanco]  = useState<BancoValue | ''>('')
-  const [ref,    setRef]    = useState('')
-  const [fecha,  setFecha]  = useState(hoyISO())
-  const [monto,  setMonto]  = useState('')
-  const [notas,  setNotas]  = useState('')
+  const [tipoPago, setTipoPago] = useState<TipoPago>('')
+  const [banco,    setBanco]    = useState<BancoValue | ''>('')
+  const [ref,      setRef]      = useState('')
+  const [fecha,    setFecha]    = useState(hoyISO())
+  const [monto,    setMonto]    = useState('')
+  const [notas,    setNotas]    = useState('')
 
   // ── Estado OCR ────────────────────────────────────────────────────
   const [ocrFase,           setOcrFase]           = useState<OcrFase>({ fase: 'idle' })
@@ -408,18 +435,29 @@ export default function TabReportarPago({
       // ── PASO 2: comprimir imagen (Canvas → WebP/JPEG, max 1280px) ───
       setOcrFase({ fase: 'procesando', label: 'Comprimiendo imagen…', progreso: 12 })
       const comprimida = await comprimirImagen(imagenFuente)
-
-      // Guardar el blob comprimido — es exactamente lo que se subirá al Storage
       setArchivoComprimido(comprimida.blob)
 
-      // ── PASO 3: OCR sobre la imagen comprimida ─────────────────────
-      // (la misma imagen que se guardará = coherencia total)
+      // ── Cheque: solo adjuntar imagen, sin OCR ───────────────────────
+      if (tipoPago === 'Cheque') {
+        const previewUrl = URL.createObjectURL(comprimida.blob)
+        setOcrFase({
+          fase:         'listo',
+          resultado:    { detectados: [] },
+          previewUrl,
+          fileName:     file.name,
+          originalKB:   comprimida.originalKB,
+          compressedKB: comprimida.finalKB,
+          formato:      comprimida.formato,
+        })
+        return
+      }
+
+      // ── PASO 3: OCR (solo Transferencia) ───────────────────────────
       const texto = await runOCR(comprimida.blob, (label, progreso) => {
-        // OCR ocupa el 20–100 % del progreso visual
         setOcrFase({ fase: 'procesando', label, progreso: 20 + Math.round(progreso * 0.80) })
       })
 
-      // ── PASO 4: parsear y auto-fill ─────────────────────────────────
+      // ── PASO 4: parsear, auto-fill y detectar banco ─────────────────
       const resultado  = parsearTexto(texto)
       const previewUrl = URL.createObjectURL(comprimida.blob)
 
@@ -438,6 +476,12 @@ export default function TabReportarPago({
       if (resultado.referencia) { setRef(resultado.referencia);                  filled.add('referencia') }
       if (resultado.fecha)      { setFecha(resultado.fecha);                     filled.add('fecha') }
       setOcrFilled(filled)
+
+      // Auto-seleccionar banco si se detectó en el texto y aún no hay uno elegido
+      if (!banco) {
+        const bancoDetectado = detectarBanco(texto)
+        if (bancoDetectado) setBanco(bancoDetectado)
+      }
 
     } catch (err) {
       console.error('[OCR/Compresión]', err)
@@ -515,8 +559,9 @@ export default function TabReportarPago({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!tipoPago)                   { setError('Seleccione el tipo de pago'); return }
     if (!banco)                      { setError('Seleccione el banco de origen'); return }
-    if (!ref.trim())                 { setError('Ingrese el número de referencia'); return }
+    if (!ref.trim())                 { setError(tipoPago === 'Cheque' ? 'Ingrese el número de cheque' : 'Ingrese el número de referencia'); return }
     if (!fecha)                      { setError('Ingrese la fecha de transferencia'); return }
     if (!montoNum || montoNum <= 0)  { setError('Ingrese un monto válido'); return }
     if (seleccion.size === 0)        { setError('Seleccione al menos una factura'); return }
@@ -756,6 +801,30 @@ export default function TabReportarPago({
 
           <div className="flex-1 p-4 space-y-3.5">
 
+            {/* ── TIPO DE PAGO ─────────────────────────────────── */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                Tipo de pago<span className="text-red-400 ml-0.5">*</span>
+              </label>
+              <div className="relative">
+                <CreditCard size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <select
+                  value={tipoPago}
+                  onChange={e => {
+                    setTipoPago(e.target.value as TipoPago)
+                    // Al cambiar tipo, limpiar archivo previo para evitar confusión
+                    quitarArchivo()
+                  }}
+                  className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
+                  style={{ padding: '8px 32px 8px 32px', backgroundColor: 'white' }}
+                >
+                  <option value="" disabled>Seleccionar tipo…</option>
+                  {TIPOS_PAGO.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
             {/* ── DROPZONE ────────────────────────────────────── */}
 
             {/* Estado: idle — zona de arrastre */}
@@ -781,15 +850,27 @@ export default function TabReportarPago({
                 </div>
                 <p className="text-[11px] font-semibold text-center"
                   style={{ color: dragOver ? '#009ee3' : '#64748b' }}>
-                  Arrastre el comprobante aquí
+                  {tipoPago === 'Cheque'
+                    ? 'Adjuntar foto del cheque (respaldo)'
+                    : 'Arrastre el comprobante aquí'}
                 </p>
                 <p className="text-[10px] text-gray-400">JPG · PNG · PDF — máx {MAX_MB}MB</p>
-                <span
-                  className="text-[9px] font-bold rounded-full px-2 py-0.5 flex items-center gap-1 mt-0.5"
-                  style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}
-                >
-                  <Sparkles size={8} /> OCR activo — auto-completa el formulario
-                </span>
+                {tipoPago !== 'Cheque' && (
+                  <span
+                    className="text-[9px] font-bold rounded-full px-2 py-0.5 flex items-center gap-1 mt-0.5"
+                    style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}
+                  >
+                    <Sparkles size={8} /> OCR activo — auto-completa el formulario
+                  </span>
+                )}
+                {tipoPago === 'Cheque' && (
+                  <span
+                    className="text-[9px] font-bold rounded-full px-2 py-0.5 mt-0.5"
+                    style={{ backgroundColor: '#fef9c3', color: '#a16207' }}
+                  >
+                    Solo respaldo — digitación manual
+                  </span>
+                )}
               </div>
             )}
 
@@ -911,10 +992,10 @@ export default function TabReportarPago({
             {/* ── GRID: Referencia + Fecha ──────────────────────── */}
             <div className="grid grid-cols-2 gap-3">
 
-              {/* Referencia */}
+              {/* Referencia / N° de cheque */}
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  Referencia<span className="text-red-400">*</span>
+                  {tipoPago === 'Cheque' ? 'N° de cheque' : 'Referencia'}<span className="text-red-400">*</span>
                   {ocrFilled.has('referencia') && <OcrBadge onClear={() => limpiarCampoOCR('referencia')} />}
                 </label>
                 <div className="relative">
@@ -962,7 +1043,7 @@ export default function TabReportarPago({
                 {ocrFilled.has('monto') && <OcrBadge onClear={() => limpiarCampoOCR('monto')} />}
               </label>
               <div className="relative">
-                <DollarSign size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[13px] font-bold select-none">₡</span>
                 <input
                   type="number"
                   value={monto}
@@ -1023,14 +1104,14 @@ export default function TabReportarPago({
           <div className="px-4 pb-4 pt-1">
             <button
               type="submit"
-              disabled={submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum}
+              disabled={submitting || !cuadra || !tipoPago || !banco || !ref.trim() || !fecha || !montoNum}
               className="w-full flex items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white transition-all"
               style={{
                 padding:         '11px 16px',
                 backgroundColor: cuadra ? '#22c55e' : '#009ee3',
-                opacity:         (submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum)
+                opacity:         (submitting || !cuadra || !tipoPago || !banco || !ref.trim() || !fecha || !montoNum)
                                    ? 0.45 : 1,
-                cursor:          (submitting || !cuadra || !banco || !ref.trim() || !fecha || !montoNum)
+                cursor:          (submitting || !cuadra || !tipoPago || !banco || !ref.trim() || !fecha || !montoNum)
                                    ? 'not-allowed' : 'pointer',
                 boxShadow:       cuadra
                                    ? '0 4px 14px rgba(34,197,94,0.40)'
