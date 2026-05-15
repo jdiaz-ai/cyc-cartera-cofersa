@@ -1109,67 +1109,153 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
 
 // ── Modal Estado de cuenta ────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, analistaEmail, supabase, onClose, onSuccess }: {
+function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, supabase, onClose, onSuccess }: {
   clienteNombre: string; clienteCod: string; contribuyente: string
   correo: string; analistaEmail: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
   onClose: () => void; onSuccess: () => void
 }) {
+  const [para,    setPara]    = useState(correo)
+  const [mensaje, setMensaje] = useState('')
   const [loading, setLoading] = useState(false)
+  const [enviado, setEnviado] = useState(false)
+  const [error,   setError]   = useState('')
 
-  async function registrarGestion(accion: string) {
+  async function enviarEmail() {
+    if (!para.trim()) { setError('Ingresá un correo destinatario'); return }
     setLoading(true)
-    const hoy   = new Date()
-    const fecha = hoy.toISOString().split('T')[0]
-    const hora  = `${String(hoy.getHours()).padStart(2,'0')}:${String(hoy.getMinutes()).padStart(2,'0')}:00`
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await supabase.from('gestiones').insert({
-      cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
-      fecha, hora, tipo: 'CORREO', resultado: 'Email enviado',
-      nota: `Estado de cuenta: ${accion}`,
-    } as any)
+    setError('')
+
+    // Obtener provider_token del lado del cliente
+    const { data: { session } } = await supabase.auth.getSession()
+    const providerToken = session?.provider_token ?? null
+
+    const res = await fetch('/api/clientes/estado-cuenta', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cliente_cod:    clienteCod,
+        cliente_nombre: clienteNombre,
+        contribuyente,
+        to_email:       para.trim(),
+        mensaje:        mensaje.trim() || undefined,
+        providerToken,
+      }),
+    })
+
     setLoading(false)
-    onSuccess()
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      setError(data.error ?? 'Error al enviar')
+      return
+    }
+    if (data.email_sent) {
+      setEnviado(true)
+      setTimeout(() => onSuccess(), 1400)
+    } else {
+      setError(data.email_error ?? 'Error al enviar el correo')
+    }
   }
 
   return (
     <ModalOverlay onClose={onClose}>
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div>
-          <h2 className="text-[15px] font-bold text-gray-900">Estado de cuenta</h2>
+          <h2 className="text-[15px] font-bold text-gray-900">Enviar Estado de Cuenta</h2>
           <p className="text-[12px] text-gray-400 mt-0.5">{clienteNombre}</p>
         </div>
         <CloseBtn onClose={onClose} />
       </div>
-      <div className="p-5 space-y-3">
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => registrarGestion('Descarga de PDF solicitada')}
-          className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition disabled:opacity-60"
-        >
-          <FileDown size={18} className="text-gray-400" />
-          <div className="text-left">
-            <p className="text-[13px] font-bold text-gray-800">Descargar PDF</p>
-            <p className="text-[11px] text-gray-400">Genera el estado de cuenta en PDF</p>
+
+      {enviado ? (
+        /* ── Estado de éxito ──────────────────────────────────────── */
+        <div className="p-10 flex flex-col items-center text-center">
+          <CheckCircle2 size={42} style={{ color: '#22c55e' }} className="mb-3" />
+          <p className="text-[14px] font-bold text-gray-800">Estado de cuenta enviado</p>
+          <p className="text-[12px] text-gray-400 mt-1">Gestión registrada automáticamente.</p>
+        </div>
+      ) : (
+        /* ── Formulario ───────────────────────────────────────────── */
+        <div className="p-5 space-y-4">
+
+          {/* Campo Para */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              Destinatario
+            </label>
+            <input
+              type="email"
+              value={para}
+              onChange={e => { setPara(e.target.value); setError('') }}
+              placeholder="correo@empresa.com"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition"
+            />
+            {!correo && (
+              <p className="text-[10px] text-amber-500 mt-1">
+                Este cliente no tiene correo registrado. Podés ingresar uno manualmente.
+              </p>
+            )}
           </div>
-        </button>
-        <button
-          type="button"
-          disabled={loading || !correo}
-          onClick={() => registrarGestion(`Enviado por email a ${correo}`)}
-          className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition disabled:opacity-60"
-          title={!correo ? 'Sin correo registrado para este cliente' : undefined}
-        >
-          <Send size={18} style={{ color: '#009ee3' }} />
-          <div className="text-left">
-            <p className="text-[13px] font-bold text-gray-800">Enviar por email</p>
-            <p className="text-[11px] text-gray-400">{correo || 'Sin correo registrado'}</p>
+
+          {/* Mensaje personalizado */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              Mensaje{' '}
+              <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span>
+            </label>
+            <textarea
+              value={mensaje}
+              onChange={e => setMensaje(e.target.value)}
+              placeholder="Ej: Por favor gestionar el pago a la brevedad posible..."
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-800 focus:outline-none focus:border-[#009ee3] resize-none transition"
+            />
           </div>
-        </button>
-        <p className="text-[10px] text-gray-400 text-center">Se registrará una gestión automáticamente al confirmar.</p>
-      </div>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-[12px] text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Botones */}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={loading || !para.trim()}
+              onClick={enviarEmail}
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-bold text-white disabled:opacity-60 transition"
+              style={{ backgroundColor: '#009ee3' }}
+            >
+              {loading ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send size={13} />
+                  Enviar estado de cuenta
+                </>
+              )}
+            </button>
+          </div>
+
+          <p className="text-[10px] text-gray-400 text-center">
+            Se registrará una gestión automáticamente al enviar.
+          </p>
+        </div>
+      )}
     </ModalOverlay>
   )
 }
