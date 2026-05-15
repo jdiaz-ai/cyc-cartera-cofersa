@@ -28,23 +28,12 @@ export default function TipoCambio() {
       .catch(() => setData({ compra: null, venta: null, fecha: null, error: true }))
   }, [])
 
-  // ── Estado de carga ──────────────────────────────────────────────────
-  if (!data) {
-    return (
-      <div style={{ padding: '8px 12px', textAlign: 'center' }}>
-        <p style={{ color: 'rgba(255,255,255,0.18)', fontSize: '10px' }}>
-          Cargando tipo de cambio…
-        </p>
-      </div>
-    )
-  }
+  // sinDatos = cargando todavía O error O sin credenciales
+  const sinDatos = !data || data.error || !data.compra || !data.venta
 
-  // ── Error o sin credenciales → ocultar completamente ───────────────
-  if (data.error || !data.compra || !data.venta) return null
-
-  // ── Convertidor bidireccional ────────────────────────────────────────
+  // ── Convertidor — solo activo cuando hay datos reales ────────────────
   function handleColones(val: string) {
-    // Solo dígitos y punto/coma
+    if (sinDatos) return
     const clean = val.replace(/[^0-9.,]/g, '')
     setColones(clean)
     setDolares('')
@@ -58,6 +47,7 @@ export default function TipoCambio() {
   }
 
   function handleDolares(val: string) {
+    if (sinDatos) return
     const clean = val.replace(/[^0-9.,]/g, '')
     setDolares(clean)
     setColones('')
@@ -70,9 +60,8 @@ export default function TipoCambio() {
     }
   }
 
-  // Capitalizar primera letra de la fecha
-  const fechaMostrar = data.fecha
-    ? data.fecha.charAt(0).toUpperCase() + data.fecha.slice(1)
+  const fechaMostrar = (!sinDatos && data!.fecha)
+    ? data!.fecha.charAt(0).toUpperCase() + data!.fecha.slice(1)
     : ''
 
   return (
@@ -96,24 +85,24 @@ export default function TipoCambio() {
       >
         <span
           style={{
-            color:          'rgba(255,255,255,0.30)',
-            fontSize:       '9px',
-            fontWeight:     700,
-            letterSpacing:  '0.10em',
-            textTransform:  'uppercase',
+            color:         'rgba(255,255,255,0.30)',
+            fontSize:      '9px',
+            fontWeight:    700,
+            letterSpacing: '0.10em',
+            textTransform: 'uppercase',
           }}
         >
           Tipo de Cambio
         </span>
 
-        {/* Badge BCCR con punto verde */}
+        {/* Badge BCCR — punto gris si sin datos, verde si activo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <div
             style={{
               width:        '5px',
               height:       '5px',
               borderRadius: '50%',
-              background:   '#22c55e',
+              background:   sinDatos ? 'rgba(255,255,255,0.20)' : '#22c55e',
             }}
           />
           <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: '9px', fontWeight: 600 }}>
@@ -136,7 +125,7 @@ export default function TipoCambio() {
             Compra
           </p>
           <p style={{ color: 'white', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', lineHeight: 1 }}>
-            ₡{fmtTC(data.compra)}
+            {sinDatos ? '—' : `₡${fmtTC(data!.compra!)}`}
           </p>
         </div>
 
@@ -144,8 +133,8 @@ export default function TipoCambio() {
           <p style={{ color: 'rgba(255,255,255,0.30)', fontSize: '9px', marginBottom: '2px' }}>
             Venta
           </p>
-          <p style={{ color: '#34d399', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', lineHeight: 1 }}>
-            ₡{fmtTC(data.venta)}
+          <p style={{ color: sinDatos ? 'rgba(255,255,255,0.25)' : '#34d399', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', lineHeight: 1 }}>
+            {sinDatos ? '—' : `₡${fmtTC(data!.venta!)}`}
           </p>
         </div>
       </div>
@@ -155,29 +144,31 @@ export default function TipoCambio() {
         {/* Colones → Dólares */}
         <div
           style={{
-            display:    'flex',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.06)',
+            display:      'flex',
+            alignItems:   'center',
+            background:   sinDatos ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
             borderRadius: '6px',
-            padding:    '5px 8px',
-            gap:        '5px',
+            padding:      '5px 8px',
+            gap:          '5px',
           }}
         >
-          <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '11px', flexShrink: 0 }}>₡</span>
+          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '11px', flexShrink: 0 }}>₡</span>
           <input
             type="text"
             inputMode="decimal"
             value={colones}
             onChange={e => handleColones(e.target.value)}
-            placeholder="Colones"
+            placeholder={sinDatos ? '—' : 'Colones'}
+            disabled={sinDatos}
             style={{
-              background:  'transparent',
-              border:      'none',
-              outline:     'none',
-              color:       'white',
-              fontSize:    '11px',
-              fontFamily:  'monospace',
-              width:       '100%',
+              background: 'transparent',
+              border:     'none',
+              outline:    'none',
+              color:      sinDatos ? 'rgba(255,255,255,0.20)' : 'white',
+              fontSize:   '11px',
+              fontFamily: 'monospace',
+              width:      '100%',
+              cursor:     sinDatos ? 'not-allowed' : 'text',
             }}
           />
         </div>
@@ -185,47 +176,47 @@ export default function TipoCambio() {
         {/* Dólares → Colones */}
         <div
           style={{
-            display:    'flex',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.06)',
+            display:      'flex',
+            alignItems:   'center',
+            background:   sinDatos ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
             borderRadius: '6px',
-            padding:    '5px 8px',
-            gap:        '5px',
+            padding:      '5px 8px',
+            gap:          '5px',
           }}
         >
-          <span style={{ color: 'rgba(255,255,255,0.38)', fontSize: '11px', flexShrink: 0 }}>$</span>
+          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: '11px', flexShrink: 0 }}>$</span>
           <input
             type="text"
             inputMode="decimal"
             value={dolares}
             onChange={e => handleDolares(e.target.value)}
-            placeholder="Dólares"
+            placeholder={sinDatos ? '—' : 'Dólares'}
+            disabled={sinDatos}
             style={{
-              background:  'transparent',
-              border:      'none',
-              outline:     'none',
-              color:       'white',
-              fontSize:    '11px',
-              fontFamily:  'monospace',
-              width:       '100%',
+              background: 'transparent',
+              border:     'none',
+              outline:    'none',
+              color:      sinDatos ? 'rgba(255,255,255,0.20)' : 'white',
+              fontSize:   '11px',
+              fontFamily: 'monospace',
+              width:      '100%',
+              cursor:     sinDatos ? 'not-allowed' : 'text',
             }}
           />
         </div>
       </div>
 
-      {/* ── Fecha de la tasa ─────────────────────────────────────── */}
-      {fechaMostrar && (
-        <p
-          style={{
-            color:     'rgba(255,255,255,0.18)',
-            fontSize:  '9px',
-            marginTop: '8px',
-            textAlign: 'center',
-          }}
-        >
-          {fechaMostrar}
-        </p>
-      )}
+      {/* ── Fecha o texto de estado ──────────────────────────────── */}
+      <p
+        style={{
+          color:     'rgba(255,255,255,0.18)',
+          fontSize:  '9px',
+          marginTop: '8px',
+          textAlign: 'center',
+        }}
+      >
+        {sinDatos ? 'Pendiente de configuración' : fechaMostrar}
+      </p>
     </div>
   )
 }
