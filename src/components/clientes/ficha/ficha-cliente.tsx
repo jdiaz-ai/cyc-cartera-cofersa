@@ -3,16 +3,16 @@
 import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, ClipboardList, Handshake, FileText, AlertTriangle,
+  ArrowLeft, Handshake, FileText, AlertTriangle,
   CheckCircle2, XCircle, Clock, Circle, Plus,
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
-  MailOpen, MessageCircle, ChevronDown, FileDown, Send, Search,
+  MessageCircle, ChevronDown, FileDown, Send, Search,
 } from 'lucide-react'
-import { fmtM, fmtCRC, fmtCRC2, fmtFecha, fmtFechaHora, hoyISO } from '@/lib/utils/formato'
+import { fmtM, fmtCRC, fmtCRC2, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import FormNuevaGestion    from './form-nueva-gestion'
-import TimelineGestionesV2  from './timeline-gestiones-v2'
+import TablaGestionesCompacta, { KpiCard, fechaRelativa } from '@/components/gestiones/tabla-gestiones-base'
 import TabReportarPago      from './tab-reportar-pago'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
@@ -418,14 +418,6 @@ export default function FichaCliente({
             style={{ borderColor: maestro?.telefono ? '#86efac' : undefined, color: maestro?.telefono ? '#16a34a' : undefined }}
           />
 
-          {/* Emails — placeholder junio 2026 */}
-          <ActionBtn
-            icon={<MailOpen size={12} />}
-            label="Emails"
-            disabled
-            title="Disponible Junio 2026 — Integración Gmail"
-          />
-
           {/* Email de cobro */}
           <ActionBtn
             icon={<Send size={12} />}
@@ -513,6 +505,7 @@ export default function FichaCliente({
           <TabGestiones
             gestiones      = {gestiones}
             promesas       = {promesas}
+            solicitudes    = {solicitudes}
             userEmail      = {userEmail}
             esCoordinador  = {esCoordinador}
             onNuevaGestion = {() => setModalGestion(true)}
@@ -1280,10 +1273,6 @@ function CloseBtn({ onClose }: { onClose: () => void }) {
   )
 }
 
-function Divider() {
-  return <div className="w-px self-stretch bg-gray-100" />
-}
-
 function KpiChip({ label, valor, color, small, italic }: {
   label: string; valor: string; color?: string; small?: boolean; italic?: boolean
 }) {
@@ -1896,6 +1885,7 @@ function ModalEditarGestion({ gestion, onClose, onSuccess }: {
 function TabGestiones({
   gestiones,
   promesas,
+  solicitudes,
   userEmail,
   esCoordinador,
   onNuevaGestion,
@@ -1904,6 +1894,8 @@ function TabGestiones({
 }: {
   gestiones:      Gestion[]
   promesas:       Promesa[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  solicitudes:    any[]
   userEmail:      string
   esCoordinador:  boolean
   onNuevaGestion: () => void
@@ -1911,194 +1903,174 @@ function TabGestiones({
   onRefresh:      () => void
 }) {
   const hoy = hoyISO()
-  const [filtroTipo,      setFiltroTipo]      = useState('Todos')
-  const [filtroResultado, setFiltroResultado] = useState('Todos')
-  const [filtroPeriodo,   setFiltroPeriodo]   = useState('Todo')
-  const [busqueda,        setBusqueda]        = useState('')
-  const [visibles,        setVisibles]        = useState(10)
-  const [editando,        setEditando]        = useState<Gestion | null>(null)
+  const [busqueda,   setBusqueda]   = useState('')
+  const [fTipo,      setFTipo]      = useState('Todos')
+  const [fResultado, setFResultado] = useState('Todos')
+  const [fPeriodo,   setFPeriodo]   = useState('90')
+  const [fAnalista,  setFAnalista]  = useState('Todos')
+  const [editando,   setEditando]   = useState<Gestion | null>(null)
 
-  // Todos ven la bitácora completa del cliente.
-  // Editar/eliminar se controla por fila (puedeEditar / puedeEliminar).
-  const visiblesBase = useMemo(() =>
-    gestiones.filter(g => g.activo !== false),
-    [gestiones]
+  const base = useMemo(() => gestiones.filter(g => g.activo !== false), [gestiones])
+
+  const promesaMap = useMemo(
+    () => new Map(promesas.map(p => [p.id, p])),
+    [promesas],
   )
 
-  // Filtro de período
+  const solPorGestion = useMemo(() => {
+    const s = new Set<string>()
+    for (const x of solicitudes) if (x?.gestion_id) s.add(x.gestion_id as string)
+    return s
+  }, [solicitudes])
+
+  const CERRADOS = ['Resuelta', 'Cerrada', 'Rechazada', 'APROBADA', 'RECHAZADA']
+  const solAbiertas = useMemo(
+    () => solicitudes.filter(x => !CERRADOS.includes(x?.estado)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [solicitudes],
+  )
+
+  function diasDesde(fecha: string): number {
+    return Math.floor((new Date(hoy).getTime() - new Date(fecha).getTime()) / 86400000)
+  }
   function enPeriodo(fecha: string): boolean {
-    if (filtroPeriodo === 'Todo') return true
-    const diff = Math.floor((new Date(hoy).getTime() - new Date(fecha).getTime()) / 86400000)
-    if (filtroPeriodo === 'Hoy')         return diff === 0
-    if (filtroPeriodo === 'Esta semana') return diff >= 0 && diff <= 6
-    if (filtroPeriodo === 'Este mes')    return diff >= 0 && diff <= 30
+    if (fPeriodo === 'todo') return true
+    const d = diasDesde(fecha)
+    if (fPeriodo === 'hoy')    return d === 0
+    if (fPeriodo === 'semana') return d >= 0 && d <= 6
+    if (fPeriodo === 'mes')    return d >= 0 && d <= 30
+    if (fPeriodo === '90')     return d >= 0 && d <= 90
     return true
   }
 
-  const filtradas = useMemo(() => visiblesBase.filter(g => {
-    if (filtroTipo      !== 'Todos' && g.tipo      !== filtroTipo)      return false
-    if (filtroResultado !== 'Todos' && g.resultado !== filtroResultado) return false
-    if (!enPeriodo(g.fecha))                                            return false
-    if (busqueda && !g.nota?.toLowerCase().includes(busqueda.toLowerCase())) return false
+  const filtradas = useMemo(() => base.filter(g => {
+    if (fTipo      !== 'Todos' && g.tipo      !== fTipo)      return false
+    if (fResultado !== 'Todos' && g.resultado !== fResultado) return false
+    if (fAnalista  !== 'Todos' && g.analista_email !== fAnalista) return false
+    if (!enPeriodo(g.fecha)) return false
+    if (busqueda) {
+      const q = busqueda.toLowerCase()
+      if (!(g.nota ?? '').toLowerCase().includes(q) &&
+          !(g.resultado ?? '').toLowerCase().includes(q)) return false
+    }
     return true
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [visiblesBase, filtroTipo, filtroResultado, filtroPeriodo, busqueda, hoy])
+  }), [base, fTipo, fResultado, fAnalista, fPeriodo, busqueda, hoy])
 
-  const mostradas = filtradas.slice(0, visibles)
+  const ult90 = useMemo(
+    () => base.filter(g => { const d = diasDesde(g.fecha); return d >= 0 && d <= 90 }).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, hoy],
+  )
 
-  // KPIs del total visible (respeta permisos)
-  const total         = visiblesBase.length
-  const ultima        = visiblesBase[0]
-  const resultadoTop  = useMemo(() => {
-    const m: Record<string, number> = {}
-    visiblesBase.forEach(g => { m[g.resultado] = (m[g.resultado] ?? 0) + 1 })
-    return Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
-  }, [visiblesBase])
+  const conPromesa = useMemo(() => base.filter(g => g.promesa_id), [base])
+  const promCumpl  = conPromesa.filter(g => promesaMap.get(g.promesa_id!)?.estado === 'CUMPLIDA').length
+  const promActiv  = conPromesa.filter(g => {
+    const e = promesaMap.get(g.promesa_id!)?.estado
+    return e === 'PENDIENTE' || e === 'ABONO_PARCIAL'
+  }).length
 
-  const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.tipo)))], [visiblesBase])
-  const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(visiblesBase.map(g => g.resultado)))], [visiblesBase])
+  const ordenadas = useMemo(
+    () => [...base].sort((a, b) =>
+      `${b.fecha}T${b.hora ?? '00:00'}`.localeCompare(`${a.fecha}T${a.hora ?? '00:00'}`)),
+    [base],
+  )
+  const ultima = ordenadas[0]
 
-  const hayFiltros = filtroTipo !== 'Todos' || filtroResultado !== 'Todos' || filtroPeriodo !== 'Todo' || !!busqueda
+  const analistasUnicos = useMemo(
+    () => Array.from(new Set(base.map(g => g.analista_email))).filter(Boolean),
+    [base],
+  )
+  const tiposUnicos      = useMemo(() => ['Todos', ...Array.from(new Set(base.map(g => g.tipo)))], [base])
+  const resultadosUnicos = useMemo(() => ['Todos', ...Array.from(new Set(base.map(g => g.resultado)))], [base])
+
+  const filtradasOrden = useMemo(
+    () => [...filtradas].sort((a, b) =>
+      `${b.fecha}T${b.hora ?? '00:00'}`.localeCompare(`${a.fecha}T${a.hora ?? '00:00'}`)),
+    [filtradas],
+  )
+
+  const selCls = 'rounded-lg text-[12px] text-gray-700 bg-white focus:outline-none transition'
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
 
-      {/* ── Fila 1: KPIs + botón ─────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex flex-wrap gap-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-              Total gestiones
-            </p>
-            <p className="text-[22px] font-black tabular-nums text-gray-800 leading-tight">{total}</p>
-          </div>
-          <Divider />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Última gestión</p>
-            <p className="text-[15px] font-bold text-gray-700 leading-tight">
-              {ultima ? fmtFecha(ultima.fecha) : '—'}
-            </p>
-            {ultima && (
-              <p className="text-[11px] text-gray-400">{ultima.tipo} · {ultima.hora?.slice(0, 5)}</p>
-            )}
-          </div>
-          <Divider />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resultado frecuente</p>
-            {resultadoTop !== '—' ? (
-              <span className="inline-block text-[12px] font-bold rounded-full px-2.5 py-0.5 mt-0.5"
-                style={{
-                  backgroundColor: (RESULTADO_COLORS[resultadoTop] ?? { bg: '#f1f5f9' }).bg,
-                  color:            (RESULTADO_COLORS[resultadoTop] ?? { text: '#64748b' }).text,
-                }}>
-                {resultadoTop}
-              </span>
-            ) : <p className="text-[13px] text-gray-300 italic">—</p>}
-          </div>
-          <Divider />
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Por tipo</p>
-            <div className="flex gap-2 mt-0.5 flex-wrap">
-              {Object.entries(
-                visiblesBase.reduce<Record<string, number>>((acc, g) => { acc[g.tipo] = (acc[g.tipo] ?? 0) + 1; return acc }, {})
-              ).map(([t, cnt]) => {
-                const sty = TIPO_COLORES[t] ?? { bg: '#f1f5f9', text: '#64748b' }
-                return (
-                  <span key={t} className="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2 py-0.5"
-                    style={{ backgroundColor: sty.bg, color: sty.text }}>
-                    {TIPO_ICONOS[t]}
-                    {cnt}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+      {/* KPIs (4) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard label="Total gestiones" valor={ult90} sub="últimos 90 días" />
+        <KpiCard label="Con promesa" valor={conPromesa.length}
+          sub={`${promCumpl} cumplidas · ${promActiv} activas`} valorColor="#854f0b" />
+        <KpiCard label="Solicitudes" valor={solicitudes.length}
+          sub={`${solAbiertas} abierta${solAbiertas !== 1 ? 's' : ''}`} valorColor="#534ab7" />
+        <KpiCard label="Última gestión"
+          valor={ultima ? fechaRelativa(ultima.fecha) : '—'}
+          sub={ultima ? `${fmtFecha(ultima.fecha)} · ${ultima.tipo}` : ''}
+          esTexto />
       </div>
 
-      {/* ── Fila 2: Filtros ──────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative" style={{ minWidth: '180px', maxWidth: '240px', flex: '1' }}>
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={busqueda}
-            onChange={e => { setBusqueda(e.target.value); setVisibles(10) }}
-            placeholder="Buscar en notas..."
-            className="w-full rounded-lg border border-gray-200 pl-8 pr-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:border-blue-300 transition"
-          />
+      {/* Barra de filtros (1 fila) */}
+      <div className="flex items-center gap-2 flex-wrap"
+        style={{ backgroundColor: '#fff', border: '0.5px solid #e2e8f0', borderRadius: 10, padding: '8px 10px' }}>
+        <div className="relative flex-1 min-w-[160px]">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+            placeholder="Buscar en nota o resultado…"
+            className="w-full text-[12px] text-gray-700 focus:outline-none"
+            style={{ border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 10px 5px 28px' }} />
         </div>
-        <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setVisibles(10) }}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
+        <span style={{ width: 1, height: 22, backgroundColor: '#e2e8f0' }} />
+        <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={selCls}
+          style={{ border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 8px' }}>
           {tiposUnicos.map(t => <option key={t} value={t}>{t === 'Todos' ? 'Todos los tipos' : t}</option>)}
         </select>
-        <select value={filtroResultado} onChange={e => { setFiltroResultado(e.target.value); setVisibles(10) }}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
+        <select value={fResultado} onChange={e => setFResultado(e.target.value)} className={selCls}
+          style={{ border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 8px' }}>
           {resultadosUnicos.map(r => <option key={r} value={r}>{r === 'Todos' ? 'Todos los resultados' : r}</option>)}
         </select>
-        <select value={filtroPeriodo} onChange={e => { setFiltroPeriodo(e.target.value); setVisibles(10) }}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-blue-300 transition bg-white">
-          {['Todo', 'Hoy', 'Esta semana', 'Este mes'].map(p => <option key={p} value={p}>{p}</option>)}
+        <select value={fPeriodo} onChange={e => setFPeriodo(e.target.value)} className={selCls}
+          style={{ border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 8px' }}>
+          <option value="hoy">Hoy</option>
+          <option value="semana">Esta semana</option>
+          <option value="mes">Este mes</option>
+          <option value="90">Últimos 90 días</option>
+          <option value="todo">Todo</option>
         </select>
-        {hayFiltros && (
-          <button type="button"
-            onClick={() => { setFiltroTipo('Todos'); setFiltroResultado('Todos'); setFiltroPeriodo('Todo'); setBusqueda(''); setVisibles(10) }}
-            className="text-[12px] font-semibold text-blue-500 hover:text-blue-700 transition">
-            Limpiar
-          </button>
+        {esCoordinador && (
+          <select value={fAnalista} onChange={e => setFAnalista(e.target.value)} className={selCls}
+            style={{ border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 8px' }}>
+            <option value="Todos">Todos los analistas</option>
+            {analistasUnicos.map(a => <option key={a} value={a}>{a.split('@')[0]}</option>)}
+          </select>
         )}
-        {filtradas.length !== total && (
-          <span className="text-[11px] text-gray-400 ml-auto">{filtradas.length} de {total}</span>
-        )}
+        <span className="text-[11px] text-gray-400 ml-auto">{filtradasOrden.length} de {base.length}</span>
       </div>
 
-      {/* ── Fila 3: Timeline ─────────────────────────────────── */}
-      {filtradas.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <EmptyState icon={<ClipboardList size={32} />}
-            texto={total === 0 ? 'Sin gestiones registradas.' : 'No hay gestiones con esos filtros.'} />
-        </div>
-      ) : (
-        <>
-          <TimelineGestionesV2
-            gestiones     = {mostradas}
-            promesas      = {promesas}
-            userEmail     = {userEmail}
-            esCoordinador = {esCoordinador}
-            onEdit        = {setEditando}
-          />
-
-          {/* Ver más / eliminar paginado */}
-          {filtradas.length > visibles && (
-            <div className="flex items-center justify-between px-2 py-3">
-              <span className="text-[12px] text-gray-400">
-                Mostrando {mostradas.length} de {filtradas.length}
-              </span>
-              <button type="button" onClick={() => setVisibles(v => v + 20)}
-                className="text-[12px] font-bold text-[#009ee3] hover:text-[#0080c0] transition">
-                Ver más ↓
-              </button>
-            </div>
-          )}
-        </>
-      )}
+      {/* Tabla compacta */}
+      <TablaGestionesCompacta
+        gestiones={filtradasOrden}
+        promesaMap={promesaMap}
+        solicitudesPorGestion={solPorGestion}
+        mostrarCliente={false}
+        canEdit={g => esCoordinador || g.analista_email === userEmail}
+        onEdit={setEditando}
+      />
 
       {/* Modal editar */}
       {editando && (
         <ModalEditarGestion
-          gestion    = {editando}
-          onClose    = {() => setEditando(null)}
-          onSuccess  = {() => { setEditando(null); onToast('Gestión actualizada'); onRefresh() }}
+          gestion   = {editando}
+          onClose   = {() => setEditando(null)}
+          onSuccess = {() => { setEditando(null); onToast('Gestión actualizada'); onRefresh() }}
         />
       )}
 
-      {/* ── Botón flotante ────────────────────────────────────── */}
+      {/* Botón flotante */}
       <button
         type="button"
         onClick={onNuevaGestion}
         title="Registrar una nueva gestión (llamada, email, visita, etc.)"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
-        style={{ backgroundColor: '#009ee3' }}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        style={{ backgroundColor: '#009ee3', padding: '11px 18px', borderRadius: 22 }}
       >
         <Plus size={16} /> Nueva gestión
       </button>
