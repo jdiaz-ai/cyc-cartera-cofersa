@@ -4,7 +4,7 @@ import { useState, useMemo }         from 'react'
 import {
   Phone, MessageCircle, Mail, Wrench, MapPin, X,
   CheckCircle2, Calendar, DollarSign, FileText,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Receipt, ArrowRight,
 } from 'lucide-react'
 import { fmtCRC }          from '@/lib/utils/formato'
 import { hoyISO_CR, ahoraCR, esFechaPasadaCR } from '@/lib/utils/timezone'
@@ -34,7 +34,7 @@ const TIPOS: { value: Tipo; label: string; icon: React.ReactNode; color: string 
 const RESULTADOS: Record<Tipo, string[]> = {
   LLAMADA: [
     'Compromiso de pago confirmado',
-    'Pago realizado',
+    'Cliente indica pago realizado',
     'Solicitud de convenio',
     'Reclamo comercial',
     'Reclamo logístico',
@@ -46,7 +46,7 @@ const RESULTADOS: Record<Tipo, string[]> = {
   ],
   WHATSAPP: [
     'Compromiso de pago confirmado',
-    'Pago realizado',
+    'Cliente indica pago realizado',
     'Solicitud de convenio',
     'Reclamo comercial',
     'Reclamo logístico',
@@ -58,7 +58,7 @@ const RESULTADOS: Record<Tipo, string[]> = {
   ],
   CORREO: [
     'Compromiso de pago confirmado',
-    'Pago realizado',
+    'Cliente indica pago realizado',
     'Solicitud de convenio',
     'Reclamo comercial',
     'Reclamo logístico',
@@ -109,11 +109,13 @@ interface Props {
   facturas:      Factura[]      // TODAS — filtrar aquí (saldo > 0 y vencidas)
   onClose:       () => void
   onSuccess:     () => void
+  onIrAReportarPago: () => void  // cierra modal + cambia al tab Reportar Pago
 }
 
 // ══════════════════════════════════════════════════════════════════════
 export default function FormNuevaGestion({
   clienteCod, clienteNombre, contribuyente, facturas, onClose, onSuccess,
+  onIrAReportarPago,
 }: Props) {
   const hoy = hoyISO_CR()
 
@@ -129,11 +131,6 @@ export default function FormNuevaGestion({
   const [compromisoFecha,  setCompromisoFecha]  = useState('')
   const [factSeleccionadas, setFactSeleccionadas] = useState<Set<number>>(new Set())
   const [mostrarFacturas,   setMostrarFacturas]  = useState(false)
-
-  // Pago realizado
-  const [pagoMonto,     setPagoMonto]     = useState('')
-  const [pagoReferencia,setPagoReferencia]= useState('')
-  const [pagoFecha,     setPagoFecha]     = useState(hoy)
 
   // Solicitud de convenio
   const [convMonto,     setConvMonto]     = useState('')
@@ -192,6 +189,10 @@ export default function FormNuevaGestion({
     if (r === 'Llamar después') {
       setProximaAccion('recontactar')
     }
+    // El pago se concilia en Reportar Pago → la próxima acción natural es esperar/validar
+    if (r === 'Cliente indica pago realizado') {
+      setProximaAccion('esperar_pago')
+    }
   }
 
   function toggleFactura(id: number) {
@@ -226,12 +227,6 @@ export default function FormNuevaGestion({
         return 'Ingresá la fecha del compromiso'
       if (esFechaPasadaCR(compromisoFecha))
         return 'La fecha del compromiso no puede ser en el pasado'
-    }
-
-    if (resultado === 'Pago realizado') {
-      if (!pagoMonto) return 'Ingresá el monto del pago'
-      if (!pagoReferencia.trim()) return 'Ingresá la referencia del pago'
-      if (!pagoFecha) return 'Ingresá la fecha del pago'
     }
 
     if (resultado === 'Solicitud de convenio') {
@@ -288,12 +283,6 @@ export default function FormNuevaGestion({
         compromiso_monto: parseFloat(compromisoMonto.replace(/\./g, '').replace(',', '.')),
         compromiso_fecha: compromisoFecha,
         facturas_ids:     Array.from(factSeleccionadas),
-      }
-    } else if (resultado === 'Pago realizado') {
-      metadata = {
-        pago_monto:      parseFloat(pagoMonto.replace(/\./g, '').replace(',', '.')),
-        pago_referencia: pagoReferencia.trim(),
-        pago_fecha:      pagoFecha,
       }
     } else if (resultado === 'Solicitud de convenio') {
       metadata = {
@@ -513,30 +502,29 @@ export default function FormNuevaGestion({
           </div>
         )}
 
-        {resultado === 'Pago realizado' && (
+        {resultado === 'Cliente indica pago realizado' && (
           <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
             <p className="text-[12px] font-bold text-blue-700 flex items-center gap-1.5">
-              <CheckCircle2 size={14} /> Datos del pago
+              <Receipt size={14} /> El pago se documenta en Reportar Pago
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Monto pagado *</label>
-                <input type="text" value={pagoMonto}
-                  onChange={e => setPagoMonto(e.target.value.replace(/[^0-9.,]/g, ''))}
-                  placeholder="Ej: 250000" className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Fecha de pago *</label>
-                <input type="date" value={pagoFecha}
-                  onChange={e => setPagoFecha(e.target.value)} className={inputCls} />
-              </div>
-            </div>
-            <div>
-              <label className={labelCls}>Referencia *</label>
-              <input type="text" value={pagoReferencia}
-                onChange={e => setPagoReferencia(e.target.value)}
-                placeholder="N° transferencia, SINPE, cheque..." className={inputCls} />
-            </div>
+            <p className="text-[12px] text-blue-600 leading-relaxed">
+              No se registra el pago aquí para evitar duplicidad operativa. La evidencia
+              documental (OCR del comprobante, selección de facturas y conciliación) se
+              gestiona en la pestaña <strong>Reportar Pago</strong>.
+            </p>
+            <p className="text-[11px] text-blue-500 leading-relaxed">
+              Esta gestión queda registrada como el contacto donde el cliente indicó el
+              pago. Guardala normalmente y luego adjuntá el comprobante en Reportar Pago,
+              o usá el botón para ir directo.
+            </p>
+            <button
+              type="button"
+              onClick={onIrAReportarPago}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white transition hover:opacity-90"
+              style={{ backgroundColor: '#009ee3' }}
+            >
+              <Receipt size={14} /> Ir a Reportar Pago <ArrowRight size={14} />
+            </button>
           </div>
         )}
 

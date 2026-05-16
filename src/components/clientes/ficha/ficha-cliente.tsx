@@ -571,6 +571,7 @@ export default function FichaCliente({
           facturas      = {facturas}
           onClose       = {() => setModalGestion(false)}
           onSuccess     = {() => { setModalGestion(false); router.refresh() }}
+          onIrAReportarPago = {() => { setModalGestion(false); setTab('Reportar Pago') }}
         />
       )}
 
