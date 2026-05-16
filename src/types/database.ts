@@ -163,9 +163,41 @@ export interface Solicitud {
   fecha_limite: string | null
   para_email: string | null     // correo principal al que se envió
   cc_emails: string[] | null    // correos en copia
-  estado: EstadoSolicitud
+  estado: string                // legacy MAYÚSCULA o estados oficiales nuevos
   created_at: string
   updated_at: string
+  // ── Sprint Centro Operativo de Solicitudes ────────────────────────
+  gestion_id:             string | null   // FK a gestiones.id (trazabilidad)
+  area:                   string | null   // AreaKey del catálogo nuevo
+  prioridad:              'Alta' | 'Media' | 'Baja' | null
+  sla_horas:              number | null
+  sla_vencimiento:        string | null   // TIMESTAMPTZ
+  responsable_nombre:     string | null
+  responsable_email:      string | null
+  descripcion:            string | null
+  observaciones_internas: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  datos:                  Record<string, any> | null   // jsonb (facturas, adjuntos, etc.)
+}
+
+// Comentario interno de una solicitud
+export interface SolicitudComentario {
+  id:           string
+  solicitud_id: string
+  usuario_id:   string
+  contenido:    string
+  created_at:   string
+}
+
+// Cambio de estado registrado en el historial
+export interface SolicitudHistorialEstado {
+  id:              string
+  solicitud_id:    string
+  estado_anterior: string | null
+  estado_nuevo:    string
+  usuario_id:      string
+  nota:            string | null
+  created_at:      string
 }
 
 export interface CoordinacionVendedor {
@@ -219,6 +251,8 @@ export type Database = {
       coordinaciones_vendedor: { Row: CoordinacionVendedor; Insert: Partial<CoordinacionVendedor>; Update: Partial<CoordinacionVendedor> }
       notificaciones:          { Row: Notificacion;         Insert: Partial<Notificacion>;         Update: Partial<Notificacion> }
       notas_rapidas:           { Row: NotaRapida;           Insert: Partial<NotaRapida>;           Update: Partial<NotaRapida> }
+      solicitud_comentarios:        { Row: SolicitudComentario;       Insert: Partial<SolicitudComentario>;       Update: Partial<SolicitudComentario> }
+      solicitud_historial_estados:  { Row: SolicitudHistorialEstado;  Insert: Partial<SolicitudHistorialEstado>;  Update: Partial<SolicitudHistorialEstado> }
     }
   }
 }

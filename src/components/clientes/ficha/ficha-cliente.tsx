@@ -572,6 +572,17 @@ export default function FichaCliente({
           onClose       = {() => setModalGestion(false)}
           onSuccess     = {() => { setModalGestion(false); router.refresh() }}
           onIrAReportarPago = {() => { setModalGestion(false); setTab('Reportar Pago') }}
+          onCrearSolicitud  = {({ gestion_id, area, tipo }) => {
+            setModalGestion(false)
+            const qs = new URLSearchParams({
+              cliente_cod: cartera.cliente_cod,
+              gestion_id,
+              area,
+              tipo,
+            }).toString()
+            // Flujo NUEVO de solicitudes (no el wizard legacy de la ficha)
+            router.push(`/solicitudes/nueva?${qs}`)
+          }}
         />
       )}
 

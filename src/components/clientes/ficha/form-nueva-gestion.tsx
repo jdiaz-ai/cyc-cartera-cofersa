@@ -10,6 +10,8 @@ import { fmtCRC }          from '@/lib/utils/formato'
 import { hoyISO_CR, ahoraCR, esFechaPasadaCR } from '@/lib/utils/timezone'
 import type { Factura }    from '@/types/database'
 import type { NuevaGestionBody } from '@/app/api/clientes/gestiones/nueva/route'
+import { AREAS, getTiposPorArea } from '@/lib/solicitudes/catalogo'
+import type { AreaKey } from '@/lib/solicitudes/catalogo'
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 type Tipo = 'LLAMADA' | 'WHATSAPP' | 'CORREO' | 'INTERNA' | 'VISITA'
@@ -72,7 +74,6 @@ const RESULTADOS: Record<Tipo, string[]> = {
     'Validación logística',
     'Validación crédito',
     'Escalado coordinación',
-    'Solicitud creada',
     'Seguimiento interno',
   ],
   VISITA: [
@@ -90,7 +91,7 @@ const PROXIMAS: { value: ProximaAccion; label: string; requiresFecha: boolean }[
   { value: 'esperar_pago',      label: 'Esperar pago',      requiresFecha: true  },
   { value: 'recontactar',       label: 'Recontactar',       requiresFecha: true  },
   { value: 'escalar',           label: 'Escalar revisión',  requiresFecha: true  },
-  { value: 'crear_solicitud',   label: 'Crear solicitud',   requiresFecha: true  },
+  { value: 'crear_solicitud',   label: 'Crear solicitud',   requiresFecha: false },
   { value: 'sin_seguimiento',   label: 'Sin seguimiento',   requiresFecha: false },
 ]
 
@@ -110,12 +111,14 @@ interface Props {
   onClose:       () => void
   onSuccess:     () => void
   onIrAReportarPago: () => void  // cierra modal + cambia al tab Reportar Pago
+  // Guarda la gestión y navega al flujo NUEVO /solicitudes/nueva (no el wizard legacy)
+  onCrearSolicitud: (p: { gestion_id: string; area: string; tipo: string }) => void
 }
 
 // ══════════════════════════════════════════════════════════════════════
 export default function FormNuevaGestion({
   clienteCod, clienteNombre, contribuyente, facturas, onClose, onSuccess,
-  onIrAReportarPago,
+  onIrAReportarPago, onCrearSolicitud,
 }: Props) {
   const hoy = hoyISO_CR()
 
@@ -147,6 +150,17 @@ export default function FormNuevaGestion({
 
   // Contacto inválido
   const [tipoProblema, setTipoProblema] = useState('')
+
+  // Próxima acción = "Crear solicitud" → destino (área + tipo del catálogo nuevo)
+  const [solArea, setSolArea] = useState<AreaKey | ''>('')
+  const [solTipo, setSolTipo] = useState('')
+
+  // Cambia la próxima acción y limpia el sub-bloque de solicitud si aplica
+  function handleProxima(v: ProximaAccion) {
+    setProximaAccion(v)
+    setError('')
+    if (v !== 'crear_solicitud') { setSolArea(''); setSolTipo('') }
+  }
 
   // UX
   const [loading,  setLoading]  = useState(false)
@@ -257,6 +271,10 @@ export default function FormNuevaGestion({
 
     // Próxima acción
     if (!proximaAccion) return 'Seleccioná una próxima acción'
+    if (proximaAccion === 'crear_solicitud') {
+      if (!solArea) return 'Seleccioná el área destino de la solicitud'
+      if (!solTipo) return 'Seleccioná el tipo de solicitud'
+    }
     const pa = PROXIMAS.find(p => p.value === proximaAccion)
     if (pa?.requiresFecha && !proximaFecha) return 'Ingresá la fecha de la próxima acción'
     if (pa?.requiresFecha && proximaFecha && esFechaPasadaCR(proximaFecha))
@@ -266,8 +284,8 @@ export default function FormNuevaGestion({
   }
 
   // ── Submit ─────────────────────────────────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault()
     const err = validar()
     if (err) { setError(err); return }
 
@@ -336,6 +354,16 @@ export default function FormNuevaGestion({
       const d = await res.json().catch(() => ({}))
       setError(d.error ?? 'Error al guardar. Intentá de nuevo.')
       setLoading(false)
+      return
+    }
+
+    // ── Próxima acción = "Crear solicitud" ───────────────────────────
+    // La gestión SIEMPRE se guarda antes de navegar. Solo si el guardado
+    // fue exitoso, navegamos al flujo NUEVO /solicitudes/nueva.
+    if (proximaAccion === 'crear_solicitud') {
+      const d = await res.json().catch(() => ({}))
+      const gestionId: string = d.gestion_id ?? ''
+      onCrearSolicitud({ gestion_id: gestionId, area: solArea, tipo: solTipo })
       return
     }
 
@@ -624,7 +652,7 @@ export default function FormNuevaGestion({
               const activo = proximaAccion === pa.value
               return (
                 <button key={pa.value} type="button"
-                  onClick={() => setProximaAccion(pa.value)}
+                  onClick={() => handleProxima(pa.value)}
                   className="px-3 py-1.5 rounded-full border text-[12px] font-medium transition-all"
                   style={activo
                     ? { backgroundColor: '#003B5C', borderColor: '#003B5C', color: '#fff' }
@@ -635,8 +663,70 @@ export default function FormNuevaGestion({
             })}
           </div>
 
+          {/* ── Sub-bloque: Destino de la solicitud ─────────────────── */}
+          {proximaAccion === 'crear_solicitud' && (
+            <div className="mt-3 rounded-xl p-4 space-y-3" style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd' }}>
+              <p className="text-[12px] font-bold text-[#0369a1] flex items-center gap-1.5">
+                <FileText size={14} /> Destino de la solicitud
+              </p>
+
+              <div>
+                <label className={labelCls}>Área destino *</label>
+                <div className="relative">
+                  <select
+                    value={solArea}
+                    onChange={e => { setSolArea(e.target.value as AreaKey); setSolTipo(''); setError('') }}
+                    className={`${inputCls} appearance-none pr-9`}
+                  >
+                    <option value="">Seleccionar área…</option>
+                    {AREAS.map(a => (
+                      <option key={a.key} value={a.key}>{a.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {solArea && (
+                <div>
+                  <label className={labelCls}>Tipo de solicitud *</label>
+                  <div className="relative">
+                    <select
+                      value={solTipo}
+                      onChange={e => { setSolTipo(e.target.value); setError('') }}
+                      className={`${inputCls} appearance-none pr-9`}
+                    >
+                      <option value="">Seleccionar tipo…</option>
+                      {getTiposPorArea(solArea).map(t => (
+                        <option key={t.tipo} value={t.tipo}>
+                          {t.tipo} · {t.prioridad} · SLA {t.sla_horas}h
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={loading || !solArea || !solTipo}
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: '#009ee3' }}
+              >
+                {loading ? 'Guardando gestión…' : <>Continuar a Solicitud <ArrowRight size={14} /></>}
+              </button>
+              <p className="text-[11px] text-[#0369a1] leading-relaxed">
+                Se guardará la gestión y serás llevado al formulario de solicitud con
+                el área y tipo pre-cargados, vinculado a esta gestión.
+              </p>
+            </div>
+          )}
+
           {/* Fecha próxima acción */}
-          {proximaAccion && proximaAccion !== 'sin_seguimiento' && resultado !== 'Llamar después' && (
+          {proximaAccion && proximaAccion !== 'sin_seguimiento'
+            && proximaAccion !== 'crear_solicitud' && resultado !== 'Llamar después' && (
             <div className="mt-3">
               <label className={labelCls}>
                 <Calendar size={11} className="inline mr-1" />

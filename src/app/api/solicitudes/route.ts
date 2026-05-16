@@ -22,6 +22,15 @@ export async function POST(req: NextRequest) {
     documento_ref?: string
     fecha_limite?: string
     providerToken?: string | null
+    // ── Catálogo nuevo (Centro Operativo de Solicitudes) ──────────────
+    area?: string
+    prioridad?: string
+    sla_horas?: number
+    gestion_id?: string
+    descripcion?: string
+    responsable_nombre?: string
+    responsable_email?: string
+    observaciones_internas?: string
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
@@ -56,6 +65,78 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     )
   }
+
+  // ════════════════════════════════════════════════════════════════════
+  // RAMA NUEVA — Catálogo Centro Operativo
+  // Se detecta por la presencia de `area` + `sla_horas`.
+  // SIN correo, SIN notificación (fuera de alcance de este sprint).
+  // ════════════════════════════════════════════════════════════════════
+  if (body.area && body.sla_horas != null) {
+    const {
+      tipo: tipoCat, area, prioridad, sla_horas, gestion_id,
+      descripcion, responsable_nombre, responsable_email,
+      observaciones_internas, datos: datosCat,
+    } = body
+
+    if (!tipoCat || !cliente_cod || !descripcion?.trim()) {
+      return NextResponse.json(
+        { error: 'tipo, cliente_cod y descripcion son requeridos' },
+        { status: 400 },
+      )
+    }
+
+    const slaVenc = new Date(Date.now() + sla_horas * 3_600_000).toISOString()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: nueva, error: insErr } = await (supabase as any)
+      .from('solicitudes')
+      .insert({
+        tipo:                   tipoCat,
+        area:                   area ?? null,
+        cliente_cod,
+        cliente_nombre:         cliente_nombre ?? '',
+        solicitante_id:         solicitanteId,
+        gestion_id:             gestion_id ?? null,
+        justificacion:          descripcion.trim(),   // columna NOT NULL
+        descripcion:            descripcion.trim(),
+        observaciones_internas: observaciones_internas?.trim() ?? null,
+        prioridad:              prioridad ?? null,
+        sla_horas,
+        sla_vencimiento:        slaVenc,
+        responsable_nombre:     responsable_nombre?.trim() ?? null,
+        responsable_email:      responsable_email?.trim() ?? null,
+        datos:                  datosCat ?? null,
+        estado:                 'Pendiente',
+        updated_at:             new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (insErr || !nueva) {
+      return NextResponse.json(
+        { error: `Error al crear la solicitud: ${insErr?.message ?? 'desconocido'}` },
+        { status: 500 },
+      )
+    }
+
+    const solicitudId = (nueva as { id: string }).id
+
+    // Historial de estados — fila inicial (estado_anterior = null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('solicitud_historial_estados').insert({
+      solicitud_id:    solicitudId,
+      estado_anterior: null,
+      estado_nuevo:    'Pendiente',
+      usuario_id:      solicitanteId,
+      nota:            'Solicitud creada',
+    })
+
+    return NextResponse.json({ ok: true, id: solicitudId })
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // RAMA LEGACY — wizard de la ficha (con correo + notificación)
+  // ════════════════════════════════════════════════════════════════════
 
   // Verificar provider_token ANTES del INSERT — si el token expiró no queremos
   // guardar la solicitud y que el usuario crea que falló (causaría duplicados).

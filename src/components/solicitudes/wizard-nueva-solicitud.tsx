@@ -1,10 +1,15 @@
 'use client'
 
 /**
- * WizardNuevaSolicitud — Pasos 1-2-3 compartidos
+ * WizardNuevaSolicitud — Pasos 1-2-3 compartidos (FLUJO LEGACY)
  *
- * Usado tanto desde la ficha del cliente (página completa)
- * como desde el módulo del sidebar (con paso 0 previo de selección de cliente).
+ * Usado SOLO desde la ficha del cliente (/clientes/[cod]/solicitudes/nueva).
+ * El módulo /solicitudes/nueva ya migró al catálogo nuevo (Centro Operativo).
+ *
+ * TODO (sprint futuro): alinear este wizard al catálogo oficial nuevo
+ *   (src/lib/solicitudes/catalogo.ts — áreas/tipos/SLA/prioridad) para
+ *   eliminar la inconsistencia entre el flujo de la ficha y /solicitudes/nueva.
+ *   Mantener mientras tanto como legacy: usa destinatario + envío de correo.
  *
  * Paso 1: Seleccionar destinatario
  * Paso 2: Seleccionar tipo
