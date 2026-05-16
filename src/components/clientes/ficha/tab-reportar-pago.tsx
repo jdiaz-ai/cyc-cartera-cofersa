@@ -747,8 +747,8 @@ export default function TabReportarPago({
                           max={f.saldo ?? undefined}
                           step={1}
                           onChange={e => cambiarMontoAplicado(f.id, e.target.value)}
-                          className="border border-[#009ee3] rounded-lg text-[13px] font-semibold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]/40"
-                          style={{ width: '90px', padding: '5px 8px' }}
+                          className="border border-[#009ee3] rounded-lg text-[13px] font-semibold text-gray-800 text-right focus:outline-none focus:ring-1 focus:ring-[#009ee3]/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          style={{ width: '100px', padding: '5px 10px 5px 6px' }}
                         />
                         <span className="text-[10px] text-gray-500">máx {fmtCRC(f.saldo)}</span>
                       </div>
@@ -972,33 +972,33 @@ export default function TabReportarPago({
               </div>
             )}
 
-            {/* ── BANCO ────────────────────────────────────────── */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                Banco origen<span className="text-red-400 ml-0.5">*</span>
-              </label>
-              <div className="relative">
-                <Landmark size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <select
-                  value={banco}
-                  onChange={e => setBanco(e.target.value as BancoValue)}
-                  className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
-                  style={{ padding: '8px 32px 8px 32px', backgroundColor: 'white' }}
-                >
-                  <option value="" disabled>Seleccionar banco…</option>
-                  {BANCOS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
-                </select>
-                <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* ── GRID: Referencia + Fecha ──────────────────────── */}
+            {/* ── GRID 2×2: [Banco][Referencia] / [Fecha][Monto] ── */}
             <div className="grid grid-cols-2 gap-3">
 
-              {/* Referencia / N° de cheque */}
+              {/* Fila 1 — Col izquierda: Banco Origen */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                  Banco origen<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <div className="relative">
+                  <Landmark size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <select
+                    value={banco}
+                    onChange={e => setBanco(e.target.value as BancoValue)}
+                    className="w-full border border-gray-200 rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition appearance-none"
+                    style={{ padding: '8px 24px 8px 28px', backgroundColor: 'white' }}
+                  >
+                    <option value="" disabled>Banco…</option>
+                    {BANCOS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Fila 1 — Col derecha: Referencia / N° cheque */}
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                  {tipoPago === 'Cheque' ? 'N° de cheque' : 'Referencia'}<span className="text-red-400">*</span>
+                  {tipoPago === 'Cheque' ? 'N° cheque' : 'Referencia'}<span className="text-red-400">*</span>
                   {ocrFilled.has('referencia') && <OcrBadge onClear={() => limpiarCampoOCR('referencia')} />}
                 </label>
                 <div className="relative">
@@ -1010,14 +1010,14 @@ export default function TabReportarPago({
                     placeholder="123456789"
                     className="w-full border rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none focus:border-[#009ee3] transition"
                     style={{
-                      padding:     '8px 10px 8px 26px',
+                      padding:     '8px 8px 8px 24px',
                       borderColor: ocrFilled.has('referencia') ? '#bae6fd' : '#e2e8f0',
                     }}
                   />
                 </div>
               </div>
 
-              {/* Fecha */}
+              {/* Fila 2 — Col izquierda: Fecha */}
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
                   Fecha<span className="text-red-400">*</span>
@@ -1031,47 +1031,48 @@ export default function TabReportarPago({
                     onChange={e => { setFecha(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('fecha'); return s }) }}
                     className="w-full border rounded-xl text-[12px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition"
                     style={{
-                      padding:     '8px 10px 8px 26px',
+                      padding:     '8px 6px 8px 24px',
                       borderColor: ocrFilled.has('fecha') ? '#bae6fd' : '#e2e8f0',
                     }}
                   />
                 </div>
               </div>
-            </div>
 
-            {/* ── MONTO con semáforo visual ──────────────────────── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-                Monto transferido (CRC)<span className="text-red-400">*</span>
-                {ocrFilled.has('monto') && <OcrBadge onClear={() => limpiarCampoOCR('monto')} />}
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[13px] font-bold select-none">₡</span>
-                <input
-                  type="number"
-                  value={monto}
-                  onChange={e => { setMonto(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('monto'); return s }) }}
-                  placeholder="0"
-                  min={1}
-                  step={1}
-                  className="w-full border rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none transition"
-                  style={{
-                    padding:     '8px 12px 8px 32px',
-                    borderColor: montoSemaforoBorder,
-                    boxShadow:   montoSemaforoShadow,
-                  }}
-                />
+              {/* Fila 2 — Col derecha: Monto transferido */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
+                  Monto (CRC)<span className="text-red-400">*</span>
+                  {ocrFilled.has('monto') && <OcrBadge onClear={() => limpiarCampoOCR('monto')} />}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[13px] font-bold select-none">₡</span>
+                  <input
+                    type="number"
+                    value={monto}
+                    onChange={e => { setMonto(e.target.value); setOcrFilled(p => { const s = new Set(p); s.delete('monto'); return s }) }}
+                    placeholder="0"
+                    min={1}
+                    step={1}
+                    className="w-full border rounded-xl text-[12px] text-gray-800 placeholder-gray-300 focus:outline-none transition [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    style={{
+                      padding:     '8px 10px 8px 28px',
+                      borderColor: montoSemaforoBorder,
+                      boxShadow:   montoSemaforoShadow,
+                    }}
+                  />
+                </div>
+                {montoNum > 0 && (
+                  <p
+                    className="mt-1 text-[10px] font-semibold truncate"
+                    style={{ color: cuadra ? '#15803d' : seleccion.size > 0 && montoNum > 0 ? '#a16207' : '#94a3b8' }}
+                  >
+                    {fmtCRC(montoNum)}
+                    {cuadra && ' ✓'}
+                    {!cuadra && seleccion.size > 0 && montoNum > 0 && ` Δ ${fmtCRC(diferencia)}`}
+                  </p>
+                )}
               </div>
-              {montoNum > 0 && (
-                <p
-                  className="mt-1 text-[10px] font-semibold"
-                  style={{ color: cuadra ? '#15803d' : seleccion.size > 0 && montoNum > 0 ? '#a16207' : '#94a3b8' }}
-                >
-                  {fmtCRC(montoNum)}
-                  {cuadra && ' · ✓ Coincide con las facturas'}
-                  {!cuadra && seleccion.size > 0 && montoNum > 0 && ` · Diferencia: ${fmtCRC(diferencia)}`}
-                </p>
-              )}
+
             </div>
 
             {/* ── NOTAS ────────────────────────────────────────────── */}
