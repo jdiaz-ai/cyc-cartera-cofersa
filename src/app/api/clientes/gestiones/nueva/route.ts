@@ -109,11 +109,30 @@ export async function POST(req: NextRequest) {
 
   // ── PASO 2: INSERT promesa (si aplica) ─────────────────────────────
   if (promesa) {
+    // Nombre del cliente para desnormalizar en la bandeja de promesas
+    const { data: mRow } = await supabase
+      .from('maestro_clientes')
+      .select('cliente_nombre')
+      .eq('cliente_cod', cliente_cod)
+      .limit(1)
+      .maybeSingle()
+    const clienteNombre =
+      (mRow as { cliente_nombre: string } | null)?.cliente_nombre ?? contribuyente ?? null
+
+    // Evento inicial del mini-timeline
+    const eventoCreada = {
+      fecha:       fecha,
+      tipo:        'creada',
+      descripcion: `Promesa creada desde gestión (${resultado})`,
+      por:         analista_email,
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: pData, error: pErr } = await (supabase as any)
       .from('promesas')
       .insert({
         cliente_cod,
+        cliente_nombre: clienteNombre,
         contribuyente,
         analista_email,
         fecha_creacion: fecha,
@@ -121,10 +140,8 @@ export async function POST(req: NextRequest) {
         monto:          promesa.monto,
         estado:         'PENDIENTE',
         notas:          nota.trim(),
-        // facturas relacionadas en metadata de la promesa
-        ...(promesa.facturas_ids && promesa.facturas_ids.length > 0
-          ? { }   // metadata de promesa se puede agregar si la tabla lo soporta
-          : {}),
+        gestion_id:     gestionId,           // trazabilidad obligatoria
+        eventos:        [eventoCreada],
       })
       .select('id')
       .single()

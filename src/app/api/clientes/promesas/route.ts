@@ -1,104 +1,143 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { hoyISO } from '@/lib/utils/formato'
+import { hoyISO_CR } from '@/lib/utils/timezone'
 
-// POST /api/clientes/promesas  { cliente_cod, contribuyente, monto, fecha_promesa, notas? }
-export async function POST(req: NextRequest) {
-  let body: {
-    cliente_cod?: string
-    contribuyente?: string
-    monto?: number
-    fecha_promesa?: string
-    notas?: string
-  }
-  try { body = await req.json() }
-  catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
+/**
+ * MÓDULO PROMESAS — CENTRO DE SEGUIMIENTO
+ *
+ * Las promesas YA NO se crean manualmente desde aquí.
+ * Toda promesa nace ÚNICAMENTE desde Gestiones cuando el resultado es
+ * "Compromiso de pago confirmado" (ver gestiones/nueva/route.ts).
+ *
+ * Este endpoint solo permite:
+ *   PATCH   → validación manual (CUMPLIDA | INCUMPLIDA | ABONO_PARCIAL)
+ *   DELETE  → soft-delete (solo coordinador)
+ *
+ * Reprogramación → endpoint separado: /api/promesas/reprogramar
+ */
 
-  const { cliente_cod, contribuyente, monto, fecha_promesa, notas } = body
-  if (!cliente_cod || !monto || !fecha_promesa) {
-    return NextResponse.json({ error: 'cliente_cod, monto y fecha_promesa son requeridos' }, { status: 400 })
-  }
-
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any).from('promesas').insert({
-    cliente_cod,
-    contribuyente: contribuyente ?? '',
-    analista_email: user.email,
-    monto,
-    fecha_promesa,
-    fecha_creacion: hoyISO(),
-    estado: 'PENDIENTE',
-    notas: notas?.trim() ?? '',
-    activo: true,
-    updated_at: new Date().toISOString(),
-  })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+// ── Tipo de evento del mini-timeline ───────────────────────────────────
+interface EventoPromesa {
+  fecha:       string
+  tipo:        'creada' | 'cumplida' | 'incumplida' | 'abono' | 'reprogramada' | 'nota'
+  descripcion: string
+  por:         string
 }
 
-// PATCH /api/clientes/promesas  { id, estado, monto_real?, fecha_cumplimiento?, motivo? }
+// PATCH /api/clientes/promesas
+// { id, estado: 'CUMPLIDA'|'INCUMPLIDA'|'ABONO_PARCIAL',
+//   comentario?, monto_abono_parcial? }
 export async function PATCH(req: NextRequest) {
   let body: {
-    id?: string
-    estado?: string
-    monto_real?: number
-    fecha_cumplimiento?: string
-    motivo?: string
-    notas?: string
-    monto?: number
-    fecha_promesa?: string
+    id?:                  string
+    estado?:              string
+    comentario?:          string
+    monto_abono_parcial?: number
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { id, estado, monto_real, motivo, notas, monto, fecha_promesa } = body
-  if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 })
+  const { id, estado, comentario, monto_abono_parcial } = body
+  if (!id)     return NextResponse.json({ error: 'id requerido' }, { status: 400 })
+  if (!estado) return NextResponse.json({ error: 'estado requerido' }, { status: 400 })
+
+  const ESTADOS_VALIDOS = ['CUMPLIDA', 'INCUMPLIDA', 'ABONO_PARCIAL']
+  if (!ESTADOS_VALIDOS.includes(estado)) {
+    return NextResponse.json(
+      { error: 'Estado inválido. Use CUMPLIDA, INCUMPLIDA o ABONO_PARCIAL. Para reprogramar use /api/promesas/reprogramar' },
+      { status: 400 },
+    )
+  }
+
+  // ── Validaciones de campos obligatorios por estado ──────────────────
+  if (estado === 'INCUMPLIDA' && !comentario?.trim()) {
+    return NextResponse.json({ error: 'El motivo/comentario es obligatorio al marcar incumplida' }, { status: 400 })
+  }
+  if (estado === 'ABONO_PARCIAL') {
+    if (!monto_abono_parcial || monto_abono_parcial <= 0) {
+      return NextResponse.json({ error: 'El monto del abono es obligatorio y debe ser mayor a 0' }, { status: 400 })
+    }
+    if (!comentario?.trim()) {
+      return NextResponse.json({ error: 'El comentario es obligatorio al registrar un abono parcial' }, { status: 400 })
+    }
+  }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!user?.email) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  // Verificar permisos
+  // ── Permisos ────────────────────────────────────────────────────────
   const { data: usuarioRow } = await supabase
-    .from('usuarios').select('rol').eq('email', user.email!).limit(1).single()
+    .from('usuarios').select('rol').eq('email', user.email).limit(1).single()
   const rol = (usuarioRow as { rol: string } | null)?.rol ?? ''
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: pRow } = await (supabase as any)
-    .from('promesas').select('analista_email').eq('id', id).limit(1).single()
+    .from('promesas')
+    .select('analista_email, estado, monto, eventos')
+    .eq('id', id)
+    .limit(1)
+    .single()
   if (!pRow) return NextResponse.json({ error: 'Promesa no encontrada' }, { status: 404 })
 
-  if (rol !== 'COORDINADOR' && (pRow as { analista_email: string }).analista_email !== user.email) {
-    return NextResponse.json({ error: 'Sin permisos para editar esta promesa' }, { status: 403 })
+  if (rol !== 'COORDINADOR' && pRow.analista_email !== user.email) {
+    return NextResponse.json({ error: 'Sin permisos para validar esta promesa' }, { status: 403 })
   }
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (estado        !== undefined) updates.estado        = estado
-  if (monto         !== undefined) updates.monto         = monto
-  if (fecha_promesa !== undefined) updates.fecha_promesa = fecha_promesa
-  if (notas         !== undefined) updates.notas         = notas.trim()
-
-  // Si cumplida: agregar nota de monto real
-  if (estado === 'CUMPLIDA' && monto_real) {
-    updates.notas = `Monto real pagado: ₡${Math.round(monto_real).toLocaleString('es-CR')}. ${notas ?? ''}`
+  // No re-validar promesas ya cerradas
+  if (['CUMPLIDA', 'REPROGRAMADA'].includes(pRow.estado)) {
+    return NextResponse.json(
+      { error: `Esta promesa ya está ${pRow.estado.toLowerCase()} y no puede modificarse` },
+      { status: 409 },
+    )
   }
-  // Si incumplida: agregar motivo
-  if (estado === 'INCUMPLIDA' && motivo) {
-    updates.notas = `Motivo: ${motivo}. ${notas ?? ''}`
+
+  const hoy = hoyISO_CR()
+
+  // ── Construir evento para el mini-timeline ─────────────────────────
+  const eventosPrev: EventoPromesa[] = Array.isArray(pRow.eventos) ? pRow.eventos : []
+  let descripcion = ''
+  let tipoEvento: EventoPromesa['tipo'] = 'nota'
+
+  if (estado === 'CUMPLIDA') {
+    tipoEvento  = 'cumplida'
+    descripcion = `Promesa validada como CUMPLIDA${comentario?.trim() ? ` — ${comentario.trim()}` : ''}`
+  } else if (estado === 'INCUMPLIDA') {
+    tipoEvento  = 'incumplida'
+    descripcion = `Promesa marcada INCUMPLIDA — ${comentario!.trim()}`
+  } else if (estado === 'ABONO_PARCIAL') {
+    tipoEvento  = 'abono'
+    descripcion = `Abono parcial de ₡${Math.round(monto_abono_parcial!).toLocaleString('es-CR')} — ${comentario!.trim()}`
+  }
+
+  const nuevoEvento: EventoPromesa = {
+    fecha:       hoy,
+    tipo:        tipoEvento,
+    descripcion,
+    por:         user.email,
+  }
+
+  // ── Updates ─────────────────────────────────────────────────────────
+  const updates: Record<string, unknown> = {
+    estado,
+    fecha_validacion:      hoy,
+    validado_por:          user.email,
+    comentario_validacion: comentario?.trim() ?? null,
+    eventos:               [...eventosPrev, nuevoEvento],
+    updated_at:            new Date().toISOString(),
+  }
+  if (estado === 'ABONO_PARCIAL') {
+    updates.monto_abono_parcial = monto_abono_parcial
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any).from('promesas').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+
+  return NextResponse.json({ ok: true, estado, evento: nuevoEvento })
 }
 
-// DELETE /api/clientes/promesas  { id }  — solo coordinador (soft-delete)
+// DELETE /api/clientes/promesas  { id }  — soft-delete (solo coordinador)
 export async function DELETE(req: NextRequest) {
   let body: { id?: string }
   try { body = await req.json() }

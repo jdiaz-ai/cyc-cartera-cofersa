@@ -1,5 +1,13 @@
 export type Rol = 'COORDINADOR' | 'ANALISTA'
-export type EstadoPromesa = 'PENDIENTE' | 'CUMPLIDA' | 'INCUMPLIDA' | 'ABONO_PARCIAL'
+export type EstadoPromesa = 'PENDIENTE' | 'CUMPLIDA' | 'INCUMPLIDA' | 'ABONO_PARCIAL' | 'REPROGRAMADA'
+
+// Evento del mini-timeline de una promesa (guardado en promesas.eventos JSONB)
+export interface EventoPromesa {
+  fecha:       string   // YYYY-MM-DD
+  tipo:        'creada' | 'cumplida' | 'incumplida' | 'abono' | 'reprogramada' | 'nota'
+  descripcion: string
+  por:         string   // email del usuario que generó el evento
+}
 export type NivelScore = 'ROJO' | 'AMARILLO' | 'VERDE'
 
 export interface Usuario {
@@ -105,6 +113,7 @@ export interface Gestion {
 export interface Promesa {
   id: string
   cliente_cod: string
+  cliente_nombre: string | null   // desnormalizado para la bandeja
   contribuyente: string
   analista_email: string
   fecha_creacion: string
@@ -114,6 +123,14 @@ export interface Promesa {
   notas: string
   updated_at: string
   activo?: boolean
+  // ── Sprint Centro de Seguimiento ──────────────────────────────────
+  gestion_id:            string | null   // FK a gestiones.id (trazabilidad)
+  reprogramada_de_id:    string | null   // FK a promesas.id (auto-ref)
+  fecha_validacion:      string | null   // DATE
+  validado_por:          string | null   // email validador
+  comentario_validacion: string | null
+  monto_abono_parcial:   number | null
+  eventos:               EventoPromesa[] | null   // mini-timeline JSONB
 }
 
 export interface ConfigSistema {
