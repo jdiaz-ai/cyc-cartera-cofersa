@@ -13,30 +13,10 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, FileText, AlertTriangle, Zap, Clock } from 'lucide-react'
+import { Plus, Search, FileText, AlertTriangle } from 'lucide-react'
 import type { Solicitud } from '@/types/database'
-import {
-  AREA_MAP, ESTADO_CFG, PRIORIDAD_CFG, ESTADOS_OFICIALES,
-  numeroSolicitud, slaEstado,
-} from '@/lib/solicitudes/catalogo'
-
-// Fallback de estados legacy (MAYÚSCULA)
-const ESTADO_LEGACY: Record<string, { bg: string; text: string; label: string }> = {
-  PENDIENTE: { bg: '#fef9c3', text: '#a16207', label: 'Pendiente (legacy)' },
-  EN_REVISION: { bg: '#e0f2fe', text: '#0369a1', label: 'En revisión (legacy)' },
-  APROBADA:  { bg: '#dcfce7', text: '#15803d', label: 'Aprobada (legacy)' },
-  RECHAZADA: { bg: '#fee2e2', text: '#dc2626', label: 'Rechazada (legacy)' },
-}
-
-function estadoStyle(estado: string) {
-  if (estado in ESTADO_CFG) {
-    const c = ESTADO_CFG[estado as keyof typeof ESTADO_CFG]
-    return { bg: c.bg, text: c.text, label: estado }
-  }
-  return ESTADO_LEGACY[estado] ?? { bg: '#f1f5f9', text: '#475569', label: estado }
-}
-
-const SLA_COLOR = { verde: '#16a34a', amarillo: '#d97706', rojo: '#dc2626' } as const
+import { AREA_MAP, ESTADO_CFG, ESTADOS_OFICIALES, slaEstado } from '@/lib/solicitudes/catalogo'
+import SolicitudCard from './SolicitudCard'
 
 interface Props {
   solicitudes:    Solicitud[]
@@ -169,96 +149,14 @@ export default function ListaSolicitudes({ solicitudes: init, rol, solicitanteMa
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          {filtradas.map(s => {
-            const est   = estadoStyle(s.estado)
-            const areaD = s.area ? AREA_MAP[s.area as keyof typeof AREA_MAP] : null
-            const pr    = s.prioridad ? PRIORIDAD_CFG[s.prioridad] : null
-            const sla   = slaEstado(s.created_at, s.sla_vencimiento)
-            const solNombre = s.solicitante_id ? (solicitanteMap[s.solicitante_id] ?? '—') : '—'
-            const esEscalada = (s.tipo ?? '').toLowerCase().includes('escalamiento')
-
-            return (
-              <button
-                key={s.id}
-                onClick={() => router.push(`/solicitudes/${s.id}`)}
-                className="text-left bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition flex flex-col"
-              >
-                {/* Header */}
-                <div className="px-4 py-3 border-b border-gray-50 flex items-start justify-between gap-3"
-                  style={{ backgroundColor: '#fafbfc' }}>
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-black tracking-wider text-gray-400">{numeroSolicitud(s.id)}</p>
-                    <p className="text-[13px] font-bold text-gray-800 truncate">
-                      {s.cliente_nombre || s.cliente_cod || '—'}
-                    </p>
-                    {s.cliente_cod && <p className="text-[11px] text-gray-400 font-mono">{s.cliente_cod}</p>}
-                  </div>
-                  <span className="flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 flex-shrink-0 whitespace-nowrap"
-                    style={{ backgroundColor: est.bg, color: est.text }}>
-                    <span style={{ fontSize: 7 }}>●</span> {est.label}
-                  </span>
-                </div>
-
-                {/* Body */}
-                <div className="px-4 py-3 flex-1 space-y-2.5">
-                  <p className="text-[13px] font-semibold text-gray-800">{s.tipo}</p>
-
-                  {/* Badges */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {areaD && (
-                      <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                        style={{ backgroundColor: areaD.bg, color: areaD.color }}>{areaD.label}</span>
-                    )}
-                    {pr && (
-                      <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                        style={{ backgroundColor: pr.bg, color: pr.text }}>{s.prioridad}</span>
-                    )}
-                    {s.prioridad === 'Alta' && (
-                      <span className="text-[10px] font-bold rounded-full px-2 py-0.5 flex items-center gap-0.5"
-                        style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                        <Zap size={9} /> ALTA PRIORIDAD
-                      </span>
-                    )}
-                    {esEscalada && (
-                      <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                        style={{ backgroundColor: '#ede9fe', color: '#6d28d9' }}>ESCALADA</span>
-                    )}
-                    {sla.vencido && s.sla_vencimiento && (
-                      <span className="text-[10px] font-bold rounded-full px-2 py-0.5"
-                        style={{ backgroundColor: '#dc2626', color: '#fff' }}>SLA VENCIDO</span>
-                    )}
-                  </div>
-
-                  {/* SLA bar */}
-                  {s.sla_vencimiento ? (
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] mb-1">
-                        <span className="font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1">
-                          <Clock size={10} /> SLA
-                        </span>
-                        <span className="font-bold" style={{ color: SLA_COLOR[sla.nivel] }}>
-                          {sla.vencido ? 'Vencido' : `${Math.round(sla.pct)}% restante`}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${Math.max(3, sla.pct)}%`, backgroundColor: SLA_COLOR[sla.nivel] }} />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-gray-300">Solicitud legacy — sin SLA</p>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="px-4 py-2.5 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400"
-                  style={{ backgroundColor: '#fafbfc' }}>
-                  <span>Resp: <span className="font-semibold text-gray-600">{s.responsable_nombre || '—'}</span></span>
-                  <span>Por {solNombre} · {new Date(s.created_at).toLocaleDateString('es-CR', { day: '2-digit', month: 'short' })}</span>
-                </div>
-              </button>
-            )
-          })}
+          {filtradas.map(s => (
+            <SolicitudCard
+              key={s.id}
+              solicitud={s}
+              solicitanteNombre={s.solicitante_id ? (solicitanteMap[s.solicitante_id] ?? '—') : '—'}
+              onClick={() => router.push(`/solicitudes/${s.id}`)}
+            />
+          ))}
         </div>
       )}
     </div>

@@ -52,10 +52,12 @@ interface Props {
   preArea:       string | null
   preTipo:       string | null
   gestionOrigen: GestionOrigenPreload | null
+  /** true cuando se abre desde el tab Solicitudes de la ficha del cliente */
+  origenFicha?:  boolean
 }
 
 export default function FormSolicitudNueva({
-  clientes, preCliente, preArea, preTipo, gestionOrigen,
+  clientes, preCliente, preArea, preTipo, gestionOrigen, origenFicha = false,
 }: Props) {
   const router   = useRouter()
   const supabase = createClient()
@@ -155,7 +157,7 @@ export default function FormSolicitudNueva({
           observaciones_internas: observaciones.trim() || undefined,
           datos: {
             factura_relacionada: facturaSel || null,
-            origen: gestionOrigen ? 'gestion' : 'manual',
+            origen: gestionOrigen ? 'gestion' : origenFicha ? 'ficha' : 'manual',
           },
         }),
       })
@@ -210,6 +212,15 @@ export default function FormSolicitudNueva({
                   Ver cliente →
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Badge creada desde ficha del cliente */}
+          {!gestionOrigen && origenFicha && (
+            <div className="rounded-xl px-4 py-3 flex items-center gap-2 text-[12px]"
+              style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1' }}>
+              <Link2 size={14} />
+              <span className="font-semibold">Creada desde ficha del cliente</span>
             </div>
           )}
 

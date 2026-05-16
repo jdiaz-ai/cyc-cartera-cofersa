@@ -27,7 +27,7 @@ export interface GestionOrigenPreload {
 export default async function NuevaSolicitudPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cliente_cod?: string; gestion_id?: string; area?: string; tipo?: string }>
+  searchParams: Promise<{ cliente_cod?: string; gestion_id?: string; area?: string; tipo?: string; origen?: string }>
 }) {
   const sp       = await searchParams
   const supabase = await createClient()
@@ -137,6 +137,7 @@ export default async function NuevaSolicitudPage({
       preArea       = {sp.area ?? null}
       preTipo       = {sp.tipo ?? null}
       gestionOrigen = {gestionOrigen}
+      origenFicha   = {sp.origen === 'ficha'}
     />
   )
 }

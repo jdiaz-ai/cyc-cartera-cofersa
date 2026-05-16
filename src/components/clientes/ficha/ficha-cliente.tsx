@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 import FormNuevaGestion    from './form-nueva-gestion'
 import TablaGestionesCompacta, { KpiCard, fechaRelativa } from '@/components/gestiones/tabla-gestiones-base'
+import SolicitudCard        from '@/components/solicitudes/SolicitudCard'
 import TabReportarPago      from './tab-reportar-pago'
 
 // ── Tabs ───────────────────────────────────────────────────────────────
@@ -517,20 +518,9 @@ export default function FichaCliente({
         {/* ── TAB: SOLICITUDES ─────────────────────────────────── */}
         {tab === 'Solicitudes' && (
           <TabSolicitudes
-            solicitudes        = {solicitudes}
-            solicitanteMap     = {solicitanteMap}
-            clienteCod         = {cartera.cliente_cod}
-            clienteNombre      = {cartera.cliente_nombre}
-            limiteActual       = {maestro?.limite_credito ?? 0}
-            moraTotal          = {mora_total}
-            diasAtraso         = {tramo_peor}
-            creditoDisponible  = {maestro?.limite_credito ? maestro.limite_credito - cartera.total : null}
-            condicionPago      = {maestro?.condicion_pago ? String(maestro.condicion_pago) : '—'}
-            facturas           = {facturas}
-            esCoordinador      = {esCoordinador}
-            userEmail          = {userEmail}
-            onToast            = {showToast}
-            onRefresh          = {() => router.refresh()}
+            solicitudes    = {solicitudes}
+            solicitanteMap = {solicitanteMap}
+            clienteCod     = {cartera.cliente_cod}
           />
         )}
 
@@ -2082,415 +2072,79 @@ function TabGestiones({
 // TAB 8 — SOLICITUDES
 // ══════════════════════════════════════════════════════════════════════
 
-const TIPO_SOL_LABELS: Record<string, string> = {
-  // nuevos slugs
-  aumento_limite:        'Aumento de límite',
-  excepcion_credito:     'Excepción de crédito',
-  cambio_condicion:      'Cambio de condición',
-  suspension_temporal:   'Suspensión temporal',
-  reactivacion_cliente:  'Reactivación de cliente',
-  caso_especial:         'Caso especial',
-  descuento_no_aplicado: 'Descuento no aplicado',
-  diferencia_precio:     'Diferencia de precio',
-  regalia_bonificacion:  'Regalía / Bonificación',
-  beneficio_mercadeo:    'Beneficio de mercadeo',
-  mercaderia_faltante:   'Mercadería faltante',
-  devolucion_mercaderia: 'Devolución de mercadería',
-  garantias:             'Garantías',
-  refacturacion:         'Refacturación',
-  otra_solicitud:        'Otra solicitud',
-  // legacy uppercase
-  AUMENTO_LIMITE:        'Aumento de límite',
-  EXCEPCION_CREDITO:     'Excepción de crédito',
-  NOTA_CREDITO:          'Nota de crédito',
-  OTRA:                  'Otra',
-}
-// color del borde/acento por tipo
-const TIPO_SOL_COLOR: Record<string, string> = {
-  aumento_limite:        '#009ee3',
-  excepcion_credito:     '#f59e0b',
-  cambio_condicion:      '#0ea5e9',
-  suspension_temporal:   '#dc2626',
-  reactivacion_cliente:  '#16a34a',
-  caso_especial:         '#dc2626',
-  descuento_no_aplicado: '#16a34a',
-  diferencia_precio:     '#16a34a',
-  regalia_bonificacion:  '#16a34a',
-  beneficio_mercadeo:    '#16a34a',
-  mercaderia_faltante:   '#f59e0b',
-  devolucion_mercaderia: '#f59e0b',
-  garantias:             '#f59e0b',
-  refacturacion:         '#f59e0b',
-  otra_solicitud:        '#9ca3af',
-  AUMENTO_LIMITE:        '#009ee3',
-  EXCEPCION_CREDITO:     '#f59e0b',
-  NOTA_CREDITO:          '#8b5cf6',
-  OTRA:                  '#9ca3af',
-}
-const TIPO_SOL_AREA: Record<string, string> = {
-  aumento_limite:        'Coordinador',
-  excepcion_credito:     'Coordinador',
-  cambio_condicion:      'Coordinador',
-  suspension_temporal:   'Coordinador',
-  reactivacion_cliente:  'Coordinador',
-  caso_especial:         'Coordinador',
-  descuento_no_aplicado: 'Comercial',
-  diferencia_precio:     'Comercial',
-  regalia_bonificacion:  'Comercial',
-  beneficio_mercadeo:    'Comercial',
-  mercaderia_faltante:   'Logística',
-  devolucion_mercaderia: 'Logística',
-  garantias:             'Logística',
-  refacturacion:         'Logística',
-  otra_solicitud:        'Otro',
-  AUMENTO_LIMITE:        'Coordinador',
-  EXCEPCION_CREDITO:     'Coordinador',
-  NOTA_CREDITO:          'Coordinador',
-  OTRA:                  'Otro',
-}
-const AREA_SOL_CFG: Record<string, { bg: string; text: string }> = {
-  Coordinador: { bg: '#dbeafe', text: '#1d4ed8' },
-  Comercial:   { bg: '#dcfce7', text: '#15803d' },
-  Logística:   { bg: '#fef9c3', text: '#a16207' },
-  Otro:        { bg: '#f1f5f9', text: '#475569' },
-}
-// mantener para filtros y modal
-const TIPO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
-  aumento_limite:        { bg: '#e0f2fe', text: '#0369a1' },
-  excepcion_credito:     { bg: '#fef9c3', text: '#a16207' },
-  AUMENTO_LIMITE:        { bg: '#e0f2fe', text: '#0369a1' },
-  EXCEPCION_CREDITO:     { bg: '#fef9c3', text: '#a16207' },
-  NOTA_CREDITO:          { bg: '#f3e8ff', text: '#7c3aed' },
-  OTRA:                  { bg: '#f1f5f9', text: '#64748b' },
-}
-const ESTADO_SOL_COLORES: Record<string, { bg: string; text: string }> = {
-  PENDIENTE:   { bg: '#fef9c3', text: '#a16207' },
-  EN_REVISION: { bg: '#e0f2fe', text: '#0369a1' },
-  APROBADA:    { bg: '#dcfce7', text: '#15803d' },
-  RECHAZADA:   { bg: '#fee2e2', text: '#dc2626' },
-}
-
-function ModalAccionSolicitud({ solicitud, accion, onClose, onSuccess }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  solicitud: any
-  accion:    'APROBAR' | 'RECHAZAR' | 'CANCELAR'
-  onClose:   () => void
-  onSuccess: () => void
-}) {
-  const [comentario, setComentario] = useState('')
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState('')
-
-  async function confirmar(e: React.FormEvent) {
-    e.preventDefault()
-    if (accion === 'RECHAZAR' && !comentario.trim()) { setError('El comentario es obligatorio al rechazar'); return }
-    setLoading(true); setError('')
-    const res = await fetch(`/api/solicitudes/${solicitud.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accion, comentario }),
-    })
-    setLoading(false)
-    if (res.ok) onSuccess()
-    else { const d = await res.json(); setError(d.error ?? 'Error') }
-  }
-
-  const LABEL = { APROBAR: 'Aprobar', RECHAZAR: 'Rechazar', CANCELAR: 'Cancelar' } as const
-  const COLOR = { APROBAR: '#16a34a', RECHAZAR: '#dc2626', CANCELAR: '#64748b' } as const
-
-  return (
-    <ModalOverlay onClose={onClose}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h2 className="text-[15px] font-bold text-gray-900">{LABEL[accion]} solicitud</h2>
-        <CloseBtn onClose={onClose} />
-      </div>
-      <form onSubmit={confirmar} className="p-5 space-y-3">
-        {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-[12px] text-red-700">{error}</div>}
-        <p className="text-[13px] text-gray-600">
-          {TIPO_SOL_LABELS[solicitud.tipo] ?? solicitud.tipo} · {solicitud.justificacion}
-        </p>
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
-            Comentario {accion === 'RECHAZAR' ? '(obligatorio)' : '(opcional)'}
-          </label>
-          <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={3}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-[13px] text-gray-800 bg-white focus:outline-none focus:border-blue-400 resize-none transition"
-            placeholder={accion === 'RECHAZAR' ? 'Motivo del rechazo...' : 'Nota adicional...'} />
-        </div>
-        <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose}
-            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
-            Cancelar
-          </button>
-          <button type="submit" disabled={loading}
-            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60"
-            style={{ backgroundColor: COLOR[accion] }}>
-            {loading ? '...' : `Confirmar ${LABEL[accion]}`}
-          </button>
-        </div>
-      </form>
-    </ModalOverlay>
-  )
-}
-
 function TabSolicitudes({
   solicitudes,
   solicitanteMap,
   clienteCod,
-  esCoordinador,
-  onToast,
-  onRefresh,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  solicitudes:       any[]
-  solicitanteMap:    Record<string, string>
-  clienteCod:        string
-  clienteNombre:     string
-  limiteActual:      number
-  moraTotal:         number
-  diasAtraso:        string
-  creditoDisponible: number | null
-  condicionPago:     string
-  facturas:          Factura[]
-  esCoordinador:     boolean
-  userEmail:         string
-  onToast:           (msg: string) => void
-  onRefresh:         () => void
+  solicitudes:    any[]
+  solicitanteMap: Record<string, string>
+  clienteCod:     string
 }) {
   const router = useRouter()
-  const [filtroEstado, setFiltroEstado] = useState('Todos')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [modalAccion,  setModalAccion]  = useState<{ sol: any; accion: 'APROBAR' | 'RECHAZAR' | 'CANCELAR' } | null>(null)
 
-  const total      = solicitudes.length
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pendientes = solicitudes.filter((s: any) => s.estado === 'PENDIENTE').length
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const aprobadas  = solicitudes.filter((s: any) => s.estado === 'APROBADA').length
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rechazadas = solicitudes.filter((s: any) => s.estado === 'RECHAZADA').length
+  // Solo catálogo nuevo: area != null (excluye solicitudes legacy)
+  const nuevas = useMemo(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => solicitudes.filter((s: any) => s.area != null),
+    [solicitudes],
+  )
 
+  const PEND = ['Pendiente', 'En revisión', 'Pendiente cliente', 'Pendiente tercero']
+  const RES  = ['Resuelta', 'Cerrada']
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filtradas  = solicitudes.filter((s: any) => filtroEstado === 'Todos' || s.estado === filtroEstado)
-
-  // helper fecha hora
-  function fmtFechaCorta(iso: string) {
-    try {
-      const d = new Date(iso)
-      const dia  = d.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })
-      const hora = d.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false })
-      return `${dia} · ${hora}`
-    } catch { return iso }
-  }
-
-  // configs visuales — reutiliza los mapas de módulo-nivel
-  const AREA_BADGES: Record<string, { bg: string; color: string }> = {
-    'Coordinador':    { bg: 'rgba(59,130,246,0.12)',  color: '#2563eb' },
-    'Área comercial': { bg: 'rgba(34,197,94,0.12)',   color: '#16a34a' },
-    'Área logística': { bg: 'rgba(245,158,11,0.12)',  color: '#d97706' },
-    'Otro':           { bg: 'rgba(107,114,128,0.10)', color: '#6b7280' },
-  }
-  const ESTADO_BADGES: Record<string, { bg: string; color: string; label: string }> = {
-    PENDIENTE: { bg: 'rgba(245,158,11,0.15)',  color: '#d97706', label: 'Pendiente' },
-    APROBADA:  { bg: 'rgba(34,197,94,0.15)',   color: '#16a34a', label: 'Aprobada'  },
-    RECHAZADA: { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', label: 'Rechazada' },
-  }
+  const pendientes = nuevas.filter((s: any) => PEND.includes(s.estado)).length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enProceso  = nuevas.filter((s: any) => s.estado === 'En revisión').length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const resueltas  = nuevas.filter((s: any) => RES.includes(s.estado)).length
 
   return (
     <div className="space-y-4">
 
-      {/* ── KPIs — solo 3 estados ───────────────────────── */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-        {([
-          { key: 'PENDIENTE', label: 'Pendientes', val: pendientes, color: pendientes > 0 ? '#d97706' : '#94a3b8' },
-          { key: 'APROBADA',  label: 'Aprobadas',  val: aprobadas,  color: aprobadas  > 0 ? '#16a34a' : '#94a3b8' },
-          { key: 'RECHAZADA', label: 'Rechazadas', val: rechazadas, color: rechazadas > 0 ? '#ef4444' : '#94a3b8' },
-        ]).map(k => (
-          <div key={k.key} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{k.label}</p>
-            <p className="text-[22px] font-black tabular-nums leading-tight" style={{ color: k.color }}>{k.val}</p>
-          </div>
-        ))}
+      {/* KPIs (3) — mismos estilos que el tab Gestiones */}
+      <div className="grid gap-[10px]" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        <KpiCard label="Pendientes" valor={pendientes} valorColor="#854f0b" />
+        <KpiCard label="En proceso" valor={enProceso}  valorColor="#534ab7" />
+        <KpiCard label="Resueltas"  valor={resueltas}  valorColor="#0f6e56" />
       </div>
 
-      {/* ── Filtros + botón ─────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5 flex-wrap flex-1">
-          {[
-            { key: 'Todos',     label: 'Todas'     },
-            { key: 'PENDIENTE', label: 'Pendiente' },
-            { key: 'APROBADA',  label: 'Aprobada'  },
-            { key: 'RECHAZADA', label: 'Rechazada' },
-          ].map(f => {
-            const active = filtroEstado === f.key
-            const sty    = ESTADO_BADGES[f.key] ?? { bg: '#f1f5f9', color: '#64748b', label: '' }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cnt    = f.key !== 'Todos' ? solicitudes.filter((s: any) => s.estado === f.key).length : null
-            return (
-              <button key={f.key} type="button" onClick={() => setFiltroEstado(f.key)}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold transition"
-                style={active
-                  ? { backgroundColor: sty.bg, color: sty.color, boxShadow: `0 0 0 1.5px ${sty.color}40` }
-                  : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
-                }>
-                {f.label}
-                {cnt !== null && <span className="text-[10px]">({cnt})</span>}
-              </button>
-            )
-          })}
-        </div>
+      {/* Botón nueva solicitud → flujo NUEVO con catálogo (origen=ficha) */}
+      <div className="flex justify-end">
         <button type="button"
-          onClick={() => router.push(`/clientes/${clienteCod}/solicitudes/nueva`)}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 flex-shrink-0"
+          onClick={() => router.push(
+            `/solicitudes/nueva?cliente_cod=${encodeURIComponent(clienteCod)}&origen=ficha`,
+          )}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90"
           style={{ backgroundColor: '#009ee3' }}>
           <Plus size={14} /> Nueva solicitud
         </button>
       </div>
 
-      {/* ── Lista de solicitudes ─────────────────────────── */}
-      {filtradas.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <EmptyState icon={<AlertTriangle size={32} />}
-            texto={total === 0 ? 'No hay solicitudes para este cliente.' : 'No hay solicitudes con ese estado.'}
-            sub="Las solicitudes de aumento de crédito, excepciones y notas de crédito aparecerán aquí." />
+      {/* Lista de solicitudes del cliente (card compartido) */}
+      {nuevas.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-16 text-center">
+          <FileText size={32} className="text-gray-200 mb-3" />
+          <p className="text-[13px] font-semibold text-gray-500">
+            No hay solicitudes registradas para este cliente.
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Las solicitudes se generan desde el tab Gestiones.
+          </p>
         </div>
       ) : (
-        <div className="space-y-[10px]">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {filtradas.map((s: any) => {
-            const tipoLabel   = TIPO_SOL_LABELS[s.tipo] ?? (s.tipo as string).replace(/_/g, ' ')
-            const tipoAccent  = TIPO_SOL_COLOR[s.tipo]  ?? '#6b7280'
-            const area        = TIPO_SOL_AREA[s.tipo]   ?? 'Otro'
-            const areaBadge   = AREA_BADGES[area]       ?? AREA_BADGES['Otro']
-            const estadoBadge = ESTADO_BADGES[s.estado] ?? ESTADO_BADGES['PENDIENTE']
-            const solNombre   = s.solicitante_id ? (solicitanteMap[s.solicitante_id] ?? '—') : '—'
-            return (
-              <div key={s.id}
-                className="bg-white rounded-xl overflow-hidden transition-colors"
-                style={{ border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: '12px' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = '#cbd5e1')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border-tertiary, #e2e8f0)')}
-              >
-                <div style={{ padding: '16px' }}>
-
-                  {/* FILA 1: Badges */}
-                  <div className="flex items-center gap-2 flex-wrap mb-3">
-                    <span className="inline-flex items-center gap-1.5"
-                      style={{
-                        background: 'var(--color-background-secondary, #f8fafc)',
-                        border: '0.5px solid var(--color-border-secondary, #e2e8f0)',
-                        borderRadius: '6px', padding: '3px 8px',
-                        fontSize: '12px', fontWeight: 500, color: tipoAccent,
-                      }}>
-                      {tipoLabel}
-                    </span>
-                    <span style={{
-                      background: areaBadge.bg, borderRadius: '6px', padding: '3px 8px',
-                      fontSize: '11px', fontWeight: 500, color: areaBadge.color,
-                    }}>
-                      {area}
-                    </span>
-                    <span className="ml-auto inline-flex items-center gap-1"
-                      style={{
-                        background: estadoBadge.bg, borderRadius: '6px', padding: '3px 8px',
-                        fontSize: '11px', fontWeight: 600, color: estadoBadge.color,
-                      }}>
-                      <span style={{ fontSize: '8px' }}>●</span> {estadoBadge.label}
-                    </span>
-                  </div>
-
-                  {/* FILA 2: Grid 2 columnas */}
-                  <div className="grid gap-3 mb-3" style={{
-                    gridTemplateColumns: '1fr 1fr',
-                    background: 'var(--color-background-secondary, #f8fafc)',
-                    borderRadius: '8px', padding: '12px',
-                  }}>
-                    {/* Enviado a */}
-                    <div>
-                      <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: '4px' }}>
-                        Enviado a
-                      </p>
-                      {s.para_email ? (
-                        <>
-                          <p className="truncate" style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', marginBottom: '2px' }}>
-                            {s.para_email}
-                          </p>
-                          {s.cc_emails && s.cc_emails.length > 0 && (
-                            <p className="truncate" style={{ fontSize: '11px', color: '#64748b' }}>
-                              CC: {s.cc_emails.join(', ')}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <p style={{ fontSize: '13px', fontStyle: 'italic', color: '#94a3b8' }}>Sin destinatario registrado</p>
-                      )}
-                    </div>
-
-                    {/* Fecha + analista */}
-                    <div>
-                      <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b', marginBottom: '4px' }}>
-                        Fecha
-                      </p>
-                      <p style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', marginBottom: '2px' }}>
-                        {fmtFechaCorta(s.created_at)}
-                      </p>
-                      <p style={{ fontSize: '11px', color: '#64748b' }}>Por {solNombre}</p>
-                    </div>
-                  </div>
-
-                  {/* FILA 3: Nota + acción */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      {s.justificacion && (
-                        <p className="line-clamp-2"
-                          style={{ fontSize: '13px', fontStyle: 'italic', color: '#64748b' }}>
-                          &ldquo;{s.justificacion}&rdquo;
-                        </p>
-                      )}
-                      {s.comentario_revisor && (
-                        <div className="mt-2 rounded-lg px-3 py-2"
-                          style={{ backgroundColor: '#f0f9ff', borderLeft: '3px solid #009ee3' }}>
-                          <p style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
-                            Respuesta
-                          </p>
-                          <p style={{ fontSize: '12px', color: '#334155' }}>{s.comentario_revisor}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Cancelar — solo analista + pendiente */}
-                    {!esCoordinador && s.estado === 'PENDIENTE' && (
-                      <button type="button"
-                        onClick={() => setModalAccion({ sol: s, accion: 'CANCELAR' })}
-                        className="flex-shrink-0 transition hover:opacity-80"
-                        style={{
-                          border: '0.5px solid #ef4444', borderRadius: '8px',
-                          padding: '6px 12px', fontSize: '12px', fontWeight: 500,
-                          color: '#ef4444', background: 'white', whiteSpace: 'nowrap',
-                        }}>
-                        Cancelar solicitud
-                      </button>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-            )
-          })}
+          {nuevas.map((s: any) => (
+            <SolicitudCard
+              key={s.id}
+              solicitud={s}
+              solicitanteNombre={s.solicitante_id ? (solicitanteMap[s.solicitante_id] ?? '—') : '—'}
+              onClick={() => router.push(`/solicitudes/${s.id}`)}
+            />
+          ))}
         </div>
-      )}
-
-      {modalAccion && (
-        <ModalAccionSolicitud
-          solicitud = {modalAccion.sol}
-          accion    = {modalAccion.accion}
-          onClose   = {() => setModalAccion(null)}
-          onSuccess = {() => {
-            const msg = modalAccion.accion === 'APROBAR' ? 'Solicitud aprobada'
-                      : modalAccion.accion === 'RECHAZAR' ? 'Solicitud rechazada'
-                      : 'Solicitud cancelada'
-            setModalAccion(null); onToast(msg); onRefresh()
-          }}
-        />
       )}
     </div>
   )
