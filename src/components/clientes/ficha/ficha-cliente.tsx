@@ -1037,8 +1037,16 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
   supabase: any
   onClose: () => void; onSuccess: () => void
 }) {
+  const ASUNTOS_COBRO = [
+    'Gestión de cobro',
+    'Recordatorio de pago',
+    'Aviso de mora',
+    'Seguimiento de cuenta',
+    'Confirmación de acuerdo de pago',
+  ] as const
+
   const [para,    setPara]    = useState(correo)
-  const [asunto,  setAsunto]  = useState(`Estado de cuenta - ${clienteNombre}`)
+  const [asunto,  setAsunto]  = useState<string>('Gestión de cobro')
   const [mensaje, setMensaje] = useState('')
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
@@ -1081,7 +1089,7 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
     const { error: gErr } = await supabase.from('gestiones').insert({
       cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
       fecha, hora, tipo: 'CORREO', resultado: 'Email enviado',
-      nota: `Email de cobro enviado a ${para}. Asunto: ${asunto}. ${mensaje}`,
+      nota: `[${asunto}] Email enviado a ${para}. ${mensaje}`,
     } as any)
     setLoading(false)
     if (gErr) { setError('Error al registrar gestión: ' + gErr.message); return }
@@ -1107,7 +1115,11 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
         </div>
         <div>
           <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Asunto</label>
-          <input type="text" value={asunto} onChange={e => setAsunto(e.target.value)} className={inputCls} />
+          <select value={asunto} onChange={e => setAsunto(e.target.value)} className={inputCls}>
+            {ASUNTOS_COBRO.map(op => (
+              <option key={op} value={op}>{op}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Mensaje</label>

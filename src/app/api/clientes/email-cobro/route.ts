@@ -98,10 +98,14 @@ export async function POST(req: NextRequest) {
   // ── Construir RFC 2822 + base64url ────────────────────────────────────
   const encH = (str: string) => `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
 
+  const fullSubject = clienteNombre
+    ? `${asunto.trim()} - ${clienteNombre}`
+    : asunto.trim()
+
   const rawEmail = [
     `From: ${encH(nombreAnalista)} <${user.email}>`,
     `To: ${to.trim()}`,
-    `Subject: ${encH(asunto.trim())}`,
+    `Subject: ${encH(fullSubject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     '',
