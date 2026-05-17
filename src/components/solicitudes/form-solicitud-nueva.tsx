@@ -91,6 +91,7 @@ export default function FormSolicitudNueva({
   const [facturaSel,    setFacturaSel]    = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [adjuntos,      setAdjuntos]      = useState<AdjuntoUI[]>([])
+  const [adjuntosBlobs, setAdjuntosBlobs] = useState<Array<Blob | File>>([])
   const [dragOver,      setDragOver]      = useState(false)
 
   const [facturas, setFacturas] = useState<Factura[]>([])
@@ -153,24 +154,33 @@ export default function FormSolicitudNueva({
   }
 
   // ── Adjuntos (compresión compartida) ───────────────────────────────
+  // Los blobs comprimidos se guardan en adjuntosBlobs (índice paralelo a adjuntos)
+  // y se suben a Supabase Storage al momento de enviar la solicitud.
   const procesarArchivos = useCallback(async (files: FileList | File[]) => {
     const aceptados = ['image/jpeg', 'image/png', 'application/pdf']
-    const next: AdjuntoUI[] = []
+    const nextUI:    AdjuntoUI[]        = []
+    const nextBlobs: Array<Blob | File> = []
     for (const f of Array.from(files)) {
       if (!aceptados.includes(f.type)) continue
       if (f.size > 10 * 1024 * 1024) { setError(`"${f.name}" supera 10MB`); continue }
       if (f.type === 'application/pdf') {
-        next.push({ name: f.name, sizeKB: Math.round(f.size / 1024), tipo: 'pdf' })
+        nextUI.push({ name: f.name, sizeKB: Math.round(f.size / 1024), tipo: 'pdf' })
+        nextBlobs.push(f)                             // PDF se sube sin modificar
       } else {
         try {
           const c = await comprimirImagen(f)
-          next.push({ name: f.name, sizeKB: c.finalKB, tipo: c.formato })
+          nextUI.push({ name: f.name, sizeKB: c.finalKB, tipo: c.formato })
+          nextBlobs.push(c.blob)                      // blob comprimido (WebP/JPEG)
         } catch {
-          next.push({ name: f.name, sizeKB: Math.round(f.size / 1024), tipo: 'img' })
+          nextUI.push({ name: f.name, sizeKB: Math.round(f.size / 1024), tipo: 'img' })
+          nextBlobs.push(f)                           // original como fallback
         }
       }
     }
-    if (next.length) setAdjuntos(prev => [...prev, ...next])
+    if (nextUI.length) {
+      setAdjuntos(prev => [...prev, ...nextUI])
+      setAdjuntosBlobs(prev => [...prev, ...nextBlobs])
+    }
   }, [])
 
   // ── Submit ─────────────────────────────────────────────────────────
@@ -193,6 +203,35 @@ export default function FormSolicitudNueva({
       const { data: { session } } = await supabase.auth.getSession()
       const providerToken = session?.provider_token ?? null
 
+      // ── Upload adjuntos a Supabase Storage ──────────────────────────
+      // Mismo bucket y patrón que TabReportarPago:
+      //   bucket: 'comprobantes-pago'
+      //   path:   ${cliente_cod}/${Date.now()}_${i}_${baseName}.${ext}
+      // Las URLs públicas se guardan en datos.adjuntos[].url
+      const urlsAdjuntos: (string | null)[] = []
+      for (let i = 0; i < adjuntos.length; i++) {
+        const adjUI  = adjuntos[i]
+        const blob   = adjuntosBlobs[i]
+        if (!blob || !cliente) { urlsAdjuntos.push(null); continue }
+        const ext      = adjUI.tipo === 'pdf' ? 'pdf' : adjUI.tipo   // 'pdf' | 'webp' | 'jpeg'
+        const baseName = adjUI.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
+        const path     = `${cliente.cliente_cod}/${Date.now()}_${i}_${baseName}.${ext}`
+        const ct       = ext === 'pdf' ? 'application/pdf' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: stData, error: stErr } = await (supabase as any)
+          .storage.from('comprobantes-pago').upload(path, blob, {
+            contentType: ct, cacheControl: '31536000', upsert: false,
+          })
+        if (!stErr && stData) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: { publicUrl } } = (supabase as any)
+            .storage.from('comprobantes-pago').getPublicUrl(stData.path)
+          urlsAdjuntos.push(publicUrl)
+        } else {
+          urlsAdjuntos.push(null)   // upload falló — continúa sin URL
+        }
+      }
+
       const res = await fetch('/api/solicitudes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +250,7 @@ export default function FormSolicitudNueva({
           datos: {
             factura_relacionada: facturaSel || null,
             monto:               monto.trim() || null,
-            adjuntos:            adjuntos.map(a => ({ name: a.name, sizeKB: a.sizeKB, tipo: a.tipo })),
+            adjuntos:            adjuntos.map((a, i) => ({ name: a.name, sizeKB: a.sizeKB, tipo: a.tipo, url: urlsAdjuntos[i] ?? null })),
             origen:              gestionOrigen ? 'gestion' : origenFicha ? 'ficha' : 'manual',
           },
         }),
@@ -597,7 +636,10 @@ export default function FormSolicitudNueva({
                       <span className="flex-1 truncate text-gray-700">{a.name}</span>
                       <span className="text-gray-400">{a.sizeKB} KB</span>
                       <button type="button"
-                        onClick={() => setAdjuntos(prev => prev.filter((_, j) => j !== i))}
+                        onClick={() => {
+                          setAdjuntos(prev => prev.filter((_, j) => j !== i))
+                          setAdjuntosBlobs(prev => prev.filter((_, j) => j !== i))
+                        }}
                         className="text-gray-400 hover:text-red-500"><X size={12} /></button>
                     </li>
                   ))}
