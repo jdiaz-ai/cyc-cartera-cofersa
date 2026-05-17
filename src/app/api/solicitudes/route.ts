@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { numeroSolicitud } from '@/lib/solicitudes/catalogo'
 
 // POST /api/solicitudes
 // { tipo, destinatario?, cliente_cod, cliente_nombre, justificacion,
@@ -115,7 +114,7 @@ export async function POST(req: NextRequest) {
         estado:                 'Pendiente',
         updated_at:             new Date().toISOString(),
       })
-      .select('id')
+      .select('id, numero_consecutivo')
       .single()
 
     if (insErr || !nueva) {
@@ -125,7 +124,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const solicitudId = (nueva as { id: string }).id
+    const solicitudId  = (nueva as { id: string; numero_consecutivo: number }).id
+    const numConsec    = (nueva as { id: string; numero_consecutivo: number }).numero_consecutivo
 
     // Historial de estados — fila inicial (estado_anterior = null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,8 +137,9 @@ export async function POST(req: NextRequest) {
       nota:            'Solicitud creada',
     })
 
-    // ── MEJORA 3: correo con número SIC (best-effort, no bloquea) ──────
-    const numeroSic = numeroSolicitud(solicitudId)
+    // ── Correo con número SIC real (best-effort, no bloquea) ───────────
+    // Usa numero_consecutivo de BD → SIC-00001, SIC-00002, etc.
+    const numeroSic = `SIC-${String(numConsec).padStart(5, '0')}`
     let emailSent = false
     let emailTo:   string | null = null
     let emailError: string | null = null
@@ -147,11 +148,65 @@ export async function POST(req: NextRequest) {
       const { data: solRow } = await supabase
         .from('usuarios').select('nombre').eq('id', solicitanteId).single()
       const nombreSolicitante = (solRow as { nombre: string } | null)?.nombre ?? user.email!
-      const toEmail   = responsable_email?.trim() || process.env.EMAIL_COORDINADOR || 'jdiaz@cofersa.cr'
-      const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cyc-cartera-cofersa.vercel.app'
-      const venceStr  = new Date(slaVenc).toLocaleString('es-CR', {
+      const toEmail  = responsable_email?.trim() || process.env.EMAIL_COORDINADOR || 'jdiaz@cofersa.cr'
+      const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cyc-cartera-cofersa.vercel.app'
+      const venceStr = new Date(slaVenc).toLocaleString('es-CR', {
         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
       })
+
+      // ── CAMBIO 4: botón "Ver solicitud" solo si responsable es usuario del SIC ──
+      const { data: respUsuRow } = await supabase
+        .from('usuarios').select('id').ilike('email', toEmail).limit(1).maybeSingle()
+      const responsableEsUsuario = !!respUsuRow
+
+      // ── CAMBIO 3: campos dinámicos del JSONB datos ──────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const datosEmail = datosCat as Record<string, any> | null
+      const facturasArr    = datosEmail?.facturas  as string[] | null
+      const factCanceladas = datosEmail?.facturas_canceladas as string | null
+      const montoEmail     = datosEmail?.monto as string | null
+      const adjuntosEmail  = datosEmail?.adjuntos as Array<{ name: string; url?: string | null; sizeKB?: number }> | null
+      const ccEmailsNew    = datosEmail?.cc   as string[] | null
+
+      // Tabla de campos dinámicos para el correo
+      const camposFilas: string[] = []
+      if (facturasArr?.length) {
+        camposFilas.push(`
+          <tr>
+            <td style="padding:6px 0;font-size:11px;font-weight:700;color:#64748b;width:140px;vertical-align:top;">Factura(s)</td>
+            <td style="padding:6px 0;font-size:12px;color:#1e293b;font-weight:600;">${facturasArr.join(', ')}</td>
+          </tr>`)
+      }
+      if (factCanceladas) {
+        camposFilas.push(`
+          <tr>
+            <td style="padding:6px 0;font-size:11px;font-weight:700;color:#64748b;vertical-align:top;">Factura cancelada</td>
+            <td style="padding:6px 0;font-size:12px;color:#c2410c;font-weight:600;">${factCanceladas}</td>
+          </tr>`)
+      }
+      if (montoEmail) {
+        camposFilas.push(`
+          <tr>
+            <td style="padding:6px 0;font-size:11px;font-weight:700;color:#64748b;vertical-align:top;">Monto</td>
+            <td style="padding:6px 0;font-size:12px;color:#1e293b;font-weight:600;">${montoEmail}</td>
+          </tr>`)
+      }
+
+      const campoDinamicoHTML = camposFilas.length > 0 ? `
+        <tr><td style="padding:16px 32px 0;">
+          <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Datos del caso</p>
+          <table style="width:100%;border-collapse:collapse;">${camposFilas.join('')}</table>
+        </td></tr>` : ''
+
+      // Adjuntos como links clicables
+      const adjuntosConUrl = (adjuntosEmail ?? []).filter(a => a.url)
+      const adjuntosHTML = adjuntosConUrl.length > 0 ? `
+        <tr><td style="padding:12px 32px 0;">
+          <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Adjuntos</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            ${adjuntosConUrl.map((a, i) => `<a href="${a.url}" style="display:inline-block;background:#f0f9ff;color:#0369a1;font-size:11px;font-weight:600;text-decoration:none;border:1px solid #bae6fd;border-radius:8px;padding:5px 10px;">📎 ${a.name || `Adjunto ${i+1}`}${a.sizeKB ? ` (${a.sizeKB} KB)` : ''}</a>`).join('\n')}
+          </div>
+        </td></tr>` : ''
 
       const htmlBody = `<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"></head>
@@ -179,14 +234,19 @@ export async function POST(req: NextRequest) {
             <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">${descripcion}</p>
           </div>
         </td></tr>
+        ${campoDinamicoHTML}
+        ${adjuntosHTML}
         <tr><td style="padding:16px 32px 0;">
           <p style="margin:0;font-size:12px;color:#475569;"><strong>Vencimiento estimado:</strong> ${venceStr}</p>
           <p style="margin:6px 0 0;font-size:12px;color:#475569;"><strong>Responsable:</strong> ${responsable_nombre ?? '—'} &lt;${toEmail}&gt;</p>
           <p style="margin:6px 0 0;font-size:12px;color:#475569;"><strong>Solicitante:</strong> ${nombreSolicitante} &lt;${user.email}&gt;</p>
         </td></tr>
-        <tr><td style="padding:24px 32px 32px;">
-          <a href="${appUrl}/solicitudes/${solicitudId}" style="display:inline-block;background:#009ee3;color:#fff;font-size:13px;font-weight:700;text-decoration:none;border-radius:10px;padding:12px 24px;">Ver solicitud →</a>
-        </td></tr>
+        ${responsableEsUsuario
+          ? `<tr><td style="padding:24px 32px 32px;">
+              <a href="${appUrl}/solicitudes/${solicitudId}" style="display:inline-block;background:#009ee3;color:#fff;font-size:13px;font-weight:700;text-decoration:none;border-radius:10px;padding:12px 24px;">Ver solicitud →</a>
+             </td></tr>`
+          : '<tr><td style="padding:24px 32px 32px;"></td></tr>'
+        }
         <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
           <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
         </td></tr>
@@ -197,15 +257,18 @@ export async function POST(req: NextRequest) {
 
       const encH = (str: string) => `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
       const subject = `[${numeroSic}] ${tipoCat} — ${cliente_nombre ?? cliente_cod}`
+      // CAMBIO 2: CC desde datos.cc
+      const ccList = ccEmailsNew?.length ? ccEmailsNew : []
       const rawEmail = [
         `From: ${encH(nombreSolicitante)} <${user.email}>`,
         `To: ${toEmail}`,
+        ccList.length > 0 ? `Cc: ${ccList.join(', ')}` : null,
         `Subject: ${encH(subject)}`,
         'MIME-Version: 1.0',
         'Content-Type: text/html; charset=utf-8',
         '',
         htmlBody,
-      ].join('\r\n')
+      ].filter((l): l is string => l !== null).join('\r\n')
       const encoded = Buffer.from(rawEmail).toString('base64')
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
@@ -231,7 +294,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      ok: true, id: solicitudId, numero: numeroSic,
+      ok: true, id: solicitudId, numero: numeroSic, numero_consecutivo: numConsec,
       email_sent: emailSent, email_to: emailTo, email_error: emailError,
     })
   }

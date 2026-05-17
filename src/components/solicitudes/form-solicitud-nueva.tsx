@@ -88,7 +88,17 @@ export default function FormSolicitudNueva({
   const [monto,         setMonto]         = useState('')
   const [respNombre,    setRespNombre]    = useState('')
   const [respEmail,     setRespEmail]     = useState('')
-  const [facturaSel,    setFacturaSel]    = useState('')
+
+  // ── Facturas — multi-selección ──────────────────────────────────────
+  const [facturasBusq,     setFacturasBusq]     = useState('')          // filtro live
+  const [facturasSet,      setFacturasSet]       = useState<Set<string>>(new Set())   // docs seleccionados
+  const [factCancelada,    setFactCancelada]     = useState(false)      // toggle "factura cancelada"
+  const [factCanceladaTxt, setFactCanceladaTxt] = useState('')          // texto libre cuando cancelada
+
+  // ── CC — con copia a ───────────────────────────────────────────────
+  const [ccInput,  setCcInput]  = useState('')
+  const [ccEmails, setCcEmails] = useState<string[]>([])
+
   const [observaciones, setObservaciones] = useState('')
   const [adjuntos,      setAdjuntos]      = useState<AdjuntoUI[]>([])
   const [adjuntosBlobs, setAdjuntosBlobs] = useState<Array<Blob | File>>([])
@@ -142,6 +152,33 @@ export default function FormSolicitudNueva({
     return b.slice(0, 60)
   }, [clientes, q])
 
+  // ── CC helpers ─────────────────────────────────────────────────────
+  function addCC(raw: string) {
+    const emails = raw.split(/[,;\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
+    const validos: string[] = []
+    for (const e of emails) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) continue
+      if (!ccEmails.includes(e)) validos.push(e)
+    }
+    if (validos.length) setCcEmails(prev => [...prev, ...validos])
+    setCcInput('')
+  }
+
+  // ── Facturas multi-select helpers ──────────────────────────────────
+  const facturasFiltradas = useMemo(() => {
+    const q = facturasBusq.trim().toLowerCase()
+    if (!q) return facturas
+    return facturas.filter(f => f.documento.toLowerCase().includes(q))
+  }, [facturas, facturasBusq])
+
+  function toggleFacturaSel(doc: string) {
+    setFacturasSet(prev => {
+      const next = new Set(prev)
+      next.has(doc) ? next.delete(doc) : next.add(doc)
+      return next
+    })
+  }
+
   // ── Navegación FIX 2 ───────────────────────────────────────────────
   function volver() {
     if (origenFicha && cliente) {
@@ -191,8 +228,11 @@ export default function FormSolicitudNueva({
     if (campos.observaciones === 'obligatoria' && !observaciones.trim()) {
       setError('Las observaciones son obligatorias para este tipo'); return
     }
-    if (campos.factura === 'obligatoria' && !facturaSel) {
-      setError('La factura relacionada es obligatoria para este tipo'); return
+    if (campos.factura === 'obligatoria' && !factCancelada && facturasSet.size === 0) {
+      setError('Seleccioná al menos una factura para este tipo'); return
+    }
+    if (campos.factura === 'obligatoria' && factCancelada && !factCanceladaTxt.trim()) {
+      setError('Ingresá el número de factura cancelada'); return
     }
     if (!respNombre.trim() || !respEmail.trim()) {
       setError('El responsable (nombre y email) es obligatorio'); return
@@ -248,8 +288,13 @@ export default function FormSolicitudNueva({
           observaciones_internas: observaciones.trim() || undefined,
           providerToken,
           datos: {
-            factura_relacionada: facturaSel || null,
+            // Facturas del sistema (multi-selección)
+            facturas:            factCancelada ? null : (facturasSet.size > 0 ? Array.from(facturasSet) : null),
+            // Facturas canceladas (texto libre — no existen en la BD)
+            facturas_canceladas: factCancelada ? (factCanceladaTxt.trim() || null) : null,
             monto:               monto.trim() || null,
+            // Con copia (CC)
+            cc:                  ccEmails.length > 0 ? ccEmails : null,
             adjuntos:            adjuntos.map((a, i) => ({ name: a.name, sizeKB: a.sizeKB, tipo: a.tipo, url: urlsAdjuntos[i] ?? null })),
             origen:              gestionOrigen ? 'gestion' : origenFicha ? 'ficha' : 'manual',
           },
@@ -528,28 +573,87 @@ export default function FormSolicitudNueva({
               </div>
             )}
 
-            {/* Card 2 — Factura (solo si aplica) */}
+            {/* Card 2 — Factura multi-selección (solo si aplica) */}
             {campos && campos.factura && (
-              <div className="rounded-[10px] bg-white p-4" style={{ border: '0.5px solid #e2e8f0' }}>
-                <label className={labelCls}>
-                  Factura relacionada {campos.factura === 'obligatoria' ? '*' : '(opcional)'}
-                </label>
-                {facturaSel ? (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-center justify-between">
-                    <span className="text-[12px] font-bold text-blue-800">{facturaSel}</span>
-                    <button type="button" onClick={() => setFacturaSel('')}
-                      className="text-blue-400 hover:text-blue-700"><X size={14} /></button>
+              <div className="rounded-[10px] bg-white p-4 space-y-3" style={{ border: '0.5px solid #e2e8f0' }}>
+                <div className="flex items-center justify-between">
+                  <label className={labelCls + ' mb-0'}>
+                    Factura(s) {campos.factura === 'obligatoria' ? '*' : '(opcional)'}
+                  </label>
+                  {/* Toggle "Factura cancelada" */}
+                  <button type="button"
+                    onClick={() => { setFactCancelada(v => !v); setFacturasSet(new Set()); setFactCanceladaTxt('') }}
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold transition"
+                    style={factCancelada
+                      ? { backgroundColor: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }
+                      : { backgroundColor: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>
+                    ⚠ Factura cancelada
+                  </button>
+                </div>
+
+                {factCancelada ? (
+                  /* Modo factura cancelada: input de texto libre */
+                  <div>
+                    <p className="text-[11px] text-orange-600 font-semibold mb-1.5">
+                      La factura no existe en el sistema. Ingresá el número manualmente:
+                    </p>
+                    <input
+                      type="text"
+                      value={factCanceladaTxt}
+                      onChange={e => setFactCanceladaTxt(e.target.value)}
+                      placeholder="Ej: FAC-001, FAC-002 (separadas por coma)"
+                      className={inputCls}
+                    />
                   </div>
                 ) : (
-                  <select value={facturaSel} onChange={e => setFacturaSel(e.target.value)}
-                    className={inputCls} disabled={facturas.length === 0}>
-                    <option value="">{facturas.length === 0 ? 'Sin facturas con saldo' : 'Seleccionar factura…'}</option>
-                    {facturas.map(f => (
-                      <option key={f.id} value={String(f.documento)}>
-                        {f.documento} · {fmtCRC(f.saldo)}
-                      </option>
-                    ))}
-                  </select>
+                  /* Modo normal: multi-selección con búsqueda */
+                  <div className="space-y-2">
+                    {/* Tags de facturas seleccionadas */}
+                    {facturasSet.size > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from(facturasSet).map(doc => (
+                          <span key={doc} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                            style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+                            {doc}
+                            <button type="button" onClick={() => toggleFacturaSel(doc)}
+                              className="text-blue-400 hover:text-blue-700"><X size={10}/></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Búsqueda */}
+                    <div className="relative">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <input type="text" value={facturasBusq} onChange={e => setFacturasBusq(e.target.value)}
+                        placeholder="Buscar factura…"
+                        className="w-full rounded-xl border border-gray-200 pl-7 pr-3 py-2 text-[12px] text-gray-700 focus:outline-none focus:border-[#009ee3] transition"
+                      />
+                    </div>
+                    {/* Lista */}
+                    <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                      {facturasFiltradas.length === 0 ? (
+                        <p className="text-[12px] text-gray-400 text-center py-4">
+                          {facturas.length === 0 ? 'Sin facturas con saldo' : 'Sin coincidencias'}
+                        </p>
+                      ) : facturasFiltradas.map(f => {
+                        const sel = facturasSet.has(String(f.documento))
+                        return (
+                          <button key={f.id} type="button" onClick={() => toggleFacturaSel(String(f.documento))}
+                            className="w-full flex items-center justify-between px-3 py-2 text-left transition"
+                            style={{ backgroundColor: sel ? '#f0f9ff' : undefined }}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ border: `2px solid ${sel ? '#009ee3' : '#e2e8f0'}`, backgroundColor: sel ? '#009ee3' : 'white' }}>
+                                {sel && <span className="text-white text-[9px] font-black">✓</span>}
+                              </div>
+                              <span className="text-[12px] font-semibold text-gray-800">{f.documento}</span>
+                            </div>
+                            <span className="text-[12px] font-bold tabular-nums text-gray-500">{fmtCRC(f.saldo)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -579,6 +683,39 @@ export default function FormSolicitudNueva({
                 {respFijo && (
                   <p className="text-[11px] text-gray-400">Responsable fijo del área</p>
                 )}
+
+                {/* CC — Con copia a (opcional) */}
+                <div>
+                  <label className={labelCls}>Con copia a <span className="font-normal normal-case tracking-normal text-gray-400">(CC · opcional)</span></label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="email"
+                      value={ccInput}
+                      onChange={e => setCcInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCC(ccInput) }
+                      }}
+                      onBlur={() => { if (ccInput.trim()) addCC(ccInput) }}
+                      placeholder="email@cofersa.cr"
+                      className={inputCls + ' flex-1'}
+                    />
+                    <button type="button" onClick={() => addCC(ccInput)}
+                      className="rounded-xl px-3 py-2 text-[12px] font-bold text-white flex-shrink-0 transition hover:opacity-90"
+                      style={{ backgroundColor: '#009ee3' }}>+</button>
+                  </div>
+                  {ccEmails.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {ccEmails.map((e, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' }}>
+                          {e}
+                          <button type="button" onClick={() => setCcEmails(prev => prev.filter((_, j) => j !== i))}
+                            className="text-gray-400 hover:text-red-500"><X size={10} /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

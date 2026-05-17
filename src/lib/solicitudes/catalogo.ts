@@ -168,9 +168,14 @@ export function esAreaValida(area: string): area is AreaKey {
          area === 'logistica'     || area === 'actualizacion_datos'
 }
 
-/** Número legible de solicitud: SIC-XXXXX a partir del UUID */
-export function numeroSolicitud(id: string): string {
-  // Usa los primeros 5 hex del UUID → entero base 16 acotado a 5 dígitos
+/**
+ * Número legible de solicitud: SIC-XXXXX
+ * - Si se pasa `consecutivo` (columna número_consecutivo de la BD), lo usa directamente.
+ * - Fallback para registros legacy sin consecutivo: deriva un pseudo-número del UUID.
+ */
+export function numeroSolicitud(id: string, consecutivo?: number | null): string {
+  if (consecutivo != null) return `SIC-${String(consecutivo).padStart(5, '0')}`
+  // Fallback legacy: primeros 6 hex del UUID → entero base 16 acotado a 5 dígitos
   const hex = id.replace(/-/g, '').slice(0, 6)
   const n   = parseInt(hex, 16) % 100000
   return `SIC-${String(n).padStart(5, '0')}`

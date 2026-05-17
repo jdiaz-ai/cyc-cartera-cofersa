@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Link2, Clock, MessageSquare, History, Send, Loader2,
+  ArrowLeft, Link2, Clock, MessageSquare, History, Send, Loader2, Paperclip,
 } from 'lucide-react'
 import {
   AREA_MAP, ESTADO_CFG, PRIORIDAD_CFG, ESTADOS_OFICIALES,
@@ -145,7 +145,7 @@ export default function DetalleSolicitud({
         <div className="px-5 py-4 border-b border-gray-50" style={{ backgroundColor: '#fafbfc' }}>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <p className="text-[11px] font-black tracking-wider text-gray-400">{numeroSolicitud(solicitud.id)}</p>
+              <p className="text-[11px] font-black tracking-wider text-gray-400">{numeroSolicitud(solicitud.id, solicitud.numero_consecutivo)}</p>
               <h1 className="text-[18px] font-bold text-gray-800">{solicitud.tipo}</h1>
               <p className="text-[13px] text-gray-500 mt-0.5">
                 {solicitud.cliente_nombre || solicitud.cliente_cod}
@@ -208,6 +208,9 @@ export default function DetalleSolicitud({
             )}
           </div>
         )}
+
+        {/* ── CAMPOS DEL CASO (JSONB datos) ────────────────────────── */}
+        {solicitud.datos && <DatosCaso datos={solicitud.datos} tipo={solicitud.tipo ?? ''} />}
 
         {/* Link gestión origen */}
         {gestionOrigen && (
@@ -334,6 +337,123 @@ function Dato({ label, valor, sub }: { label: string; valor: string; sub?: strin
       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">{label}</p>
       <p className="text-[13px] font-semibold text-gray-700 truncate">{valor}</p>
       {sub ? <p className="text-[11px] text-gray-400 truncate">{sub}</p> : null}
+    </div>
+  )
+}
+
+// ── Campos dinámicos del JSONB `datos` ─────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function DatosCaso({ datos, tipo }: { datos: Record<string, any>; tipo: string }) {
+  const facturas        = datos.facturas        as string[] | null | undefined
+  const factCanceladas  = datos.facturas_canceladas as string | null | undefined
+  // compatibilidad legacy con campo simple
+  const factLegacy      = datos.factura_relacionada as string | null | undefined
+  const monto           = datos.monto           as string | null | undefined
+  const adjuntos        = datos.adjuntos        as Array<{ name: string; url?: string | null; tipo?: string; sizeKB?: number }> | null | undefined
+  const cc              = datos.cc              as string[] | null | undefined
+
+  const facturasDisplay: string[] =
+    facturas?.length ? facturas :
+    factLegacy       ? [factLegacy] :
+    []
+
+  const hayAlgo = facturasDisplay.length > 0 || factCanceladas || monto || (adjuntos?.length ?? 0) > 0 || cc?.length
+
+  if (!hayAlgo) return null
+
+  return (
+    <div className="px-5 pb-4">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+        Datos del caso
+      </p>
+      <div className="rounded-xl border border-gray-100 divide-y divide-gray-50 overflow-hidden">
+
+        {/* Facturas del sistema */}
+        {facturasDisplay.length > 0 && (
+          <CampoFila
+            label="Factura(s)"
+            value={
+              <div className="flex flex-wrap gap-1">
+                {facturasDisplay.map((f, i) => (
+                  <span key={i} className="text-[11px] font-bold rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: '#e0f2fe', color: '#0369a1' }}>{f}</span>
+                ))}
+              </div>
+            }
+          />
+        )}
+
+        {/* Facturas canceladas (texto libre) */}
+        {factCanceladas && (
+          <CampoFila
+            label="Factura(s) cancelada(s)"
+            value={
+              <span className="text-[12px] font-semibold text-orange-700 bg-orange-50 rounded-full px-2 py-0.5">
+                {factCanceladas}
+              </span>
+            }
+          />
+        )}
+
+        {/* Monto */}
+        {monto && (
+          <CampoFila
+            label={tipo.includes('descuento') ? '% o monto descuento' : tipo.includes('límite') ? 'Límite solicitado' : 'Monto'}
+            value={<span className="text-[13px] font-bold text-gray-800">{monto}</span>}
+          />
+        )}
+
+        {/* CC */}
+        {cc?.length ? (
+          <CampoFila
+            label="Con copia (CC)"
+            value={
+              <div className="flex flex-wrap gap-1">
+                {cc.map((e, i) => (
+                  <span key={i} className="text-[11px] font-mono rounded-full px-2 py-0.5"
+                    style={{ backgroundColor: '#f1f5f9', color: '#475569' }}>{e}</span>
+                ))}
+              </div>
+            }
+          />
+        ) : null}
+
+        {/* Adjuntos */}
+        {adjuntos && adjuntos.length > 0 && (
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-1">
+              <Paperclip size={10} /> Adjuntos
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {adjuntos.map((a, i) => (
+                a.url
+                  ? (
+                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition hover:opacity-80"
+                      style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', color: '#0369a1' }}>
+                      <Paperclip size={10} /> {a.name || `Adjunto ${i + 1}`}
+                      {a.sizeKB ? <span className="text-gray-400">({a.sizeKB} KB)</span> : null}
+                    </a>
+                  ) : (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-semibold"
+                      style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#94a3b8' }}>
+                      <Paperclip size={10} /> {a.name || `Adjunto ${i + 1}`} — sin URL
+                    </span>
+                  )
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CampoFila({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="px-4 py-2.5 flex items-start gap-4">
+      <p className="text-[11px] font-bold text-gray-400 w-40 flex-shrink-0 pt-0.5">{label}</p>
+      <div className="flex-1 min-w-0">{value}</div>
     </div>
   )
 }

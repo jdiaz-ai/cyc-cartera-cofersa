@@ -178,6 +178,7 @@ export interface Solicitud {
   observaciones_internas: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   datos:                  Record<string, any> | null   // jsonb (facturas, adjuntos, etc.)
+  numero_consecutivo:     number | null                // SIC-XXXXX (auto-incrementado en BD)
 }
 
 // Comentario interno de una solicitud

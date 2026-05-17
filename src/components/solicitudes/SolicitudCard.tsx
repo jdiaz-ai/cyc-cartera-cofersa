@@ -72,7 +72,7 @@ export default function SolicitudCard({ solicitud: s, solicitanteNombre, onClick
       <div className="px-4 py-3 border-b border-gray-50 flex items-start justify-between gap-3"
         style={{ backgroundColor: '#fafbfc' }}>
         <div className="min-w-0">
-          <p className="text-[11px] font-black tracking-wider text-gray-400">{numeroSolicitud(s.id)}</p>
+          <p className="text-[11px] font-black tracking-wider text-gray-400">{numeroSolicitud(s.id, s.numero_consecutivo)}</p>
           <p className="text-[13px] font-bold text-gray-800 truncate">
             {s.cliente_nombre || s.cliente_cod || '—'}
           </p>
