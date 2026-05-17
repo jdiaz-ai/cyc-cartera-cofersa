@@ -267,15 +267,15 @@ export default function Sidebar({
             role="img"
             aria-label="Cofersa"
             style={{
-              width: '130px',
-              height: '40px',
+              width: '160px',
+              height: '49px',
               borderRadius: '10px',
               backgroundImage: "url('/logo-cofersa.png')",
               backgroundSize: 'contain',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
               backgroundColor: 'white',
-              padding: '4px 10px',
+              padding: '4px 14px',
             }}
           />
         </div>

@@ -151,10 +151,10 @@ export default function Topbar({
     >
       {/* ── Título de página ─────────────────────────────────── */}
       <div>
-        <h1 className="font-bold text-gray-900 leading-tight" style={{ fontSize: '15px' }}>
+        <h1 className="font-bold text-gray-900 leading-tight" style={{ fontSize: '18px' }}>
           {page.title}
         </h1>
-        <p className="text-gray-400 leading-tight" style={{ fontSize: '11px' }}>
+        <p className="text-gray-400 leading-tight" style={{ fontSize: '12px' }}>
           {page.sub}
         </p>
       </div>

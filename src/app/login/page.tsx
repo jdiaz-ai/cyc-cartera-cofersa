@@ -141,11 +141,11 @@ export default function LoginPage() {
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 backgroundColor: '#f8f9fa',
-                width: '260px',
-                height: '98px',
-                borderRadius: '12px',
+                width: '330px',
+                height: '124px',
+                borderRadius: '14px',
                 border: '0.5px solid #e5e7eb',
-                padding: '14px 28px',
+                padding: '16px 32px',
               }}
             />
           </div>

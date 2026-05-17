@@ -209,11 +209,11 @@ export async function POST(req: NextRequest) {
         </td></tr>` : ''
 
       const htmlBody = `<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"></head>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:600px){.sic-main{width:100%!important;border-radius:0!important}}</style></head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Nunito',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <tr><td style="background:#003B5C;padding:20px 32px;">
           <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
           <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:800;">${numeroSic}</h1>
@@ -377,11 +377,11 @@ export async function POST(req: NextRequest) {
   // ── Cuerpo HTML del correo ───────────────────────────────────────────────
   const htmlBody = `<!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>@media(max-width:600px){.sic-main{width:100%!important;border-radius:0!important}}</style></head>
 <body style="margin:0;padding:0;background:#f0f4f8;font-family:'Nunito',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <tr>
           <td style="background:#003B5C;padding:20px 32px;text-align:left;">
             <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
