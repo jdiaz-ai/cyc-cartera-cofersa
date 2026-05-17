@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft, Handshake, FileText, AlertTriangle,
   CheckCircle2, XCircle, Clock, Circle, Plus,
@@ -128,8 +128,20 @@ export default function FichaCliente({
 }: Props) {
   const router   = useRouter()
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
-  const [tab,               setTab]               = useState<Tab>('Información')
+  // FIX 2: abrir el tab indicado por ?tab= (ej: ?tab=solicitudes)
+  const tabInicial: Tab = (() => {
+    const q = (searchParams.get('tab') ?? '').toLowerCase()
+    if (!q) return 'Información'
+    const match = TABS.find(t =>
+      t.toLowerCase() === q ||
+      t.toLowerCase().replace(/\s+/g, '-') === q,
+    )
+    return (match as Tab) ?? 'Información'
+  })()
+
+  const [tab,               setTab]               = useState<Tab>(tabInicial)
   const [modalGestion,      setModalGestion]      = useState(false)
   const [modalEmail,        setModalEmail]        = useState(false)
   const [modalEdoCta,       setModalEdoCta]       = useState(false)
@@ -2110,17 +2122,16 @@ function TabSolicitudes({
         <KpiCard label="Resueltas"  valor={resueltas}  valorColor="#0f6e56" />
       </div>
 
-      {/* Botón nueva solicitud → flujo NUEVO con catálogo (origen=ficha) */}
-      <div className="flex justify-end">
-        <button type="button"
-          onClick={() => router.push(
-            `/solicitudes/nueva?cliente_cod=${encodeURIComponent(clienteCod)}&origen=ficha`,
-          )}
-          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90"
-          style={{ backgroundColor: '#009ee3' }}>
-          <Plus size={14} /> Nueva solicitud
-        </button>
-      </div>
+      {/* Botón flotante — mismo estilo que "+ Nueva gestión" (FIX 4) */}
+      <button type="button"
+        onClick={() => router.push(
+          `/solicitudes/nueva?cliente_cod=${encodeURIComponent(clienteCod)}&origen=ficha`,
+        )}
+        title="Crear una nueva solicitud para este cliente"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        style={{ backgroundColor: '#009ee3', padding: '11px 18px', borderRadius: 22 }}>
+        <Plus size={16} /> Nueva solicitud
+      </button>
 
       {/* Lista de solicitudes del cliente (card compartido) */}
       {nuevas.length === 0 ? (

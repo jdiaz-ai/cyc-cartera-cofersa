@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { numeroSolicitud } from '@/lib/solicitudes/catalogo'
 
 // POST /api/solicitudes
 // { tipo, destinatario?, cliente_cod, cliente_nombre, justificacion,
@@ -35,13 +36,18 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { tipo, destinatario, cliente_cod, cliente_nombre, justificacion,
+  const { tipo, destinatario, cliente_cod, cliente_nombre,
     para_email, cc_emails, datos,
     monto_actual, monto_solicitado, monto, motivo_nota, documento_ref, fecha_limite,
     providerToken } = body
 
-  if (!tipo || !cliente_cod || !justificacion?.trim()) {
-    return NextResponse.json({ error: 'tipo, cliente_cod y justificacion son requeridos' }, { status: 400 })
+  // FIX 1: el formulario nuevo envía `descripcion`; el legacy `justificacion`.
+  // Aceptar ambos para compatibilidad.
+  const descripcion = (body.descripcion ?? body.justificacion ?? '').toString()
+  const justificacion = descripcion
+
+  if (!tipo || !cliente_cod || !descripcion.trim()) {
+    return NextResponse.json({ error: 'tipo, cliente_cod y descripcion son requeridos' }, { status: 400 })
   }
 
   const supabase = await createClient()
@@ -69,16 +75,16 @@ export async function POST(req: NextRequest) {
   // ════════════════════════════════════════════════════════════════════
   // RAMA NUEVA — Catálogo Centro Operativo
   // Se detecta por la presencia de `area` + `sla_horas`.
-  // SIN correo, SIN notificación (fuera de alcance de este sprint).
+  // Crea la solicitud + historial y envía correo best-effort (no bloquea).
   // ════════════════════════════════════════════════════════════════════
   if (body.area && body.sla_horas != null) {
     const {
       tipo: tipoCat, area, prioridad, sla_horas, gestion_id,
-      descripcion, responsable_nombre, responsable_email,
+      responsable_nombre, responsable_email,
       observaciones_internas, datos: datosCat,
     } = body
 
-    if (!tipoCat || !cliente_cod || !descripcion?.trim()) {
+    if (!tipoCat || !cliente_cod || !descripcion.trim()) {
       return NextResponse.json(
         { error: 'tipo, cliente_cod y descripcion son requeridos' },
         { status: 400 },
@@ -131,7 +137,103 @@ export async function POST(req: NextRequest) {
       nota:            'Solicitud creada',
     })
 
-    return NextResponse.json({ ok: true, id: solicitudId })
+    // ── MEJORA 3: correo con número SIC (best-effort, no bloquea) ──────
+    const numeroSic = numeroSolicitud(solicitudId)
+    let emailSent = false
+    let emailTo:   string | null = null
+    let emailError: string | null = null
+
+    if (providerToken) {
+      const { data: solRow } = await supabase
+        .from('usuarios').select('nombre').eq('id', solicitanteId).single()
+      const nombreSolicitante = (solRow as { nombre: string } | null)?.nombre ?? user.email!
+      const toEmail   = responsable_email?.trim() || process.env.EMAIL_COORDINADOR || 'jdiaz@cofersa.cr'
+      const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cyc-cartera-cofersa.vercel.app'
+      const venceStr  = new Date(slaVenc).toLocaleString('es-CR', {
+        day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      })
+
+      const htmlBody = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Nunito',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+        <tr><td style="background:#003B5C;padding:20px 32px;">
+          <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
+          <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:800;">${numeroSic}</h1>
+          <p style="margin:4px 0 0;color:#bae6fd;font-size:13px;">Nueva solicitud interna</p>
+        </td></tr>
+        <tr><td style="padding:24px 32px 0;">
+          <span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:700;border-radius:999px;padding:5px 14px;text-transform:uppercase;letter-spacing:0.05em;">${tipoCat}</span>
+          ${prioridad ? `<span style="display:inline-block;margin-left:6px;background:#fef2f2;color:#b91c1c;font-size:11px;font-weight:700;border-radius:999px;padding:5px 14px;">${prioridad} · SLA ${sla_horas}h</span>` : ''}
+        </td></tr>
+        <tr><td style="padding:16px 32px 0;">
+          <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Cliente</p>
+          <p style="margin:0;font-size:18px;font-weight:800;color:#1e293b;">${cliente_nombre ?? cliente_cod}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#94a3b8;font-family:monospace;">${cliente_cod}</p>
+        </td></tr>
+        <tr><td style="padding:16px 32px 0;">
+          <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Descripción</p>
+          <div style="background:#f8fafc;border-left:4px solid #009ee3;border-radius:0 8px 8px 0;padding:12px 16px;">
+            <p style="margin:0;font-size:13px;color:#334155;line-height:1.6;">${descripcion}</p>
+          </div>
+        </td></tr>
+        <tr><td style="padding:16px 32px 0;">
+          <p style="margin:0;font-size:12px;color:#475569;"><strong>Vencimiento estimado:</strong> ${venceStr}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#475569;"><strong>Responsable:</strong> ${responsable_nombre ?? '—'} &lt;${toEmail}&gt;</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#475569;"><strong>Solicitante:</strong> ${nombreSolicitante} &lt;${user.email}&gt;</p>
+        </td></tr>
+        <tr><td style="padding:24px 32px 32px;">
+          <a href="${appUrl}/solicitudes/${solicitudId}" style="display:inline-block;background:#009ee3;color:#fff;font-size:13px;font-weight:700;text-decoration:none;border-radius:10px;padding:12px 24px;">Ver solicitud →</a>
+        </td></tr>
+        <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
+          <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`
+
+      const encH = (str: string) => `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
+      const subject = `[${numeroSic}] ${tipoCat} — ${cliente_nombre ?? cliente_cod}`
+      const rawEmail = [
+        `From: ${encH(nombreSolicitante)} <${user.email}>`,
+        `To: ${toEmail}`,
+        `Subject: ${encH(subject)}`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset=utf-8',
+        '',
+        htmlBody,
+      ].join('\r\n')
+      const encoded = Buffer.from(rawEmail).toString('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+      try {
+        const gmailRes = await fetch(
+          'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+          {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${providerToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: encoded }),
+          },
+        )
+        if (gmailRes.ok) { emailSent = true; emailTo = toEmail }
+        else {
+          const ge = await gmailRes.json().catch(() => ({}))
+          emailError = (ge as { error?: { message?: string } })?.error?.message ?? `Error Gmail API (${gmailRes.status})`
+        }
+      } catch {
+        emailError = 'Error de red al contactar Gmail API.'
+      }
+    } else {
+      emailError = 'Sesión de Google no disponible — solicitud creada sin correo.'
+    }
+
+    return NextResponse.json({
+      ok: true, id: solicitudId, numero: numeroSic,
+      email_sent: emailSent, email_to: emailTo, email_error: emailError,
+    })
   }
 
   // ════════════════════════════════════════════════════════════════════

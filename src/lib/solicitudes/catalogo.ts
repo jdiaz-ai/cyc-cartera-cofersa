@@ -176,6 +176,57 @@ export function numeroSolicitud(id: string): string {
   return `SIC-${String(n).padStart(5, '0')}`
 }
 
+// ── Campos dinámicos por tipo de solicitud ─────────────────────────────
+export interface CamposSolicitud {
+  factura:       'obligatoria' | 'opcional' | null
+  monto:         string | null   // label descriptivo o null si no aplica
+  observaciones: 'obligatoria' | 'opcional'
+  adjunto:       boolean         // siempre true (adjuntos opcionales)
+}
+
+// Configuración exacta por tipo (clave = etiqueta del catálogo)
+export const CAMPOS_POR_TIPO: Record<string, CamposSolicitud> = {
+  // ── Crédito y Cobro ──────────────────────────────────────────────────
+  'Aplicación / Validación de pago':  { factura: 'obligatoria', monto: 'Monto del pago',        observaciones: 'obligatoria', adjunto: true },
+  'Desbloqueo temporal de cuenta':    { factura: null,          monto: null,                   observaciones: 'obligatoria', adjunto: true },
+  'Revisión de límite de crédito':    { factura: null,          monto: 'Límite solicitado',    observaciones: 'opcional',    adjunto: true },
+  'Convenio de pago':                 { factura: 'opcional',    monto: 'Monto total convenio', observaciones: 'obligatoria', adjunto: true },
+  'Corrección de aplicación de pago': { factura: 'obligatoria', monto: 'Monto a corregir',     observaciones: 'obligatoria', adjunto: true },
+  'Revisión de saldo en disputa':     { factura: 'opcional',    monto: 'Monto en disputa',     observaciones: 'obligatoria', adjunto: true },
+  'Escalamiento caso especial':       { factura: null,          monto: null,                   observaciones: 'obligatoria', adjunto: true },
+  'Escalamiento a cobro judicial':    { factura: null,          monto: 'Monto total mora',     observaciones: 'obligatoria', adjunto: true },
+
+  // ── Comercial ────────────────────────────────────────────────────────
+  'Autorización de descuento':         { factura: 'obligatoria', monto: '% o monto descuento', observaciones: 'opcional',    adjunto: true },
+  'Diferencia de precio en factura':   { factura: 'obligatoria', monto: 'Monto diferencia',    observaciones: 'opcional',    adjunto: true },
+  'Error de facturación':              { factura: 'obligatoria', monto: null,                  observaciones: 'obligatoria', adjunto: true },
+  'Aprobación nota de crédito':        { factura: 'obligatoria', monto: 'Monto nota crédito',  observaciones: 'opcional',    adjunto: true },
+  'Reclamo por promoción no aplicada': { factura: 'opcional',    monto: 'Monto promoción',     observaciones: 'obligatoria', adjunto: true },
+  'Validación de acuerdo comercial':   { factura: null,          monto: null,                  observaciones: 'obligatoria', adjunto: true },
+  'Solicitud de refacturación':        { factura: 'obligatoria', monto: null,                  observaciones: 'obligatoria', adjunto: true },
+
+  // ── Logística ────────────────────────────────────────────────────────
+  'Incidencia de entrega':     { factura: 'obligatoria', monto: null,                       observaciones: 'obligatoria', adjunto: true },
+  'Mercadería dañada':         { factura: 'obligatoria', monto: 'Valor mercadería dañada',  observaciones: 'obligatoria', adjunto: true },
+  'Devolución de mercadería':  { factura: 'obligatoria', monto: 'Valor devolución',         observaciones: 'opcional',    adjunto: true },
+  'Garantía de mercadería':    { factura: 'opcional',    monto: 'Valor producto',           observaciones: 'obligatoria', adjunto: true },
+  'Reprogramación de entrega': { factura: null,          monto: null,                       observaciones: 'obligatoria', adjunto: true },
+  'Recolección de mercadería': { factura: 'opcional',    monto: null,                       observaciones: 'obligatoria', adjunto: true },
+
+  // ── Actualización de Datos (todos: obs obligatoria = dato a actualizar)
+  'Actualización de contacto':           { factura: null, monto: null, observaciones: 'obligatoria', adjunto: true },
+  'Actualización de datos fiscales':     { factura: null, monto: null, observaciones: 'obligatoria', adjunto: true },
+  'Corrección de información en sistema': { factura: null, monto: null, observaciones: 'obligatoria', adjunto: true },
+}
+
+const CAMPOS_DEFAULT: CamposSolicitud = {
+  factura: 'opcional', monto: null, observaciones: 'obligatoria', adjunto: true,
+}
+
+export function getCamposSolicitud(tipo: string): CamposSolicitud {
+  return CAMPOS_POR_TIPO[tipo] ?? CAMPOS_DEFAULT
+}
+
 /**
  * Estado del SLA según porcentaje de tiempo restante.
  * verde >50% · amarillo 25-50% · rojo <25% o vencido.

@@ -76,16 +76,14 @@ export default function ListaSolicitudes({ solicitudes: init, rol, solicitanteMa
   return (
     <div className="p-5 space-y-4">
 
-      {/* Header */}
+      {/* Barra de acción (el título lo muestra el topbar) */}
       <div className="flex items-center gap-2">
-        <FileText size={18} className="text-[#003B5C]" />
-        <h1 className="text-[18px] font-bold text-gray-800">Solicitudes — Centro Operativo</h1>
-        <span className="ml-auto text-[12px] text-gray-400 font-semibold mr-2">
+        <span className="text-[12px] text-gray-400 font-semibold">
           {filtradas.length} de {init.length}
         </span>
         <button
           onClick={() => router.push('/solicitudes/nueva')}
-          className="flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90"
+          className="ml-auto flex items-center gap-2 rounded-xl px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90"
           style={{ backgroundColor: '#009ee3' }}
         >
           <Plus size={14} /> Nueva solicitud

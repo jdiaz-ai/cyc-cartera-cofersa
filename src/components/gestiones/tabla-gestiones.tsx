@@ -159,13 +159,7 @@ export default function TablaGestiones({
   return (
     <div className="p-5 space-y-3">
 
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: 18, fontWeight: 500, color: '#1e293b' }}>Gestiones</h1>
-        <p style={{ fontSize: 12, color: '#94a3b8' }}>Registro de cobros del equipo</p>
-      </div>
-
-      {/* KPIs (5) */}
+      {/* KPIs (5) — el título lo muestra el topbar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard label="Total gestiones" valor={porPeriodo.length} sub={subPeriodo} />
         <KpiCard label="Con promesa" valor={conPromesa.length}

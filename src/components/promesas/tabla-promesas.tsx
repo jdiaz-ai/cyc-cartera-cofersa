@@ -181,10 +181,8 @@ export default function TablaPromesas({
   return (
     <div className="p-5 space-y-4">
 
-      {/* ── Título ────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2">
-        <Handshake size={18} className="text-[#003B5C]" />
-        <h1 className="text-[18px] font-bold text-gray-800">Promesas — Centro de Seguimiento</h1>
+      {/* Contador (el título lo muestra el topbar) */}
+      <div className="flex items-center">
         <span className="ml-auto text-[12px] text-gray-400 font-semibold">
           {filtradas.length} de {promesas.length}
         </span>
