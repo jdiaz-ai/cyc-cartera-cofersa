@@ -275,7 +275,7 @@ export default function Sidebar({
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat',
               backgroundColor: 'white',
-              padding: '4px 14px',
+              padding: '4px 6px',
             }}
           />
         </div>
