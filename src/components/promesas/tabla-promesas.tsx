@@ -139,6 +139,13 @@ export default function TablaPromesas({
   const filtradas = useMemo(() => {
     let list = [...promesas]
 
+    // Vista por defecto: excluir estados cerrados (CUMPLIDA, INCUMPLIDA,
+    // REPROGRAMADA). Aparecen solo al hacer clic en su KPI o elegirlos
+    // en el selector de estado.
+    if (estadoF === 'Todos' && quick === 'todas') {
+      list = list.filter(p => !['CUMPLIDA', 'INCUMPLIDA', 'REPROGRAMADA'].includes(p.estado))
+    }
+
     if (estadoF !== 'Todos') {
       list = list.filter(p => {
         const v = visualEstado(p, hoy).key

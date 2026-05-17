@@ -1045,12 +1045,38 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
 
   async function handleEnviar(e: React.FormEvent) {
     e.preventDefault()
+    if (!para.trim())    { setError('Ingresá un correo destinatario.'); return }
     if (!mensaje.trim()) { setError('Escribí un mensaje.'); return }
     setLoading(true); setError('')
-    // Registrar gestión automática
-    const hoy  = new Date()
-    const fecha = hoy.toISOString().split('T')[0]
-    const hora  = `${String(hoy.getHours()).padStart(2,'0')}:${String(hoy.getMinutes()).padStart(2,'0')}:00`
+
+    // ── 1. Obtener provider_token (Gmail) ─────────────────────────────
+    const { data: { session } } = await supabase.auth.getSession()
+    const providerToken = session?.provider_token ?? null
+
+    // ── 2. Enviar email vía Gmail API ──────────────────────────────────
+    const emailRes = await fetch('/api/clientes/email-cobro', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to:            para.trim(),
+        asunto:        asunto.trim(),
+        mensaje:       mensaje.trim(),
+        providerToken,
+        clienteNombre: clienteNombre,
+        clienteCod:    clienteCod,
+      }),
+    })
+    if (!emailRes.ok) {
+      const j = await emailRes.json().catch(() => ({}))
+      setError((j as { error?: string }).error ?? 'Error al enviar el correo')
+      setLoading(false)
+      return
+    }
+
+    // ── 3. Registrar gestión automática ───────────────────────────────
+    const hoyCR  = new Date(Date.now() - 6 * 3600 * 1000)
+    const fecha  = hoyCR.toISOString().split('T')[0]
+    const hora   = hoyCR.toISOString().split('T')[1].slice(0, 8)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: gErr } = await supabase.from('gestiones').insert({
       cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
@@ -1058,7 +1084,7 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
       nota: `Email de cobro enviado a ${para}. Asunto: ${asunto}. ${mensaje}`,
     } as any)
     setLoading(false)
-    if (gErr) { setError('Error al registrar: ' + gErr.message); return }
+    if (gErr) { setError('Error al registrar gestión: ' + gErr.message); return }
     onSuccess()
   }
 

@@ -305,7 +305,7 @@ export default function TablaGestionesCompacta({
   // Plantillas de columnas
   const cols = mostrarCliente
     ? '100px 180px 80px 90px 165px 1fr 120px 60px'
-    : '90px 100px 90px 1fr 150px 130px 60px'
+    : '90px 100px 90px 150px 1fr 130px 60px'
 
   const headers = mostrarCliente
     ? ['Fecha', 'Cliente', 'Analista', 'Tipo', 'Resultado', 'Nota', 'Próxima acción', 'Flags']

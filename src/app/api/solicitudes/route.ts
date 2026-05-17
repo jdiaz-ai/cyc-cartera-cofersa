@@ -151,6 +151,7 @@ export async function POST(req: NextRequest) {
       const toEmail  = responsable_email?.trim() || process.env.EMAIL_COORDINADOR || 'jdiaz@cofersa.cr'
       const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cyc-cartera-cofersa.vercel.app'
       const venceStr = new Date(slaVenc).toLocaleString('es-CR', {
+        timeZone: 'America/Costa_Rica',
         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
       })
 
@@ -248,7 +249,7 @@ export async function POST(req: NextRequest) {
           : '<tr><td style="padding:24px 32px 32px;"></td></tr>'
         }
         <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
+          <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica' })}</p>
         </td></tr>
       </table>
     </td></tr>
@@ -426,7 +427,7 @@ export async function POST(req: NextRequest) {
         </tr>
         <tr>
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;">
-            <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR')}</p>
+            <p style="margin:0;font-size:11px;color:#94a3b8;">SIC Cofersa · Sistema de Gestión de Cartera · ${new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica' })}</p>
           </td>
         </tr>
       </table>
