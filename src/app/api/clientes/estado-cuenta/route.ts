@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
 
   const cuentas: { banco: string; moneda: string; tipo: string; numero: string; iban?: string }[] = cuentasData ?? []
   const cuentasCRC = cuentas.filter(c => c.moneda === 'CRC' && c.tipo === 'cuenta')
+  const cuentasUSD = cuentas.filter(c => c.moneda === 'USD' && c.tipo === 'cuenta')
   const sinpeCRC   = cuentas.find(c => c.tipo === 'sinpe' && c.moneda === 'CRC')
 
   // ── Condición de pago del cliente ─────────────────────────────────────
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
   const { data: maestroRow } = await (supabase as any)
     .from('maestro_clientes')
     .select('condicion_pago')
-    .eq('codigo', cliente_cod)
+    .eq('cliente_cod', cliente_cod)   // columna real en la tabla
     .limit(1)
     .single()
   const condicionPago = (maestroRow as { condicion_pago?: string } | null)?.condicion_pago ?? '—'
@@ -91,9 +92,9 @@ export async function POST(req: NextRequest) {
   // ── Fecha y hora Costa Rica ───────────────────────────────────────────
   const hoyDate = new Date(Date.now() - 6 * 3600_000)  // UTC-6 approx
   const hoyStr  = hoyDate.toISOString().split('T')[0]
-  const fechaCorte = hoyDate.toLocaleDateString('es-CR', {
-    timeZone: 'America/Costa_Rica', day: '2-digit', month: 'long', year: 'numeric',
-  })
+  // Formato DD/MM/YYYY para el email
+  const [fy, fm, fd] = hoyStr.split('-')
+  const fechaCorte = `${fd}/${fm}/${fy}`
 
   // ── Helpers ───────────────────────────────────────────────────────────
   function diasVenc(fv: string): number {
@@ -177,51 +178,54 @@ export async function POST(req: NextRequest) {
   const agingBoxes = agingTramos.map(t => {
     const pct       = totalSaldo > 0 ? Math.round((t.amount / totalSaldo) * 100) : 0
     const hasAmount = t.amount > 0
-    const innerHtml = hasAmount
-      ? '<p style="margin:0 0 2px;font-size:12px;font-weight:700;color:#111827;">' + fmtMonto(t.amount) + '</p>'
-        + '<p style="margin:0;font-size:10px;color:#9ca3af;">' + pct + '%</p>'
-      : ''
+    // Siempre 3 líneas → todos los cajones tienen el mismo alto
+    const montoLine = hasAmount
+      ? '<p style="margin:0 0 2px;font-size:12px;font-weight:500;color:#111827;">' + fmtMonto(t.amount) + '</p>'
+      : '<p style="margin:0 0 2px;font-size:12px;color:#d1d5db;">—</p>'
+    const pctLine = hasAmount
+      ? '<p style="margin:0;font-size:10px;color:#9ca3af;">' + pct + '%</p>'
+      : '<p style="margin:0;font-size:10px;color:transparent;">0%</p>'  // mismo alto, invisible
     return `
     <td style="text-align:center;padding:0 3px;">
       <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 4px 10px;background:#fff;">
         <p style="margin:0 0 4px;font-size:10px;font-weight:500;color:#6b7280;">${t.label}</p>
-        ${innerHtml}
+        ${montoLine}${pctLine}
       </div>
     </td>`
   }).join('')
 
-  // ── HTML — cuentas bancarias (grid 2×2 de cards) ─────────────────────
-  const cuentaCardRows: string[] = []
-  for (let i = 0; i < cuentasCRC.length; i += 2) {
-    const l = cuentasCRC[i]
-    const r = cuentasCRC[i + 1] ?? null
-    const mkCard = (c: { banco: string; numero: string; iban?: string }) =>
-      '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;">'
-      + '<p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">' + c.banco + '</p>'
-      + '<p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#111827;font-family:monospace;">' + (c.iban ?? c.numero) + '</p>'
-      + '<p style="margin:0;font-size:10px;color:#9ca3af;">Colones · Cta corriente</p>'
-      + '</div>'
-    cuentaCardRows.push(
-      '<tr>'
-      + '<td style="width:50%;padding:0 5px 8px 0;vertical-align:top;">' + mkCard(l) + '</td>'
-      + '<td style="width:50%;padding:0 0 8px 5px;vertical-align:top;">' + (r ? mkCard(r) : '') + '</td>'
-      + '</tr>',
-    )
-  }
+  // ── HTML — cuentas bancarias (3 columnas: CRC·1 | CRC·2 | USD apiladas) ─
+  const mkCuenta = (c: { banco: string; numero: string; iban?: string }, etiqueta: string, margin = false) =>
+    '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;' + (margin ? 'margin-top:8px;' : '') + '">'
+    + '<p style="margin:0 0 3px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">' + c.banco + '</p>'
+    + '<p style="margin:0 0 2px;font-size:11.5px;font-weight:700;color:#111827;font-family:monospace;">' + (c.iban ?? c.numero) + '</p>'
+    + '<p style="margin:0;font-size:10px;color:#9ca3af;">' + etiqueta + '</p>'
+    + '</div>'
+
+  const col1Html = cuentasCRC[0] ? mkCuenta(cuentasCRC[0], 'Colones · Cta corriente') : ''
+  const col2Html = cuentasCRC[1] ? mkCuenta(cuentasCRC[1], 'Colones · Cta corriente') : ''
+  const col3Html = cuentasUSD.map((c, i) => mkCuenta(c, 'Dólares · Cta corriente', i > 0)).join('')
+
   const sinpeBadge = sinpeCRC
-    ? '<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;display:inline-block;">'
-      + '<span style="font-size:14px;">📱</span>'
+    ? '<div style="margin-top:10px;padding:9px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;display:inline-block;">'
+      + '<span style="font-size:13px;">📱</span>'
       + '<span style="font-size:12px;font-weight:700;color:#15803d;margin-left:6px;">Sinpe Móvil: ' + sinpeCRC.numero + '</span>'
       + '</div>'
     : ''
-  const cuentasHtml = cuentasCRC.length > 0 || sinpeCRC
+
+  const hayBancarios = cuentasCRC.length > 0 || cuentasUSD.length > 0 || !!sinpeCRC
+  const cuentasHtml = hayBancarios
     ? `
     <!-- INFORMACIÓN PARA PAGOS -->
     <tr>
       <td style="padding:20px 32px 0;">
-        <p style="margin:0 0 10px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Información para pagos en colones (CRC)</p>
+        <p style="margin:0 0 10px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Información para pagos</p>
         <table width="100%" cellpadding="0" cellspacing="0">
-          ${cuentaCardRows.join('')}
+          <tr>
+            <td style="width:34%;vertical-align:top;padding-right:8px;">${col1Html}</td>
+            <td style="width:33%;vertical-align:top;padding-right:8px;">${col2Html}</td>
+            <td style="width:33%;vertical-align:top;">${col3Html}</td>
+          </tr>
         </table>
         ${sinpeBadge}
       </td>
@@ -273,9 +277,9 @@ export async function POST(req: NextRequest) {
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <!-- Zona 1: Logo -->
-                <td style="width:80px;vertical-align:middle;">
-                  <div style="background:#ffffff;border-radius:8px;padding:6px 8px;display:inline-block;">
-                    <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:36px;width:auto;display:block;">
+                <td style="width:120px;vertical-align:middle;">
+                  <div style="background:#ffffff;border-radius:8px;padding:8px 16px;display:inline-block;">
+                    <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:40px;width:auto;display:block;">
                   </div>
                 </td>
                 <!-- Zona 2: Título -->
