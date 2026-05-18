@@ -78,6 +78,16 @@ export async function POST(req: NextRequest) {
   const cuentasCRC = cuentas.filter(c => c.moneda === 'CRC' && c.tipo === 'cuenta')
   const sinpeCRC   = cuentas.find(c => c.tipo === 'sinpe' && c.moneda === 'CRC')
 
+  // ── Condición de pago del cliente ─────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: maestroRow } = await (supabase as any)
+    .from('maestro_clientes')
+    .select('condicion_pago')
+    .eq('codigo', cliente_cod)
+    .limit(1)
+    .single()
+  const condicionPago = (maestroRow as { condicion_pago?: string } | null)?.condicion_pago ?? '—'
+
   // ── Fecha y hora Costa Rica ───────────────────────────────────────────
   const hoyDate = new Date(Date.now() - 6 * 3600_000)  // UTC-6 approx
   const hoyStr  = hoyDate.toISOString().split('T')[0]
@@ -107,7 +117,9 @@ export async function POST(req: NextRequest) {
   }
 
   function fmtMonto(n: number): string {
-    return '₡' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    // ₡38.543,00  (miles con punto, decimales con coma — estándar CR financiero)
+    const [intPart, decPart] = (Math.round(n * 100) / 100).toFixed(2).split('.')
+    return '₡' + intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + decPart
   }
 
   // ── Cálculos globales ─────────────────────────────────────────────────
@@ -153,54 +165,65 @@ export async function POST(req: NextRequest) {
     </tr>`
   }).join('')
 
-  // ── HTML — aging boxes ────────────────────────────────────────────────
+  // ── HTML — aging boxes (neutral — sin colores, skip si amount = 0) ──────
   const agingTramos = [
-    { label: 'Al día',      color: '#009ee3', amount: aging.aldia    },
-    { label: '1-30 días',   color: '#f59e0b', amount: aging.m1_30   },
-    { label: '31-60 días',  color: '#f97316', amount: aging.m31_60  },
-    { label: '61-90 días',  color: '#ef4444', amount: aging.m61_90  },
-    { label: '91-120 días', color: '#dc2626', amount: aging.m91_120 },
-    { label: '+120 días',   color: '#991b1b', amount: aging.m120plus },
+    { label: 'Al día',      amount: aging.aldia    },
+    { label: '1-30 días',   amount: aging.m1_30   },
+    { label: '31-60 días',  amount: aging.m31_60  },
+    { label: '61-90 días',  amount: aging.m61_90  },
+    { label: '91-120 días', amount: aging.m91_120 },
+    { label: '+120 días',   amount: aging.m120plus },
   ]
   const agingBoxes = agingTramos.map(t => {
-    const pct = totalSaldo > 0 ? Math.round((t.amount / totalSaldo) * 100) : 0
+    const pct       = totalSaldo > 0 ? Math.round((t.amount / totalSaldo) * 100) : 0
+    const hasAmount = t.amount > 0
+    const innerHtml = hasAmount
+      ? '<p style="margin:0 0 2px;font-size:12px;font-weight:700;color:#111827;">' + fmtMonto(t.amount) + '</p>'
+        + '<p style="margin:0;font-size:10px;color:#9ca3af;">' + pct + '%</p>'
+      : ''
     return `
     <td style="text-align:center;padding:0 3px;">
-      <div style="border:1px solid #e2e8f0;border-top:4px solid ${t.color};border-radius:0 0 8px 8px;padding:8px 4px 10px;background:#fff;">
-        <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#64748b;">${t.label}</p>
-        <p style="margin:0 0 2px;font-size:11px;font-weight:800;color:#1e293b;">${fmtMonto(t.amount)}</p>
-        <p style="margin:0;font-size:10px;font-weight:700;color:${t.color};">${pct}%</p>
+      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 4px 10px;background:#fff;">
+        <p style="margin:0 0 4px;font-size:10px;font-weight:500;color:#6b7280;">${t.label}</p>
+        ${innerHtml}
       </div>
     </td>`
   }).join('')
 
-  // ── HTML — cuentas bancarias ──────────────────────────────────────────
+  // ── HTML — cuentas bancarias (grid 2×2 de cards) ─────────────────────
+  const cuentaCardRows: string[] = []
+  for (let i = 0; i < cuentasCRC.length; i += 2) {
+    const l = cuentasCRC[i]
+    const r = cuentasCRC[i + 1] ?? null
+    const mkCard = (c: { banco: string; numero: string; iban?: string }) =>
+      '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;">'
+      + '<p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">' + c.banco + '</p>'
+      + '<p style="margin:0 0 3px;font-size:12px;font-weight:700;color:#111827;font-family:monospace;">' + (c.iban ?? c.numero) + '</p>'
+      + '<p style="margin:0;font-size:10px;color:#9ca3af;">Colones · Cta corriente</p>'
+      + '</div>'
+    cuentaCardRows.push(
+      '<tr>'
+      + '<td style="width:50%;padding:0 5px 8px 0;vertical-align:top;">' + mkCard(l) + '</td>'
+      + '<td style="width:50%;padding:0 0 8px 5px;vertical-align:top;">' + (r ? mkCard(r) : '') + '</td>'
+      + '</tr>',
+    )
+  }
+  const sinpeBadge = sinpeCRC
+    ? '<div style="margin-top:8px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;display:inline-block;">'
+      + '<span style="font-size:14px;">📱</span>'
+      + '<span style="font-size:12px;font-weight:700;color:#15803d;margin-left:6px;">Sinpe Móvil: ' + sinpeCRC.numero + '</span>'
+      + '</div>'
+    : ''
   const cuentasHtml = cuentasCRC.length > 0 || sinpeCRC
     ? `
     <!-- INFORMACIÓN PARA PAGOS -->
     <tr>
       <td style="padding:20px 32px 0;">
         <p style="margin:0 0 10px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Información para pagos en colones (CRC)</p>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-          <thead>
-            <tr style="background:#f8fafc;">
-              <th style="padding:8px 14px;font-size:9px;font-weight:700;color:#94a3b8;text-align:left;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;">Banco</th>
-              <th style="padding:8px 14px;font-size:9px;font-weight:700;color:#94a3b8;text-align:left;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;">N. Cuenta</th>
-              <th style="padding:8px 14px;font-size:9px;font-weight:700;color:#94a3b8;text-align:left;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;">IBAN</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${cuentasCRC.map((c, i) => `
-            <tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'};">
-              <td style="padding:8px 14px;font-size:11.5px;font-weight:700;color:#1e293b;border-bottom:1px solid #f1f5f9;">${c.banco}</td>
-              <td style="padding:8px 14px;font-size:11.5px;font-family:monospace;color:#374151;border-bottom:1px solid #f1f5f9;">${c.numero}</td>
-              <td style="padding:8px 14px;font-size:11px;font-family:monospace;color:#64748b;border-bottom:1px solid #f1f5f9;">${c.iban ?? '—'}</td>
-            </tr>`).join('')}
-          </tbody>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${cuentaCardRows.join('')}
         </table>
-        ${sinpeCRC ? `<p style="margin:10px 0 0;padding:8px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11.5px;font-weight:700;color:#15803d;">
-          📱 Sinpe Móvil: ${sinpeCRC.numero}
-        </p>` : ''}
+        ${sinpeBadge}
       </td>
     </tr>`
     : ''
@@ -247,9 +270,26 @@ export async function POST(req: NextRequest) {
         <!-- HEADER -->
         <tr>
           <td style="background:#003B5C;padding:20px 32px;">
-            <p style="margin:0;color:#009ee3;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">SIC · COFERSA · CRÉDITO Y COBRO</p>
-            <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:800;">Estado de Cuenta</h1>
-            <p style="margin:4px 0 0;color:#94a3b8;font-size:11px;">Fecha de corte: ${fechaCorte}</p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <!-- Zona 1: Logo -->
+                <td style="width:80px;vertical-align:middle;">
+                  <div style="background:#ffffff;border-radius:8px;padding:6px 8px;display:inline-block;">
+                    <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:36px;width:auto;display:block;">
+                  </div>
+                </td>
+                <!-- Zona 2: Título -->
+                <td style="padding:0 16px;vertical-align:middle;">
+                  <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SIC · COFERSA</p>
+                  <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:800;line-height:1.2;">Estado de Cuenta</h1>
+                </td>
+                <!-- Zona 3: Fecha de corte -->
+                <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
+                  <p style="margin:0;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Fecha de corte</p>
+                  <p style="margin:4px 0 0;color:#ffffff;font-size:16px;font-weight:800;">${fechaCorte}</p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
@@ -258,13 +298,14 @@ export async function POST(req: NextRequest) {
           <td style="padding:20px 32px 0;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="width:55%;">
+                <td style="width:60%;vertical-align:top;">
                   <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Cliente</p>
-                  <p style="margin:0;font-size:17px;font-weight:800;color:#1e293b;">${cliente_nombre ?? cliente_cod}</p>
+                  <p style="margin:0;font-size:16px;font-weight:800;color:#1e293b;line-height:1.2;">${cliente_nombre ?? cliente_cod}</p>
+                  <p style="margin:5px 0 0;font-size:13px;color:#64748b;">Contribuyente: <span style="font-family:monospace;font-weight:600;">${contribuyente ?? '—'}</span></p>
                 </td>
-                <td>
-                  <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Cédula / Contribuyente</p>
-                  <p style="margin:0;font-size:14px;font-weight:700;color:#475569;font-family:monospace;">${contribuyente ?? '—'}</p>
+                <td style="text-align:right;vertical-align:top;">
+                  <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Condición de pago</p>
+                  <p style="margin:0;font-size:15px;font-weight:800;color:#1e293b;">${condicionPago}</p>
                 </td>
               </tr>
             </table>
@@ -381,7 +422,7 @@ export async function POST(req: NextRequest) {
 
   // ── Construir y enviar email ──────────────────────────────────────────
   const encH = (str: string) => `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
-  const subject = `Estado de cuenta — ${cliente_nombre ?? cliente_cod} al ${fechaCorte}`
+  const subject = `Estado de cuenta — ${cliente_nombre ?? cliente_cod}`
   const ccList  = cc_emails?.length ? cc_emails : []
 
   let emailSent  = false

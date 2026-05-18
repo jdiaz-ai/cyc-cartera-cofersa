@@ -37,6 +37,12 @@ function fmtPDF(n: number): string {
   return 'CRC ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
+/** Formato CR financiero para Excel: ₡38.543,00 */
+function fmtExcel(n: number): string {
+  const [intPart, decPart] = (Math.round(n * 100) / 100).toFixed(2).split('.')
+  return '₡' + intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + decPart
+}
+
 function fmtFechaPDF(iso: string | null | undefined): string {
   if (!iso) return '—'
   const parts = iso.split('-')
@@ -474,15 +480,15 @@ async function generarEstadoCuentaExcelBuffer(params: EstadoCuentaExportParams):
 
   // Resumen KPIs
   rows.push(['RESUMEN', null, null, null, null, null])
-  rows.push(['Saldo total pendiente', totalSaldo, null, 'Total vencido', totalVenc, null])
+  rows.push(['Saldo total pendiente', fmtExcel(totalSaldo), null, 'Total vencido', fmtExcel(totalVenc), null])
   rows.push(['Facturas pendientes', facturas.filter(f=>(f.saldo??0)>0).length, null, null, null, null])
   rows.push([])
 
   // Aging
   rows.push(['DISTRIBUCION POR ANTIGUEDAD (saldo)'])
-  rows.push(['Al dia', aging.aldia, null, '1-30 dias', aging.m1_30, null])
-  rows.push(['31-60 dias', aging.m31_60, null, '61-90 dias', aging.m61_90, null])
-  rows.push(['91-120 dias', aging.m91_120, null, '+120 dias', aging.m120plus, null])
+  rows.push(['Al dia', fmtExcel(aging.aldia), null, '1-30 dias', fmtExcel(aging.m1_30), null])
+  rows.push(['31-60 dias', fmtExcel(aging.m31_60), null, '61-90 dias', fmtExcel(aging.m61_90), null])
+  rows.push(['91-120 dias', fmtExcel(aging.m91_120), null, '+120 dias', fmtExcel(aging.m120plus), null])
   rows.push([])
 
   // Observaciones
@@ -509,12 +515,12 @@ async function generarEstadoCuentaExcelBuffer(params: EstadoCuentaExportParams):
       f.documento ?? '—',
       f.fecha_documento ?? '—',
       f.fecha_vencimiento ?? '—',
-      f.monto ?? 0,
-      f.saldo ?? 0,
+      fmtExcel(f.monto ?? 0),
+      fmtExcel(f.saldo ?? 0),
       estadoLabelExport(f.fecha_vencimiento, hoy),
     ])
   }
-  rows.push(['TOTAL', null, null, totalMonto, totalSaldo, null])
+  rows.push(['TOTAL', null, null, fmtExcel(totalMonto), fmtExcel(totalSaldo), null])
   rows.push([])
 
   // Cuentas bancarias CRC
