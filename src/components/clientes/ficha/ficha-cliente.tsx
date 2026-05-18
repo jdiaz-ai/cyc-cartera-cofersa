@@ -6,8 +6,14 @@ import {
   ArrowLeft, Handshake, FileText, AlertTriangle,
   CheckCircle2, XCircle, Clock, Circle, Plus,
   Building2, Phone, Mail, CreditCard, User, Calendar, Tag,
-  MessageCircle, ChevronDown, FileDown, Send, Search,
+  MessageCircle, ChevronDown, FileDown, Send, Search, Paperclip,
 } from 'lucide-react'
+import {
+  exportarEstadoCuentaPDF, exportarEstadoCuentaExcel,
+  generarEstadoCuentaBase64, generarEstadoCuentaExcelBase64,
+  calcAging, estadoLabelExport,
+  type CuentaBancaria,
+} from '@/lib/utils/estado-cuenta-export'
 import { fmtM, fmtCRC, fmtCRC2, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import { createClient } from '@/lib/supabase/client'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
@@ -441,7 +447,7 @@ export default function FichaCliente({
 
           {/* Estado de cuenta */}
           <ActionBtn
-            icon={<FileDown size={12} />}
+            icon={<Mail size={12} />}
             label="Estado de cuenta"
             onClick={() => setModalEdoCta(true)}
           />
@@ -504,12 +510,15 @@ export default function FichaCliente({
         {/* ── TAB: ESTADO DE CUENTA ─────────────────────────────── */}
         {tab === 'Estado de Cuenta' && (
           <TabEstadoCuenta
-            facturas           = {facturas}
-            clienteCod         = {cartera.cliente_cod}
-            clienteNombre      = {cartera.cliente_nombre}
-            filtroTramoEdoCta  = {filtroTramoEdoCta}
+            facturas             = {facturas}
+            clienteCod           = {cartera.cliente_cod}
+            clienteNombre        = {cartera.cliente_nombre}
+            contribuyente        = {cartera.contribuyente}
+            filtroTramoEdoCta    = {filtroTramoEdoCta}
             setFiltroTramoEdoCta = {setFiltroTramoEdoCta}
-            onRegistrarGestion = {() => setModalGestion(true)}
+            onRegistrarGestion   = {() => setModalGestion(true)}
+            analistaNombre       = {analistaNombre}
+            analistaEmail        = {userEmail}
           />
         )}
 
@@ -635,14 +644,16 @@ export default function FichaCliente({
       {/* ── Modal Estado de cuenta ──────────────────────────────── */}
       {modalEdoCta && (
         <ModalEstadoCuenta
-          clienteNombre = {cartera.cliente_nombre}
-          clienteCod    = {cartera.cliente_cod}
-          contribuyente = {cartera.contribuyente}
-          correo        = {maestro?.correo ?? ''}
-          analistaEmail = {userEmail}
-          supabase      = {supabase}
-          onClose       = {() => setModalEdoCta(false)}
-          onSuccess     = {() => { setModalEdoCta(false); showToast('Estado de cuenta enviado'); router.refresh() }}
+          clienteNombre  = {cartera.cliente_nombre}
+          clienteCod     = {cartera.cliente_cod}
+          contribuyente  = {cartera.contribuyente}
+          correo         = {maestro?.correo ?? ''}
+          analistaEmail  = {userEmail}
+          analistaNombre = {analistaNombre}
+          facturas       = {facturas}
+          supabase       = {supabase}
+          onClose        = {() => setModalEdoCta(false)}
+          onSuccess      = {() => { setModalEdoCta(false); showToast('Estado de cuenta enviado'); router.refresh() }}
         />
       )}
     </div>
@@ -1139,28 +1150,83 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
 
 // ── Modal Estado de cuenta ────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, supabase, onClose, onSuccess }: {
-  clienteNombre: string; clienteCod: string; contribuyente: string
-  correo: string; analistaEmail: string
+function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
+  analistaNombre, facturas, supabase, onClose, onSuccess }: {
+  clienteNombre:  string
+  clienteCod:     string
+  contribuyente:  string
+  correo:         string
+  analistaEmail:  string   // retenido para compatibilidad (no usado, viene de supabase.auth)
+  analistaNombre: string
+  facturas:       Factura[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
-  onClose: () => void; onSuccess: () => void
+  onClose:  () => void
+  onSuccess: () => void
 }) {
-  const [para,    setPara]    = useState(correo)
-  const [mensaje, setMensaje] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [enviado, setEnviado] = useState(false)
-  const [error,   setError]   = useState('')
+  type TipoAdjunto = 'Ninguno' | 'PDF' | 'Excel'
+
+  const [para,          setPara]          = useState(correo)
+  const [observaciones, setObservaciones] = useState('')
+  const [adjunto,       setAdjunto]       = useState<TipoAdjunto>('Ninguno')
+  const [loading,       setLoading]       = useState(false)
+  const [loadingMsg,    setLoadingMsg]    = useState('Enviando...')
+  const [enviado,       setEnviado]       = useState(false)
+  const [error,         setError]         = useState('')
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-800 ' +
+    'focus:outline-none focus:border-[#009ee3] transition'
 
   async function enviarEmail() {
     if (!para.trim()) { setError('Ingresá un correo destinatario'); return }
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
 
-    // Obtener provider_token del lado del cliente
+    // ── 1. Provider token ─────────────────────────────────────────
     const { data: { session } } = await supabase.auth.getSession()
     const providerToken = session?.provider_token ?? null
 
+    // ── 2. Generar adjunto si corresponde ─────────────────────────
+    let adjuntoData: { base64: string; mimeType: string; filename: string } | null = null
+    if (adjunto !== 'Ninguno' && facturas.length > 0) {
+      try {
+        const fechaCorte = new Date(Date.now() - 6 * 3600_000)
+          .toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: '2-digit', year: 'numeric' })
+        const exportParams = {
+          facturas: facturas.filter(f => (f.saldo ?? 0) > 0),
+          clienteNombre, contribuyente, clienteCod,
+          observaciones: observaciones.trim() || undefined,
+          cuentas: [] as CuentaBancaria[],   // el email HTML ya lleva las cuentas desde DB
+          fechaCorte,
+          analistaNombre,
+          analistaEmail: session?.user?.email ?? '',
+        }
+
+        if (adjunto === 'PDF') {
+          setLoadingMsg('Generando PDF...')
+          const base64 = await generarEstadoCuentaBase64(exportParams)
+          adjuntoData = {
+            base64,
+            mimeType: 'application/pdf',
+            filename: `estado-cuenta-${clienteCod}.pdf`,
+          }
+        } else {
+          setLoadingMsg('Generando Excel...')
+          const base64 = await generarEstadoCuentaExcelBase64(exportParams)
+          adjuntoData = {
+            base64,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename: `estado-cuenta-${clienteCod}.xlsx`,
+          }
+        }
+      } catch {
+        setError('Error al generar el adjunto. Intentá sin adjunto.')
+        setLoading(false); setLoadingMsg('Enviando...')
+        return
+      }
+    }
+
+    // ── 3. Enviar vía API ─────────────────────────────────────────
+    setLoadingMsg('Enviando...')
     const res = await fetch('/api/clientes/estado-cuenta', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1169,18 +1235,16 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, s
         cliente_nombre: clienteNombre,
         contribuyente,
         to_email:       para.trim(),
-        mensaje:        mensaje.trim() || undefined,
+        observaciones:  observaciones.trim() || undefined,
         providerToken,
+        adjunto:        adjuntoData,
       }),
     })
 
     setLoading(false)
     const data = await res.json().catch(() => ({}))
 
-    if (!res.ok) {
-      setError(data.error ?? 'Error al enviar')
-      return
-    }
+    if (!res.ok) { setError(data.error ?? 'Error al enviar'); return }
     if (data.email_sent) {
       setEnviado(true)
       setTimeout(() => onSuccess(), 1400)
@@ -1200,17 +1264,15 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, s
       </div>
 
       {enviado ? (
-        /* ── Estado de éxito ──────────────────────────────────────── */
         <div className="p-10 flex flex-col items-center text-center">
           <CheckCircle2 size={42} style={{ color: '#22c55e' }} className="mb-3" />
           <p className="text-[14px] font-bold text-gray-800">Estado de cuenta enviado</p>
           <p className="text-[12px] text-gray-400 mt-1">Gestión registrada automáticamente.</p>
         </div>
       ) : (
-        /* ── Formulario ───────────────────────────────────────────── */
         <div className="p-5 space-y-4">
 
-          {/* Campo Para */}
+          {/* Destinatario */}
           <div>
             <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
               Destinatario
@@ -1220,57 +1282,68 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo, s
               value={para}
               onChange={e => { setPara(e.target.value); setError('') }}
               placeholder="correo@empresa.com"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-800 focus:outline-none focus:border-[#009ee3] transition"
+              className={inputCls}
             />
             {!correo && (
               <p className="text-[10px] text-amber-500 mt-1">
-                Este cliente no tiene correo registrado. Podés ingresar uno manualmente.
+                Sin correo registrado — ingresá uno manualmente.
               </p>
             )}
           </div>
 
-          {/* Mensaje personalizado */}
+          {/* Observaciones (opcional) */}
           <div>
             <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-              Mensaje{' '}
+              Observaciones{' '}
               <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span>
             </label>
             <textarea
-              value={mensaje}
-              onChange={e => setMensaje(e.target.value)}
+              value={observaciones}
+              onChange={e => setObservaciones(e.target.value)}
               placeholder="Ej: Por favor gestionar el pago a la brevedad posible..."
               rows={3}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[13px] text-gray-800 focus:outline-none focus:border-[#009ee3] resize-none transition"
+              className={inputCls + ' resize-none'}
             />
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              Si está vacío, la sección no aparece en el email.
+            </p>
           </div>
 
-          {/* Error */}
+          {/* Adjuntar como */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+              <Paperclip size={10} className="inline mr-1" />
+              Adjuntar como
+            </label>
+            <select
+              value={adjunto}
+              onChange={e => setAdjunto(e.target.value as TipoAdjunto)}
+              className={inputCls}
+            >
+              <option value="Ninguno">Ninguno (solo HTML)</option>
+              <option value="PDF">PDF</option>
+              <option value="Excel">Excel (.xlsx)</option>
+            </select>
+          </div>
+
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-[12px] text-red-700">
               {error}
             </div>
           )}
 
-          {/* Botones */}
           <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition"
-            >
+            <button type="button" onClick={onClose}
+              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
               Cancelar
             </button>
-            <button
-              type="button"
-              disabled={loading || !para.trim()}
-              onClick={enviarEmail}
+            <button type="button" disabled={loading || !para.trim()} onClick={enviarEmail}
               className="flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-bold text-white disabled:opacity-60 transition"
-              style={{ backgroundColor: '#009ee3' }}
-            >
+              style={{ backgroundColor: '#009ee3' }}>
               {loading ? (
                 <>
                   <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Enviando...
+                  {loadingMsg}
                 </>
               ) : (
                 <>
@@ -1421,22 +1494,25 @@ interface TabEstadoCuentaProps {
   facturas:            Factura[]
   clienteCod:          string
   clienteNombre:       string
+  contribuyente:       string
   filtroTramoEdoCta:   string
   setFiltroTramoEdoCta: (v: string) => void
   onRegistrarGestion:  () => void
+  analistaNombre:      string
+  analistaEmail:       string
 }
 
 function TabEstadoCuenta({
-  facturas, clienteCod, clienteNombre,
+  facturas, clienteCod, clienteNombre, contribuyente,
   filtroTramoEdoCta, setFiltroTramoEdoCta, onRegistrarGestion,
+  analistaNombre, analistaEmail,
 }: TabEstadoCuentaProps) {
   const hoy = hoyISO()
 
-  const [filtroEstado,      setFiltroEstado]      = useState('Todas')
-  const [busquedaDoc,       setBusquedaDoc]       = useState('')
-  const [pagina,            setPagina]            = useState(1)
-  const [seleccionadas,     setSeleccionadas]     = useState<Set<number>>(new Set())
-  const [modalRecordatorio, setModalRecordatorio] = useState<Factura | null>(null)
+  const [filtroEstado,  setFiltroEstado]  = useState('Todas')
+  const [busquedaDoc,   setBusquedaDoc]   = useState('')
+  const [pagina,        setPagina]        = useState(1)
+  const [seleccionadas, setSeleccionadas] = useState<Set<number>>(new Set())
 
   const selectCls = 'rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-700 bg-white ' +
     'focus:outline-none focus:border-blue-400 transition'
@@ -1491,22 +1567,25 @@ function TabEstadoCuenta({
       : new Set(enPagina.map(f => f.id))
   )
 
-  // ── Exportar Excel ────────────────────────────────────────────
-  function exportarExcel() {
-    import('xlsx').then(XLSX => {
-      const rows = filtradas.map(f => ({
-        'Documento':      f.documento,
-        'F. Emisión':     f.fecha_documento,
-        'F. Vencimiento': f.fecha_vencimiento,
-        'Monto':          f.monto,
-        'Saldo':          f.saldo,
-        'Estado':         estadoFactura(f, hoy).label,
-      }))
-      const ws = XLSX.utils.json_to_sheet(rows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Estado de Cuenta')
-      XLSX.writeFile(wb, `estado-cuenta-${clienteCod}.xlsx`)
-    })
+  // ── Exportar PDF y Excel ──────────────────────────────────────
+  const buildExportParams = () => ({
+    facturas:      filtradas,
+    clienteNombre,
+    contribuyente,
+    clienteCod,
+    cuentas:       [] as CuentaBancaria[],   // sin cuentas bancarias en descarga directa
+    fechaCorte:    new Date(Date.now() - 6 * 3600_000)
+                     .toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: '2-digit', year: 'numeric' }),
+    analistaNombre,
+    analistaEmail,
+  })
+
+  function handleExportarPDF() {
+    exportarEstadoCuentaPDF(buildExportParams()).catch(() => alert('Error generando PDF'))
+  }
+
+  function handleExportarExcel() {
+    exportarEstadoCuentaExcel(buildExportParams())
   }
 
   return (
@@ -1543,13 +1622,17 @@ function TabEstadoCuenta({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-[12px] text-gray-400">
-            {filtradas.length} facturas · Saldo:{' '}
-            <span className="font-semibold text-gray-600">{fmtM(totalSaldo)}</span>
-          </span>
           <button
-            onClick={exportarExcel}
+            onClick={handleExportarPDF}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition"
+            title="Descargar Estado de Cuenta en PDF"
+          >
+            <FileText size={13} /> PDF
+          </button>
+          <button
+            onClick={handleExportarExcel}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 transition"
+            title="Descargar Estado de Cuenta en Excel"
           >
             <FileDown size={13} /> Excel
           </button>
@@ -1610,7 +1693,6 @@ function TabEstadoCuenta({
                     <Th right>Monto</Th>
                     <Th right>Saldo</Th>
                     <Th>Estado</Th>
-                    <Th>Acciones</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1657,23 +1739,6 @@ function TabEstadoCuenta({
                             {est.label}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => setModalRecordatorio(f)}
-                              className="rounded-md px-2 py-0.5 text-[11px] font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition whitespace-nowrap"
-                            >
-                              Recordar
-                            </button>
-                            <button
-                              onClick={onRegistrarGestion}
-                              className="rounded-md px-2 py-0.5 text-[11px] font-bold border border-blue-100 transition whitespace-nowrap"
-                              style={{ color: '#009ee3' }}
-                            >
-                              Gestión
-                            </button>
-                          </div>
-                        </td>
                       </tr>
                     )
                   })}
@@ -1690,7 +1755,7 @@ function TabEstadoCuenta({
                       style={{ color: '#dc2626' }}>
                       {fmtCRC(totalSaldo)}
                     </td>
-                    <td colSpan={2} />
+                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -1725,16 +1790,6 @@ function TabEstadoCuenta({
         )}
       </div>
 
-      {/* Modal Recordatorio */}
-      {modalRecordatorio && (
-        <ModalRecordatorio
-          factura       = {modalRecordatorio}
-          clienteNombre = {clienteNombre}
-          clienteCod    = {clienteCod}
-          onClose       = {() => setModalRecordatorio(null)}
-          onSuccess     = {() => setModalRecordatorio(null)}
-        />
-      )}
     </div>
   )
 }
