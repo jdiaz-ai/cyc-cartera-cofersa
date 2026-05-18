@@ -54,9 +54,9 @@ export async function POST(req: NextRequest) {
       <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <!-- HEADER -->
         <tr>
-          <td style="background:#003B5C;padding:20px 32px;">
-            <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">COFERSA · CRÉDITO Y COBRO</p>
-            <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:800;">Gestión de Cobro</h1>
+          <td style="background:#009EE3;padding:20px 32px;">
+            <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">COFERSA · CRÉDITO Y COBRO</p>
+            <h1 style="margin:6px 0 0;color:#003B5C;font-size:20px;font-weight:800;">Gestión de Cobro</h1>
           </td>
         </tr>
         <!-- CLIENTE -->

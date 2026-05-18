@@ -215,10 +215,10 @@ export async function POST(req: NextRequest) {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
     <tr><td align="center">
       <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
-        <tr><td style="background:#003B5C;padding:20px 32px;">
-          <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
-          <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:800;">${numeroSic}</h1>
-          <p style="margin:4px 0 0;color:#bae6fd;font-size:13px;">Nueva solicitud interna</p>
+        <tr><td style="background:#009EE3;padding:20px 32px;">
+          <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
+          <h1 style="margin:6px 0 0;color:#003B5C;font-size:22px;font-weight:800;">${numeroSic}</h1>
+          <p style="margin:4px 0 0;color:#003B5C;font-size:13px;">Nueva solicitud interna</p>
         </td></tr>
         <tr><td style="padding:24px 32px 0;">
           <span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:700;border-radius:999px;padding:5px 14px;text-transform:uppercase;letter-spacing:0.05em;">${tipoCat}</span>
@@ -384,9 +384,9 @@ export async function POST(req: NextRequest) {
     <tr><td align="center">
       <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <tr>
-          <td style="background:#003B5C;padding:20px 32px;text-align:left;">
-            <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
-            <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:800;">Nueva solicitud interna</h1>
+          <td style="background:#009EE3;padding:20px 32px;text-align:left;">
+            <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
+            <h1 style="margin:6px 0 0;color:#003B5C;font-size:20px;font-weight:800;">Nueva solicitud interna</h1>
           </td>
         </tr>
         <tr>

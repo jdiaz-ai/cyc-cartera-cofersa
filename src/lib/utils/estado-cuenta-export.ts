@@ -146,34 +146,34 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   const ML = 12, MR = 12
   const CW = PW - ML - MR  // 186 mm
 
-  // ─── HEADER (barra navy, compacta 24 mm) ─────────────────────────────
+  // ─── HEADER (barra cyan corporativo #009EE3, compacta 24 mm) ────────
   const HEADER_H = 24
-  doc.setFillColor(0, 59, 92)
+  doc.setFillColor(0, 158, 227)    // #009EE3 — cyan corporativo Cofersa
   doc.rect(0, 0, PW, HEADER_H, 'F')
 
   // Logo (izquierda) — altura 14 mm, ancho proporcional ≈ 36 mm
+  // Sin fondo blanco: logo directamente sobre el header cyan
   if (logoDataUrl) {
     doc.addImage(logoDataUrl, 'PNG', ML, 5, 36, 14)
   } else {
     // Fallback si el logo no carga
-    doc.setTextColor(255, 255, 255)
+    doc.setTextColor(0, 59, 92)     // navy corporativo
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.text('COFERSA', ML, 15)
   }
 
-  // Título (centro)
-  doc.setTextColor(255, 255, 255)
+  // Título (centro) — navy sobre cyan para contraste adecuado
+  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
   doc.text('Estado de Cuenta', PW / 2, 15, { align: 'center' })
 
-  // Fecha de corte (derecha)
-  doc.setTextColor(170, 205, 230)
+  // Fecha de corte (derecha) — navy para contraste
+  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.text('Fecha de corte', PW - MR, 10, { align: 'right' })
-  doc.setTextColor(255, 255, 255)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.text(fechaCorte, PW - MR, 18, { align: 'right' })
@@ -216,30 +216,42 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
 
   y += CLIENT_H + 4
 
-  // ─── KPI ROW (3 tarjetas compactas, 16 mm) ───────────────────────────
-  const KPI_H = 16
-  const kpiW  = (CW - 4) / 3
-  const kpis  = [
+  // ─── KPI ROW (3 tarjetas compactas, dos zonas: gris arriba + blanco abajo) ──
+  // Mismo estilo que el email HTML: zona gris #f1f5f9 para el label,
+  // zona blanca para el valor — igual que los cards del estado de cuenta por correo.
+  const KPI_H        = 16    // mm — altura total del card
+  const LABEL_ZONE_H = 6.5   // mm — altura de la zona gris (label)
+  const kpiW         = (CW - 4) / 3
+  const kpis = [
     { label: 'SALDO TOTAL PENDIENTE', value: fmtPDFLabel(totalSaldo) },
     { label: 'TOTAL VENCIDO',          value: fmtPDFLabel(totalVenc)  },
     { label: 'FACTURAS PENDIENTES',    value: `${nPend} documentos`   },
   ]
   kpis.forEach((k, i) => {
-    const x   = ML + i * (kpiW + 2)
-    const cx  = x + kpiW / 2   // centro horizontal del card
+    const x  = ML + i * (kpiW + 2)
+    const cx = x + kpiW / 2   // centro horizontal del card
+
+    // Zona superior gris — label
+    doc.setFillColor(241, 245, 249)   // #f1f5f9
+    doc.setDrawColor(226, 232, 240)   // #e2e8f0
+    doc.setLineWidth(0.2)
+    doc.rect(x, y, kpiW, LABEL_ZONE_H, 'FD')
+
+    // Zona inferior blanca — valor
     doc.setFillColor(255, 255, 255)
-    doc.setDrawColor(226, 232, 240)
-    doc.rect(x, y, kpiW, KPI_H, 'FD')
-    // Label centrado — gris corporativo #646464
-    doc.setTextColor(100, 116, 139)
-    doc.setFontSize(6.5)
+    doc.rect(x, y + LABEL_ZONE_H, kpiW, KPI_H - LABEL_ZONE_H, 'FD')
+
+    // Label centrado en zona gris
+    doc.setTextColor(100, 116, 139)   // #64748b gris slate
+    doc.setFontSize(6)
     doc.setFont('helvetica', 'bold')
-    doc.text(k.label, cx, y + 6, { align: 'center', maxWidth: kpiW - 6 })
-    // Valor centrado — negro corporativo
-    doc.setTextColor(30, 41, 59)
+    doc.text(k.label, cx, y + 4.5, { align: 'center', maxWidth: kpiW - 6 })
+
+    // Valor centrado en zona blanca
+    doc.setTextColor(30, 41, 59)      // #1e293b casi negro
     doc.setFontSize(9)
     doc.setFont('helvetica', 'bold')
-    doc.text(k.value, cx, y + 13, { align: 'center', maxWidth: kpiW - 6 })
+    doc.text(k.value, cx, y + LABEL_ZONE_H + 6.5, { align: 'center', maxWidth: kpiW - 6 })
   })
 
   y += KPI_H + 4
@@ -298,7 +310,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
     },
     headStyles: {
-      fillColor:   [0, 59, 92],
+      fillColor:   [0, 158, 227],   // #009EE3 cyan corporativo Cofersa
       textColor:   [255, 255, 255],
       fontStyle:   'bold',
       fontSize:    7,
