@@ -101,14 +101,12 @@ export async function POST(req: NextRequest) {
     return Math.floor((hoyDate.getTime() - new Date(fv + 'T00:00:00').getTime()) / 86_400_000)
   }
 
+  // Colores corporativos Cofersa — Guía Tipográfica oficial
   function badgeEstado(fv: string): { label: string; bg: string; color: string } {
     const d = diasVenc(fv)
-    if (d < 0)   return { label: `Vence en ${Math.abs(d)}d`, bg: '#dcfce7', color: '#15803d' }
-    if (d === 0) return { label: 'Vence hoy',                 bg: '#ffedd5', color: '#c2410c' }
-    if (d <= 30) return { label: `Vencida ${d}d`,             bg: '#fef3c7', color: '#b45309' }
-    if (d <= 60) return { label: `Vencida ${d}d`,             bg: '#fed7aa', color: '#c2410c' }
-    if (d <= 90) return { label: `Vencida ${d}d`,             bg: '#fee2e2', color: '#dc2626' }
-    return              { label: `Vencida ${d}d`,             bg: '#fee2e2', color: '#991b1b' }
+    if (d < 0)   return { label: `Vence en ${Math.abs(d)}d`, bg: '#f0fdf4', color: '#006400' }  // verde corporativo
+    if (d === 0) return { label: 'Vence hoy',                 bg: '#fff7ed', color: '#FF6F00' }  // naranja corporativo
+    return              { label: `Vencida ${d}d`,             bg: '#fff1f2', color: '#D80236' }  // rojo corporativo
   }
 
   function fmtFecha(iso: string): string {
@@ -411,7 +409,7 @@ export async function POST(req: NextRequest) {
                     Total (${todasOrdenadas.length} facturas)
                   </td>
                   <td style="padding:9px 14px;font-size:12px;font-weight:800;color:#1e293b;text-align:right;border-top:2px solid #e2e8f0;">${fmtMonto(totalMonto)}</td>
-                  <td style="padding:9px 14px;font-size:12px;font-weight:800;color:#dc2626;text-align:right;border-top:2px solid #e2e8f0;">${fmtMonto(totalSaldo)}</td>
+                  <td style="padding:9px 14px;font-size:12px;font-weight:800;color:#1e293b;text-align:right;border-top:2px solid #e2e8f0;">${fmtMonto(totalSaldo)}</td>
                   <td style="border-top:2px solid #e2e8f0;"></td>
                 </tr>
               </tfoot>

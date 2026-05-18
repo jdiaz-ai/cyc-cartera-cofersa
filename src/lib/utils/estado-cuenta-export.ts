@@ -180,34 +180,39 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
 
   let y = HEADER_H + 5
 
-  // ─── DATOS DEL CLIENTE (14 mm) ───────────────────────────────────────
-  const CLIENT_H = 14
+  // ─── DATOS DEL CLIENTE (18 mm) ───────────────────────────────────────
+  const CLIENT_H = 18
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
   doc.rect(ML, y, CW, CLIENT_H, 'FD')
 
+  // Separador vertical al 55% del ancho
+  const divX = ML + CW * 0.55
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.3)
+  doc.line(divX, y + 3, divX, y + CLIENT_H - 3)
+
   // Nombre del cliente (izquierda)
-  doc.setTextColor(148, 163, 184)
+  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('CLIENTE', ML + 4, y + 5)
+  doc.text('CLIENTE', ML + 5, y + 6)
   doc.setTextColor(30, 41, 59)
   doc.setFontSize(9.5)
   doc.setFont('helvetica', 'bold')
-  const nom = clienteNombre.length > 42 ? clienteNombre.slice(0, 39) + '...' : clienteNombre
-  doc.text(nom, ML + 4, y + 11)
+  const nom = clienteNombre.length > 44 ? clienteNombre.slice(0, 41) + '...' : clienteNombre
+  doc.text(nom, ML + 5, y + 13)
 
   // Contribuyente (mitad derecha)
-  const midX = ML + CW * 0.52
-  doc.setTextColor(148, 163, 184)
+  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('CONTRIBUYENTE / CEDULA', midX, y + 5)
+  doc.text('CONTRIBUYENTE / CEDULA', divX + 5, y + 6)
   doc.setTextColor(30, 41, 59)
   doc.setFontSize(9.5)
-  doc.setFont('helvetica', 'normal')
-  doc.text(contribuyente, midX, y + 11)
+  doc.setFont('helvetica', 'bold')
+  doc.text(contribuyente, divX + 5, y + 13)
 
   y += CLIENT_H + 4
 
@@ -220,18 +225,21 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     { label: 'FACTURAS PENDIENTES',    value: `${nPend} documentos`   },
   ]
   kpis.forEach((k, i) => {
-    const x = ML + i * (kpiW + 2)
+    const x   = ML + i * (kpiW + 2)
+    const cx  = x + kpiW / 2   // centro horizontal del card
     doc.setFillColor(255, 255, 255)
     doc.setDrawColor(226, 232, 240)
     doc.rect(x, y, kpiW, KPI_H, 'FD')
+    // Label centrado — gris corporativo #646464
     doc.setTextColor(100, 116, 139)
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'bold')
-    doc.text(k.label, x + 4, y + 6)
+    doc.text(k.label, cx, y + 6, { align: 'center', maxWidth: kpiW - 6 })
+    // Valor centrado — negro corporativo
     doc.setTextColor(30, 41, 59)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'bold')
-    doc.text(k.value, x + 4, y + 13, { maxWidth: kpiW - 8 })
+    doc.text(k.value, cx, y + 13, { align: 'center', maxWidth: kpiW - 6 })
   })
 
   y += KPI_H + 4
@@ -254,11 +262,12 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   }
 
   // ─── DETALLE DE FACTURAS ─────────────────────────────────────────────
-  doc.setTextColor(100, 116, 139)
+  y += 4   // espacio extra antes del título de la sección
+  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
   doc.setFontSize(7)
   doc.setFont('helvetica', 'bold')
   doc.text('DETALLE DE FACTURAS PENDIENTES', ML, y)
-  y += 3
+  y += 4
 
   // Ordenar: vencidas primero (mayor antigüedad primero)
   const facturasSorted = [...facturas]
@@ -306,17 +315,19 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       0: { cellWidth: 42, fontStyle: 'bold' },    // Documento
       1: { cellWidth: 22 },                        // Emision
       2: { cellWidth: 26 },                        // Vencimiento
-      3: { cellWidth: 32, halign: 'right' },       // Monto
-      4: { cellWidth: 32, halign: 'right', textColor: [220, 38, 38] }, // Saldo
-      5: { cellWidth: 32 },                        // Estado
+      3: { cellWidth: 32, halign: 'right' },       // Monto — mismo color que texto normal
+      4: { cellWidth: 32, halign: 'right' },       // Saldo  — mismo color que Monto (sin rojo)
+      5: { cellWidth: 32 },                        // Estado — colores corporativos vía didParseCell
     },
+    // Colores corporativos Cofersa para la columna Estado
+    // Guía Tipográfica: Rojo #D80236, Naranja #FF6F00, Verde #006400
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     didParseCell: (data: any) => {
       if (data.section !== 'body' || data.column.index !== 5) return
       const v = String(data.cell.raw ?? '')
-      if (v.startsWith('Vencida'))       data.cell.styles.textColor = [220, 38, 38]
-      else if (v === 'Vence hoy')        data.cell.styles.textColor = [234, 88, 12]
-      else if (v.startsWith('Vence en')) data.cell.styles.textColor = [22, 163, 74]
+      if (v.startsWith('Vencida'))       data.cell.styles.textColor = [216,   2,  54]  // #D80236 rojo
+      else if (v === 'Vence hoy')        data.cell.styles.textColor = [255, 111,   0]  // #FF6F00 naranja
+      else if (v.startsWith('Vence en')) data.cell.styles.textColor = [  0, 100,   0]  // #006400 verde
     },
   })
 
@@ -432,8 +443,8 @@ async function generarEstadoCuentaExcelBuffer(params: EstadoCuentaExportParams):
   for (const f of sorted) {
     rows.push([
       f.documento ?? '—',
-      f.fecha_documento   ?? '—',
-      f.fecha_vencimiento ?? '—',
+      fmtFechaPDF(f.fecha_documento),    // DD/MM/YYYY
+      fmtFechaPDF(f.fecha_vencimiento),  // DD/MM/YYYY
       Math.round((f.monto ?? 0) * 100) / 100,   // número real (sumable en Excel)
       Math.round((f.saldo ?? 0) * 100) / 100,   // número real (sumable en Excel)
       estadoLabelExport(f.fecha_vencimiento, hoy),
