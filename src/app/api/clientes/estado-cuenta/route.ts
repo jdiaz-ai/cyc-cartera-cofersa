@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
     </tr>`
   }).join('')
 
-  // ── HTML — aging boxes (neutral — sin colores, skip si amount = 0) ──────
+  // ── HTML — aging boxes (igual ancho, fondo gris, labels oscuros) ────────
   const agingTramos = [
     { label: 'Al día',      amount: aging.aldia    },
     { label: '1-30 días',   amount: aging.m1_30   },
@@ -178,33 +178,45 @@ export async function POST(req: NextRequest) {
   const agingBoxes = agingTramos.map(t => {
     const pct       = totalSaldo > 0 ? Math.round((t.amount / totalSaldo) * 100) : 0
     const hasAmount = t.amount > 0
-    // Siempre 3 líneas → todos los cajones tienen el mismo alto
+    // Siempre 3 líneas → mismo alto en todos los cajones
     const montoLine = hasAmount
-      ? '<p style="margin:0 0 2px;font-size:12px;font-weight:500;color:#111827;">' + fmtMonto(t.amount) + '</p>'
-      : '<p style="margin:0 0 2px;font-size:12px;color:#d1d5db;">—</p>'
+      ? '<p style="margin:3px 0 1px;font-size:10.5px;font-weight:700;color:#1e293b;">' + fmtMonto(t.amount) + '</p>'
+      : '<p style="margin:3px 0 1px;font-size:10.5px;color:#cbd5e1;">—</p>'
     const pctLine = hasAmount
-      ? '<p style="margin:0;font-size:10px;color:#9ca3af;">' + pct + '%</p>'
-      : '<p style="margin:0;font-size:10px;color:transparent;">0%</p>'  // mismo alto, invisible
+      ? '<p style="margin:0;font-size:10px;color:#64748b;">' + pct + '%</p>'
+      : '<p style="margin:0;font-size:10px;color:transparent;">0%</p>'
     return `
-    <td style="text-align:center;padding:0 3px;">
-      <div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px 4px 10px;background:#fff;">
-        <p style="margin:0 0 4px;font-size:10px;font-weight:500;color:#6b7280;">${t.label}</p>
+    <td style="width:16.66%;text-align:center;padding:0 3px;">
+      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 4px 10px;background:#f1f5f9;">
+        <p style="margin:0;font-size:9.5px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.03em;">${t.label}</p>
         ${montoLine}${pctLine}
       </div>
     </td>`
   }).join('')
 
-  // ── HTML — cuentas bancarias (3 columnas: CRC·1 | CRC·2 | USD apiladas) ─
-  const mkCuenta = (c: { banco: string; numero: string; iban?: string }, etiqueta: string, margin = false) =>
-    '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;' + (margin ? 'margin-top:8px;' : '') + '">'
+  // ── HTML — cuentas bancarias (3 col × 2 filas = 6 cajones) ─────────────
+  // Todas las cuentas (no sinpe) ordenadas por campo 'orden' en la DB
+  const todasCuentas = cuentas.filter(c => c.tipo === 'cuenta')
+
+  // Etiqueta dinámica según moneda
+  const etiqMoneda = (moneda: string) =>
+    moneda === 'CRC' ? 'Colones · Cta corriente' : 'Dólares · Cta corriente'
+
+  // Card de banco (margin-top para la segunda en cada columna)
+  const mkCuenta = (c: { banco: string; moneda: string; numero: string; iban?: string }, marginTop = false) =>
+    '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;' + (marginTop ? 'margin-top:8px;' : '') + '">'
     + '<p style="margin:0 0 3px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">' + c.banco + '</p>'
-    + '<p style="margin:0 0 2px;font-size:11.5px;font-weight:700;color:#111827;font-family:monospace;">' + (c.iban ?? c.numero) + '</p>'
-    + '<p style="margin:0;font-size:10px;color:#9ca3af;">' + etiqueta + '</p>'
+    + '<p style="margin:0 0 2px;font-size:11px;font-weight:700;color:#111827;font-family:monospace;">' + (c.iban ?? c.numero) + '</p>'
+    + '<p style="margin:0;font-size:10px;color:#9ca3af;">' + etiqMoneda(c.moneda) + '</p>'
     + '</div>'
 
-  const col1Html = cuentasCRC[0] ? mkCuenta(cuentasCRC[0], 'Colones · Cta corriente') : ''
-  const col2Html = cuentasCRC[1] ? mkCuenta(cuentasCRC[1], 'Colones · Cta corriente') : ''
-  const col3Html = cuentasUSD.map((c, i) => mkCuenta(c, 'Dólares · Cta corriente', i > 0)).join('')
+  // Grupos de 2 cuentas → una columna (las primeras 2 van a col1, etc.)
+  const grp1 = todasCuentas.slice(0, 2)
+  const grp2 = todasCuentas.slice(2, 4)
+  const grp3 = todasCuentas.slice(4, 6)
+
+  const buildCol = (grp: typeof todasCuentas) =>
+    grp.map((c, i) => mkCuenta(c, i > 0)).join('')
 
   const sinpeBadge = sinpeCRC
     ? '<div style="margin-top:10px;padding:9px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;display:inline-block;">'
@@ -213,18 +225,18 @@ export async function POST(req: NextRequest) {
       + '</div>'
     : ''
 
-  const hayBancarios = cuentasCRC.length > 0 || cuentasUSD.length > 0 || !!sinpeCRC
+  const hayBancarios = todasCuentas.length > 0 || !!sinpeCRC
   const cuentasHtml = hayBancarios
     ? `
     <!-- INFORMACIÓN PARA PAGOS -->
     <tr>
       <td style="padding:20px 32px 0;">
         <p style="margin:0 0 10px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Información para pagos</p>
-        <table width="100%" cellpadding="0" cellspacing="0">
+        <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
           <tr>
-            <td style="width:34%;vertical-align:top;padding-right:8px;">${col1Html}</td>
-            <td style="width:33%;vertical-align:top;padding-right:8px;">${col2Html}</td>
-            <td style="width:33%;vertical-align:top;">${col3Html}</td>
+            <td style="width:33.33%;vertical-align:top;padding-right:8px;">${buildCol(grp1)}</td>
+            <td style="width:33.33%;vertical-align:top;padding-right:8px;">${buildCol(grp2)}</td>
+            <td style="width:33.33%;vertical-align:top;">${buildCol(grp3)}</td>
           </tr>
         </table>
         ${sinpeBadge}
@@ -277,19 +289,18 @@ export async function POST(req: NextRequest) {
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <!-- Zona 1: Logo -->
-                <td style="width:120px;vertical-align:middle;">
+                <td style="width:130px;vertical-align:middle;">
                   <div style="background:#ffffff;border-radius:8px;padding:8px 16px;display:inline-block;">
                     <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:40px;width:auto;display:block;">
                   </div>
                 </td>
-                <!-- Zona 2: Título -->
-                <td style="padding:0 16px;vertical-align:middle;">
-                  <p style="margin:0;color:#009ee3;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SIC · COFERSA</p>
-                  <h1 style="margin:4px 0 0;color:#ffffff;font-size:20px;font-weight:800;line-height:1.2;">Estado de Cuenta</h1>
+                <!-- Zona 2: Título centrado -->
+                <td style="text-align:center;vertical-align:middle;">
+                  <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:0.01em;">Estado de Cuenta</h1>
                 </td>
                 <!-- Zona 3: Fecha de corte -->
-                <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
-                  <p style="margin:0;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Fecha de corte</p>
+                <td style="width:130px;text-align:right;vertical-align:middle;white-space:nowrap;">
+                  <p style="margin:0;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Fecha de corte</p>
                   <p style="margin:4px 0 0;color:#ffffff;font-size:16px;font-weight:800;">${fechaCorte}</p>
                 </td>
               </tr>
@@ -348,7 +359,7 @@ export async function POST(req: NextRequest) {
         <tr>
           <td style="padding:16px 32px 0;">
             <p style="margin:0 0 10px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Distribución por antigüedad</p>
-            <table width="100%" cellpadding="0" cellspacing="0">
+            <table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">
               <tr>${agingBoxes}</tr>
             </table>
           </td>
