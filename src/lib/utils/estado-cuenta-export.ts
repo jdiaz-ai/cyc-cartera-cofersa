@@ -146,37 +146,41 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   const ML = 12, MR = 12
   const CW = PW - ML - MR  // 186 mm
 
-  // ─── HEADER (barra cyan corporativo #009EE3, compacta 24 mm) ────────
+  // ─── HEADER (fondo blanco — logo sin problemas de contraste) ────────
+  // Sin barra de color para evitar conflicto con el fondo blanco del logo PNG.
+  // Se usa una línea cyan al pie como acento de marca.
   const HEADER_H = 24
-  doc.setFillColor(0, 158, 227)    // #009EE3 — cyan corporativo Cofersa
-  doc.rect(0, 0, PW, HEADER_H, 'F')
 
-  // Logo (izquierda) — altura 14 mm, ancho proporcional ≈ 36 mm
-  // Sin fondo blanco: logo directamente sobre el header cyan
+  // Logo (izquierda) — sobre fondo blanco de la página, sin rectangulo extra
   if (logoDataUrl) {
     doc.addImage(logoDataUrl, 'PNG', ML, 5, 36, 14)
   } else {
-    // Fallback si el logo no carga
-    doc.setTextColor(0, 59, 92)     // navy corporativo
+    doc.setTextColor(0, 59, 92)
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.text('COFERSA', ML, 15)
   }
 
-  // Título (centro) — navy sobre cyan para contraste adecuado
+  // Título (centro) — navy sobre blanco
   doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
   doc.text('Estado de Cuenta', PW / 2, 15, { align: 'center' })
 
-  // Fecha de corte (derecha) — navy para contraste
-  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
+  // Fecha de corte (derecha)
+  doc.setTextColor(148, 163, 184)   // #94a3b8 slate suave para el label
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
-  doc.text('Fecha de corte', PW - MR, 10, { align: 'right' })
+  doc.text('FECHA DE CORTE', PW - MR, 10, { align: 'right' })
+  doc.setTextColor(0, 59, 92)       // navy para el valor
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.text(fechaCorte, PW - MR, 18, { align: 'right' })
+
+  // Línea separadora cyan — acento de marca al pie del header
+  doc.setDrawColor(0, 158, 227)     // #009EE3 cyan corporativo
+  doc.setLineWidth(0.8)
+  doc.line(0, HEADER_H, PW, HEADER_H)
 
   let y = HEADER_H + 5
 
@@ -310,11 +314,13 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
     },
     headStyles: {
-      fillColor:   [0, 158, 227],   // #009EE3 cyan corporativo Cofersa
-      textColor:   [255, 255, 255],
+      fillColor:   [241, 245, 249],  // #f1f5f9 gris muy claro (legible sin color de fondo)
+      textColor:   [15, 28, 46],     // #0F1C2E casi negro — máximo contraste
       fontStyle:   'bold',
       fontSize:    7,
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+      lineColor:   [203, 213, 225],  // #cbd5e1 borde sutil
+      lineWidth:   0.3,
     },
     footStyles: {
       fillColor: [248, 250, 252],

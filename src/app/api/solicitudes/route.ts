@@ -216,9 +216,8 @@ export async function POST(req: NextRequest) {
     <tr><td align="center">
       <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <tr><td style="background:#009EE3;padding:20px 32px;">
-          <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
-          <h1 style="margin:6px 0 0;color:#003B5C;font-size:22px;font-weight:800;">${numeroSic}</h1>
-          <p style="margin:4px 0 0;color:#003B5C;font-size:13px;">Nueva solicitud interna</p>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:800;">${numeroSic}</h1>
+          <p style="margin:4px 0 0;color:#ffffff;font-size:13px;opacity:0.9;">Nueva solicitud interna</p>
         </td></tr>
         <tr><td style="padding:24px 32px 0;">
           <span style="display:inline-block;background:#e0f2fe;color:#0369a1;font-size:11px;font-weight:700;border-radius:999px;padding:5px 14px;text-transform:uppercase;letter-spacing:0.05em;">${tipoCat}</span>
@@ -385,8 +384,7 @@ export async function POST(req: NextRequest) {
       <table class="sic-main" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
         <tr>
           <td style="background:#009EE3;padding:20px 32px;text-align:left;">
-            <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SISTEMA SIC · COFERSA</p>
-            <h1 style="margin:6px 0 0;color:#003B5C;font-size:20px;font-weight:800;">Nueva solicitud interna</h1>
+            <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:800;">Nueva solicitud interna</h1>
           </td>
         </tr>
         <tr>

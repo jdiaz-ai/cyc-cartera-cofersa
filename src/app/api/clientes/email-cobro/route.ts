@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
         <!-- HEADER -->
         <tr>
           <td style="background:#009EE3;padding:20px 32px;">
-            <p style="margin:0;color:#003B5C;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">COFERSA · CRÉDITO Y COBRO</p>
-            <h1 style="margin:6px 0 0;color:#003B5C;font-size:20px;font-weight:800;">Gestión de Cobro</h1>
+            <p style="margin:0;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">COFERSA · CRÉDITO Y COBRO</p>
+            <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:800;">Gestión de Cobro</h1>
           </td>
         </tr>
         <!-- CLIENTE -->

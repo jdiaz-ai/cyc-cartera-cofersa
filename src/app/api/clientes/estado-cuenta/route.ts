@@ -285,22 +285,23 @@ export async function POST(req: NextRequest) {
       <table class="sic-main" cellpadding="0" cellspacing="0"
         style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);width:100%;max-width:780px;">
 
-        <!-- HEADER — fondo cyan corporativo #009EE3 -->
+        <!-- HEADER — fondo blanco para que el logo PNG quede limpio;
+             borde inferior cyan como acento de marca -->
         <tr>
-          <td style="background:#009EE3;padding:20px 32px;">
+          <td style="background:#ffffff;padding:20px 32px;border-bottom:3px solid #009EE3;">
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <!-- Zona 1: Logo directo sobre fondo cyan (sin caja blanca) -->
+                <!-- Zona 1: Logo sobre blanco — sin problemas de fondo -->
                 <td style="width:130px;vertical-align:middle;">
                   <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:48px;width:auto;display:block;">
                 </td>
-                <!-- Zona 2: Título centrado — navy para contraste sobre cyan -->
+                <!-- Zona 2: Título centrado en navy -->
                 <td style="text-align:center;vertical-align:middle;">
                   <h1 style="margin:0;color:#003B5C;font-size:22px;font-weight:800;letter-spacing:0.01em;">Estado de Cuenta</h1>
                 </td>
-                <!-- Zona 3: Fecha de corte — navy para contraste -->
+                <!-- Zona 3: Fecha de corte -->
                 <td style="width:130px;text-align:right;vertical-align:middle;white-space:nowrap;">
-                  <p style="margin:0;color:#003B5C;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Fecha de corte</p>
+                  <p style="margin:0;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Fecha de corte</p>
                   <p style="margin:4px 0 0;color:#003B5C;font-size:16px;font-weight:800;">${fechaCorte}</p>
                 </td>
               </tr>
