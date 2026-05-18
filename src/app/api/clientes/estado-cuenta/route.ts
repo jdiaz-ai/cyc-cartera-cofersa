@@ -178,18 +178,22 @@ export async function POST(req: NextRequest) {
   const agingBoxes = agingTramos.map(t => {
     const pct       = totalSaldo > 0 ? Math.round((t.amount / totalSaldo) * 100) : 0
     const hasAmount = t.amount > 0
-    // Siempre 3 líneas → mismo alto en todos los cajones
+    // Label gris arriba — valores blancos abajo
     const montoLine = hasAmount
-      ? '<p style="margin:3px 0 1px;font-size:10.5px;font-weight:700;color:#1e293b;">' + fmtMonto(t.amount) + '</p>'
-      : '<p style="margin:3px 0 1px;font-size:10.5px;color:#cbd5e1;">—</p>'
+      ? '<p style="margin:0 0 1px;font-size:10.5px;font-weight:700;color:#1e293b;">' + fmtMonto(t.amount) + '</p>'
+      : '<p style="margin:0 0 1px;font-size:10.5px;color:#cbd5e1;">—</p>'
     const pctLine = hasAmount
       ? '<p style="margin:0;font-size:10px;color:#64748b;">' + pct + '%</p>'
       : '<p style="margin:0;font-size:10px;color:transparent;">0%</p>'
     return `
     <td style="width:16.66%;text-align:center;padding:0 3px;">
-      <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 4px 10px;background:#f1f5f9;">
-        <p style="margin:0;font-size:9.5px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.03em;">${t.label}</p>
-        ${montoLine}${pctLine}
+      <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <div style="background:#f1f5f9;padding:8px 4px 7px;">
+          <p style="margin:0;font-size:9.5px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:0.03em;">${t.label}</p>
+        </div>
+        <div style="background:#ffffff;padding:7px 4px 8px;">
+          ${montoLine}${pctLine}
+        </div>
       </div>
     </td>`
   }).join('')
@@ -290,8 +294,8 @@ export async function POST(req: NextRequest) {
               <tr>
                 <!-- Zona 1: Logo -->
                 <td style="width:130px;vertical-align:middle;">
-                  <div style="background:#ffffff;border-radius:8px;padding:8px 16px;display:inline-block;">
-                    <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:40px;width:auto;display:block;">
+                  <div style="background:#ffffff;border-radius:8px;padding:5px 12px;display:inline-block;">
+                    <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:48px;width:auto;display:block;">
                   </div>
                 </td>
                 <!-- Zona 2: Título centrado -->
@@ -333,21 +337,33 @@ export async function POST(req: NextRequest) {
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="padding-right:12px;">
-                  <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-align:center;">
-                    <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Saldo total pendiente</p>
-                    <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${fmtMonto(totalSaldo)}</p>
+                  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;text-align:center;">
+                    <div style="background:#f1f5f9;padding:7px 14px 6px;">
+                      <p style="margin:0;font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Saldo total pendiente</p>
+                    </div>
+                    <div style="background:#ffffff;padding:10px 14px 12px;">
+                      <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${fmtMonto(totalSaldo)}</p>
+                    </div>
                   </div>
                 </td>
                 <td style="padding-right:12px;">
-                  <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-align:center;">
-                    <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Total vencido</p>
-                    <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${fmtMonto(totalVencido)}</p>
+                  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;text-align:center;">
+                    <div style="background:#f1f5f9;padding:7px 14px 6px;">
+                      <p style="margin:0;font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Total vencido</p>
+                    </div>
+                    <div style="background:#ffffff;padding:10px 14px 12px;">
+                      <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${fmtMonto(totalVencido)}</p>
+                    </div>
                   </div>
                 </td>
                 <td>
-                  <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-align:center;">
-                    <p style="margin:0 0 4px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;">Facturas pendientes</p>
-                    <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${todasOrdenadas.length}</p>
+                  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;text-align:center;">
+                    <div style="background:#f1f5f9;padding:7px 14px 6px;">
+                      <p style="margin:0;font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;">Facturas pendientes</p>
+                    </div>
+                    <div style="background:#ffffff;padding:10px 14px 12px;">
+                      <p style="margin:0;font-size:20px;font-weight:800;color:#1e293b;">${todasOrdenadas.length}</p>
+                    </div>
                   </div>
                 </td>
               </tr>
