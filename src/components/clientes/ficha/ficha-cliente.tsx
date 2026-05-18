@@ -514,6 +514,7 @@ export default function FichaCliente({
             clienteCod           = {cartera.cliente_cod}
             clienteNombre        = {cartera.cliente_nombre}
             contribuyente        = {cartera.contribuyente}
+            condicionPago        = {maestro?.condicion_pago ?? null}
             filtroTramoEdoCta    = {filtroTramoEdoCta}
             setFiltroTramoEdoCta = {setFiltroTramoEdoCta}
             onRegistrarGestion   = {() => setModalGestion(true)}
@@ -648,6 +649,7 @@ export default function FichaCliente({
           clienteCod     = {cartera.cliente_cod}
           contribuyente  = {cartera.contribuyente}
           correo         = {maestro?.correo ?? ''}
+          condicionPago  = {maestro?.condicion_pago ?? null}
           analistaEmail  = {userEmail}
           analistaNombre = {analistaNombre}
           facturas       = {facturas}
@@ -1151,11 +1153,12 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
 // ── Modal Estado de cuenta ────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
-  analistaNombre, facturas, supabase, onClose, onSuccess }: {
+  condicionPago, analistaNombre, facturas, supabase, onClose, onSuccess }: {
   clienteNombre:  string
   clienteCod:     string
   contribuyente:  string
   correo:         string
+  condicionPago?: string | null
   analistaEmail:  string   // retenido para compatibilidad (no usado, viene de supabase.auth)
   analistaNombre: string
   facturas:       Factura[]
@@ -1194,6 +1197,7 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
         const exportParams = {
           facturas: facturas.filter(f => (f.saldo ?? 0) > 0),
           clienteNombre, contribuyente, clienteCod,
+          condicionPago: condicionPago ?? null,
           observaciones: observaciones.trim() || undefined,
           cuentas: [] as CuentaBancaria[],   // el email HTML ya lleva las cuentas desde DB
           fechaCorte,
@@ -1495,6 +1499,7 @@ interface TabEstadoCuentaProps {
   clienteCod:          string
   clienteNombre:       string
   contribuyente:       string
+  condicionPago?:      string | null
   filtroTramoEdoCta:   string
   setFiltroTramoEdoCta: (v: string) => void
   onRegistrarGestion:  () => void
@@ -1503,7 +1508,7 @@ interface TabEstadoCuentaProps {
 }
 
 function TabEstadoCuenta({
-  facturas, clienteCod, clienteNombre, contribuyente,
+  facturas, clienteCod, clienteNombre, contribuyente, condicionPago,
   filtroTramoEdoCta, setFiltroTramoEdoCta, onRegistrarGestion,
   analistaNombre, analistaEmail,
 }: TabEstadoCuentaProps) {
@@ -1573,6 +1578,7 @@ function TabEstadoCuenta({
     clienteNombre,
     contribuyente,
     clienteCod,
+    condicionPago: condicionPago ?? null,
     cuentas:       [] as CuentaBancaria[],   // sin cuentas bancarias en descarga directa
     fechaCorte:    new Date(Date.now() - 6 * 3600_000)
                      .toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: '2-digit', year: 'numeric' }),

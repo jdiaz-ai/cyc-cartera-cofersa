@@ -23,6 +23,7 @@ export interface EstadoCuentaExportParams {
   clienteNombre:     string
   contribuyente:     string
   clienteCod:        string
+  condicionPago?:    string | null
   observaciones?:    string
   cuentas:           CuentaBancaria[]
   fechaCorte:        string   // dd/MM/yyyy
@@ -123,7 +124,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   const { default: autoTable } = await import('jspdf-autotable')
 
   const {
-    facturas, clienteNombre, contribuyente, clienteCod,
+    facturas, clienteNombre, contribuyente, clienteCod, condicionPago,
     observaciones, cuentas, fechaCorte,
     analistaNombre, analistaEmail, analistaTelefono, analistaWhatsapp,
   } = params
@@ -151,9 +152,9 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   // Se usa una línea cyan al pie como acento de marca.
   const HEADER_H = 24
 
-  // Logo (izquierda) — sobre fondo blanco de la página, sin rectangulo extra
+  // Logo (izquierda) — más grande, sobre fondo blanco de la página
   if (logoDataUrl) {
-    doc.addImage(logoDataUrl, 'PNG', ML, 5, 36, 14)
+    doc.addImage(logoDataUrl, 'PNG', ML, 3, 50, 19)   // ancho 50mm, alto 19mm
   } else {
     doc.setTextColor(0, 59, 92)
     doc.setFontSize(11)
@@ -184,39 +185,48 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
 
   let y = HEADER_H + 5
 
-  // ─── DATOS DEL CLIENTE (18 mm) ───────────────────────────────────────
-  const CLIENT_H = 18
+  // ─── DATOS DEL CLIENTE (igual al email HTML: 2 col sin separador) ──────
+  // Izquierda: CLIENTE label → nombre → Contribuyente: xxx
+  // Derecha:   CONDICIÓN DE PAGO label → valor (alineado a la derecha)
+  const CLIENT_H = 22
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(doc as any).roundedRect(ML, y, CW, CLIENT_H, 2, 2, 'FD')
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
-  doc.rect(ML, y, CW, CLIENT_H, 'FD')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(doc as any).roundedRect(ML, y, CW, CLIENT_H, 2, 2, 'FD')
 
-  // Separador vertical al 55% del ancho
-  const divX = ML + CW * 0.55
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(divX, y + 3, divX, y + CLIENT_H - 3)
-
-  // Nombre del cliente (izquierda)
-  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
+  // CLIENTE label
+  doc.setTextColor(163, 163, 163)
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('CLIENTE', ML + 5, y + 6)
+  doc.text('CLIENTE', ML + 5, y + 5.5)
+
+  // Nombre del cliente
   doc.setTextColor(30, 41, 59)
   doc.setFontSize(9.5)
   doc.setFont('helvetica', 'bold')
-  const nom = clienteNombre.length > 44 ? clienteNombre.slice(0, 41) + '...' : clienteNombre
-  doc.text(nom, ML + 5, y + 13)
+  const nom = clienteNombre.length > 50 ? clienteNombre.slice(0, 47) + '...' : clienteNombre
+  doc.text(nom, ML + 5, y + 11.5)
 
-  // Contribuyente (mitad derecha)
-  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'bold')
-  doc.text('CONTRIBUYENTE / CEDULA', divX + 5, y + 6)
-  doc.setTextColor(30, 41, 59)
-  doc.setFontSize(9.5)
-  doc.setFont('helvetica', 'bold')
-  doc.text(contribuyente, divX + 5, y + 13)
+  // Contribuyente como subtítulo
+  doc.setTextColor(100, 116, 139)   // #64748b
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Contribuyente: ${contribuyente}`, ML + 5, y + 17.5)
+
+  // CONDICIÓN DE PAGO (derecha) — si está disponible
+  if (condicionPago) {
+    doc.setTextColor(163, 163, 163)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'bold')
+    doc.text('CONDICIÓN DE PAGO', ML + CW - 5, y + 5.5, { align: 'right' })
+    doc.setTextColor(30, 41, 59)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text(condicionPago, ML + CW - 5, y + 11.5, { align: 'right' })
+  }
 
   y += CLIENT_H + 4
 
@@ -233,17 +243,34 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   ]
   kpis.forEach((k, i) => {
     const x  = ML + i * (kpiW + 2)
-    const cx = x + kpiW / 2   // centro horizontal del card
+    const cx = x + kpiW / 2
+    const RX = 2   // radio de esquinas (mm)
 
-    // Zona superior gris — label
+    // ── Card con esquinas redondeadas, dos zonas ────────────────────
+    // 1. Fill blanco completo del card (redondeado)
+    doc.setFillColor(255, 255, 255)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'F')
+
+    // 2. Fill gris zona label (redondeado en la parte superior)
     doc.setFillColor(241, 245, 249)   // #f1f5f9
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).roundedRect(x, y, kpiW, LABEL_ZONE_H, RX, RX, 'F')
+
+    // 3. Cubrir los bordes redondeados inferiores del gris con blanco plano
+    doc.setFillColor(255, 255, 255)
+    doc.rect(x, y + LABEL_ZONE_H - RX, kpiW, RX + 0.1, 'F')
+
+    // 4. Borde exterior redondeado del card
     doc.setDrawColor(226, 232, 240)   // #e2e8f0
     doc.setLineWidth(0.2)
-    doc.rect(x, y, kpiW, LABEL_ZONE_H, 'FD')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'D')
 
-    // Zona inferior blanca — valor
-    doc.setFillColor(255, 255, 255)
-    doc.rect(x, y + LABEL_ZONE_H, kpiW, KPI_H - LABEL_ZONE_H, 'FD')
+    // 5. Línea divisora entre zonas (sin llegar a los bordes para que no se vea raro)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.15)
+    doc.line(x + RX, y + LABEL_ZONE_H, x + kpiW - RX, y + LABEL_ZONE_H)
 
     // Label centrado en zona gris
     doc.setTextColor(100, 116, 139)   // #64748b gris slate
@@ -314,13 +341,12 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
     },
     headStyles: {
-      fillColor:   [241, 245, 249],  // #f1f5f9 gris muy claro (legible sin color de fondo)
-      textColor:   [15, 28, 46],     // #0F1C2E casi negro — máximo contraste
+      fillColor:   [241, 245, 249],  // #f1f5f9 gris muy claro
+      textColor:   [15, 28, 46],     // #0F1C2E casi negro
       fontStyle:   'bold',
       fontSize:    7,
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
-      lineColor:   [203, 213, 225],  // #cbd5e1 borde sutil
-      lineWidth:   0.3,
+      lineWidth:   0,                // sin líneas de borde en el encabezado
     },
     footStyles: {
       fillColor: [248, 250, 252],
@@ -337,10 +363,15 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       4: { cellWidth: 32, halign: 'right' },       // Saldo  — mismo color que Monto (sin rojo)
       5: { cellWidth: 32 },                        // Estado — colores corporativos vía didParseCell
     },
-    // Colores corporativos Cofersa para la columna Estado
-    // Guía Tipográfica: Rojo #D80236, Naranja #FF6F00, Verde #006400
+    // Colores y alineación por celda
+    // Guía Tipográfica Cofersa: Rojo #D80236, Naranja #FF6F00, Verde #006400
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     didParseCell: (data: any) => {
+      // Alinear a la derecha los encabezados de Monto y Saldo (col 3 y 4)
+      if (data.section === 'head' && (data.column.index === 3 || data.column.index === 4)) {
+        data.cell.styles.halign = 'right'
+      }
+      // Colores corporativos para la columna Estado (col 5, solo body)
       if (data.section !== 'body' || data.column.index !== 5) return
       const v = String(data.cell.raw ?? '')
       if (v.startsWith('Vencida'))       data.cell.styles.textColor = [216,   2,  54]  // #D80236 rojo
@@ -360,7 +391,8 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     doc.setFillColor(236, 253, 245)
     doc.setDrawColor(167, 243, 208)
     doc.setLineWidth(0.2)
-    doc.rect(ML, y, CW, 10, 'FD')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).roundedRect(ML, y, CW, 10, 2, 2, 'FD')
     doc.setTextColor(5, 150, 105)
     doc.setFontSize(8.5)
     doc.setFont('helvetica', 'bold')
@@ -374,7 +406,8 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.2)
-  doc.rect(ML, y, CW, 14, 'FD')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(doc as any).roundedRect(ML, y, CW, 14, 2, 2, 'FD')
 
   doc.setTextColor(148, 163, 184)
   doc.setFontSize(6.5)
