@@ -295,14 +295,14 @@ export async function POST(req: NextRequest) {
                 <td style="width:130px;vertical-align:middle;">
                   <img src="https://cyc-cartera-cofersa.vercel.app/logo-cofersa.png" alt="Cofersa" style="height:48px;width:auto;display:block;">
                 </td>
-                <!-- Zona 2: Título centrado en navy -->
+                <!-- Zona 2: Título centrado en negro (igual que el logo) -->
                 <td style="text-align:center;vertical-align:middle;">
-                  <h1 style="margin:0;color:#003B5C;font-size:22px;font-weight:800;letter-spacing:0.01em;">Estado de Cuenta</h1>
+                  <h1 style="margin:0;color:#000000;font-size:22px;font-weight:800;letter-spacing:0.01em;">Estado de Cuenta</h1>
                 </td>
-                <!-- Zona 3: Fecha de corte -->
+                <!-- Zona 3: Fecha de corte — negro -->
                 <td style="width:130px;text-align:right;vertical-align:middle;white-space:nowrap;">
                   <p style="margin:0;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;">Fecha de corte</p>
-                  <p style="margin:4px 0 0;color:#003B5C;font-size:16px;font-weight:800;">${fechaCorte}</p>
+                  <p style="margin:4px 0 0;color:#000000;font-size:16px;font-weight:800;">${fechaCorte}</p>
                 </td>
               </tr>
             </table>

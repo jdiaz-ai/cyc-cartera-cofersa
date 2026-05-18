@@ -41,9 +41,9 @@ function fmtPDF(n: number): string {
   return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + decPart
 }
 
-/** Formato CR con prefijo para KPIs y totales: CRC 38.543,27 */
+/** Formato CR con signo colones para KPIs — igual que en el email HTML: ₡38.543,27 */
 function fmtPDFLabel(n: number): string {
-  return 'CRC ' + fmtPDF(n)
+  return '₡' + fmtPDF(n)   // U+20A1 = ₡ (signo colones)
 }
 
 function fmtFechaPDF(iso: string | null | undefined): string {
@@ -162,18 +162,18 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     doc.text('COFERSA', ML, 15)
   }
 
-  // Título (centro) — navy sobre blanco
-  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
+  // Título (centro) — negro igual que el logo Cofersa
+  doc.setTextColor(0, 0, 0)
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
   doc.text('Estado de Cuenta', PW / 2, 15, { align: 'center' })
 
   // Fecha de corte (derecha)
-  doc.setTextColor(148, 163, 184)   // #94a3b8 slate suave para el label
+  doc.setTextColor(148, 163, 184)   // #94a3b8 label secundario
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.text('FECHA DE CORTE', PW - MR, 10, { align: 'right' })
-  doc.setTextColor(0, 59, 92)       // navy para el valor
+  doc.setTextColor(0, 0, 0)          // negro para el valor
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.text(fechaCorte, PW - MR, 18, { align: 'right' })
@@ -339,15 +339,23 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     styles: {
       fontSize:    8,
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+      lineWidth:   0.15,             // líneas entre filas — mismo estilo que el email HTML
+      lineColor:   [226, 232, 240],  // #e2e8f0 gris claro
     },
     headStyles: {
-      fillColor:   [241, 245, 249],  // #f1f5f9 gris muy claro
+      fillColor:   [248, 250, 252],  // #f8fafc gris muy claro (como el HTML)
       textColor:   [15, 28, 46],     // #0F1C2E casi negro
       fontStyle:   'bold',
       fontSize:    7,
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
-      lineWidth:   0,                // sin líneas de borde en el encabezado
+      lineWidth:   0.15,
+      lineColor:   [226, 232, 240],
     },
+    alternateRowStyles: {
+      fillColor:   [248, 250, 252],  // filas alternadas en gris muy claro
+    },
+    tableLineColor: [226, 232, 240], // borde exterior de la tabla
+    tableLineWidth: 0.15,
     footStyles: {
       fillColor: [248, 250, 252],
       textColor: [30, 41, 59],
