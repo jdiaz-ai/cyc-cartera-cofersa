@@ -61,28 +61,17 @@ export interface MaestroCliente {
   cliente_nombre: string
   vendedor_nombre: string
   analista_email: string
+  analista_nombre: string
+  vendedor_cod: string
   nombre_cxp: string
   telefono: string
   telefono2: string
   correo: string
-  segmento: string
   limite_credito: number
   condicion_pago: string
-  promedio_dias_pago: number
-  desviacion_pago: number
-  responde_recordatorio: boolean
-  mejor_mes_pago: string
-  promesas_cumplidas_pct: number
-  ultima_vez_pagado: string
-  monto_promedio_pago: number
-  score_riesgo: number
   estado_manual: string
-  notas_internas: string
   agrupacion: string
   dimension: string
-  zona: string
-  latitud: number
-  longitud: number
   updated_at: string
 }
 
