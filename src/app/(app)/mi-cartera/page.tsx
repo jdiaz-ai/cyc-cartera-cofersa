@@ -21,6 +21,9 @@ export interface CarteraRow {
   gestionado_hoy:       boolean
   en_agenda:            boolean    // cumple alguna regla V1
   motivo:               string     // texto explicativo generado
+  // ── Próxima acción (de la última gestión registrada) ──────────────
+  proxima_accion:       string | null   // 'esperar_pago' | 'recontactar' | 'escalar' | etc.
+  proxima_accion_fecha: string | null   // si es futura → cliente suprimido de la agenda
 }
 
 export interface KPIs {
@@ -30,15 +33,16 @@ export interface KPIs {
   sinGestion7d:    number
 }
 
-// ── Lógica V1: reglas de prioridad para la Agenda del Día ───────────
+// ── Lógica V2: reglas de prioridad + supresión por próxima acción ───
 function calcularAgenda(p: {
-  dias_mora:        number
-  mora_total:       number
-  mora_120_plus:    number
-  dias_sin_gestion: number
-  promesa_activa:   boolean
-  promesa_fecha:    string | null
-  promesa_monto:    number | null
+  dias_mora:            number
+  mora_total:           number
+  mora_120_plus:        number
+  dias_sin_gestion:     number
+  promesa_activa:       boolean
+  promesa_fecha:        string | null
+  promesa_monto:        number | null
+  proxima_accion_fecha: string | null   // de la última gestión registrada
 }, hoy: string): {
   en_agenda: boolean
   prioridad:  CarteraRow['prioridad']
@@ -46,37 +50,62 @@ function calcularAgenda(p: {
   score:      number
 } {
   const hoyMs = new Date(hoy).getTime()
-  const dsg = p.dias_sin_gestion === 999 ? 999 : p.dias_sin_gestion
+  const dsg   = p.dias_sin_gestion === 999 ? 999 : p.dias_sin_gestion
 
-  // ── CRÍTICO ──────────────────────────────────────────────────────
-  // 1. Promesa vencida (fecha_promesa < hoy)
+  // ════════════════════════════════════════════════════════════════
+  // CRÍTICOS ABSOLUTOS — ignoran cualquier próxima acción programada
+  // ════════════════════════════════════════════════════════════════
+
+  // 1. Promesa vence HOY o ya venció
   if (p.promesa_activa && p.promesa_fecha) {
     const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
     if (diasVenc > 0) {
-      const montoStr = p.promesa_monto
-        ? `${fmtCRC(p.promesa_monto)} `
-        : ''
+      const montoStr = p.promesa_monto ? `${fmtCRC(p.promesa_monto)} ` : ''
       return {
-        en_agenda: true, prioridad: 'critico', score: 90,
+        en_agenda: true, prioridad: 'critico', score: 92,
         motivo: `Promesa de ${montoStr}venció hace ${diasVenc} día${diasVenc !== 1 ? 's' : ''}`,
       }
     }
+    if (diasVenc === 0) {
+      return {
+        en_agenda: true, prioridad: 'critico', score: 93,
+        motivo: 'Promesa vence hoy — confirmar si pagó',
+      }
+    }
   }
-  // 2. Mora > 120 días
+
+  // 2. Mora en tramo +120 días — siempre en cola
   if (p.mora_120_plus > 0 || p.dias_mora > 120) {
     return {
       en_agenda: true, prioridad: 'critico', score: 85,
       motivo: 'Mora supera 120 días — tramo crítico',
     }
   }
-  // 3. Mora > 90 días
+
+  // ════════════════════════════════════════════════════════════════
+  // SUPRESIÓN: si la última gestión programó una próxima acción
+  // para una fecha futura, este cliente sale de la cola hasta ese día
+  // ════════════════════════════════════════════════════════════════
+  if (p.proxima_accion_fecha) {
+    const paMs = new Date(p.proxima_accion_fecha).getTime()
+    if (paMs > hoyMs) {
+      return { en_agenda: false, prioridad: 'rutina', score: 0, motivo: '' }
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // PRIORIDADES NORMALES (sin supresión activa)
+  // ════════════════════════════════════════════════════════════════
+
+  // ── CRÍTICO ──────────────────────────────────────────────────────
+  // Mora > 90 días
   if (p.dias_mora > 90) {
     return {
       en_agenda: true, prioridad: 'critico', score: 80,
       motivo: 'Mora en tramo crítico +90 días',
     }
   }
-  // 4. Sin gestión > 7d con mora > ₡500k
+  // Sin gestión > 7d con mora > ₡500k
   if (dsg > 7 && p.mora_total > 500_000) {
     const d = dsg === 999 ? 'tiempo prolongado' : `${dsg} días`
     return {
@@ -86,14 +115,14 @@ function calcularAgenda(p: {
   }
 
   // ── URGENTE ──────────────────────────────────────────────────────
-  // 1. Mora 31–90 días
+  // Mora 31–90 días
   if (p.dias_mora >= 31 && p.dias_mora <= 90) {
     const motivo = p.dias_mora <= 60
-      ? 'Pasó al tramo 31-60 días esta semana'
+      ? 'Mora en tramo 31-60 días'
       : 'Mora en tramo 61-90 días'
     return { en_agenda: true, prioridad: 'urgente', score: 65, motivo }
   }
-  // 2. Sin gestión > 5d con mora ₡200k–₡500k
+  // Sin gestión > 5d con mora ₡200k–₡500k
   if (dsg > 5 && p.mora_total > 200_000 && p.mora_total <= 500_000) {
     const d = dsg === 999 ? 'tiempo prolongado' : `${dsg} días`
     return {
@@ -103,7 +132,7 @@ function calcularAgenda(p: {
   }
 
   // ── SEGUIMIENTO ──────────────────────────────────────────────────
-  // 1. Mora 1–30d con sin gestión > 3d
+  // Mora 1–30d con sin gestión > 3d
   if (p.dias_mora >= 1 && p.dias_mora <= 30 && dsg > 3) {
     const d = dsg === 999 ? 'varios días' : `${dsg} días`
     return {
@@ -111,16 +140,16 @@ function calcularAgenda(p: {
       motivo: `Primer vencimiento — sin contacto hace ${d}`,
     }
   }
-  // 2. Promesa activa que vence en ≤ 3 días
+  // Promesa activa que vence en ≤ 3 días (pero no hoy ni vencida — ya capturado arriba)
   if (p.promesa_activa && p.promesa_fecha) {
     const diasParaPromesa = Math.floor(
-      (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000
+      (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
     )
-    if (diasParaPromesa >= 0 && diasParaPromesa <= 3) {
-      const motivo = diasParaPromesa === 0
-        ? 'Promesa vence hoy — confirmar estado'
-        : `Promesa vence en ${diasParaPromesa} día${diasParaPromesa !== 1 ? 's' : ''} — confirmar estado`
-      return { en_agenda: true, prioridad: 'seguimiento', score: 40, motivo }
+    if (diasParaPromesa >= 1 && diasParaPromesa <= 3) {
+      return {
+        en_agenda: true, prioridad: 'seguimiento', score: 40,
+        motivo: `Promesa vence en ${diasParaPromesa} día${diasParaPromesa !== 1 ? 's' : ''} — confirmar estado`,
+      }
     }
   }
 
@@ -191,14 +220,32 @@ export default async function MiCarteraPage() {
   })
   const carteraList = Object.values(carteraMap)
 
-  // ── 4. Última gestión por cliente ────────────────────────────────
-  const ultimaGestionMap: Record<string, string> = {}
+  // ── 4. Última gestión + próxima acción programada por cliente ───────
+  // Tomamos el registro más reciente (fecha DESC, created_at DESC) para
+  // saber: cuándo fue el último contacto Y si hay una fecha de próxima
+  // acción futura que suprime al cliente de la agenda de hoy.
+  const ultimaGestionMap:   Record<string, string>  = {}
+  const proximaAccionMap:   Record<string, { accion: string | null; fecha: string | null }> = {}
   {
     const { data: gData } = await supabase
-      .from('gestiones').select('cliente_cod, fecha')
-      .in('cliente_cod', codigos).order('fecha', { ascending: false })
-    ;((gData ?? []) as { cliente_cod: string; fecha: string }[]).forEach(g => {
-      if (!ultimaGestionMap[g.cliente_cod]) ultimaGestionMap[g.cliente_cod] = g.fecha
+      .from('gestiones')
+      .select('cliente_cod, fecha, proxima_accion, proxima_accion_fecha')
+      .in('cliente_cod', codigos)
+      .order('fecha',      { ascending: false })
+      .order('created_at', { ascending: false })
+    ;((gData ?? []) as {
+      cliente_cod:          string
+      fecha:                string
+      proxima_accion:       string | null
+      proxima_accion_fecha: string | null
+    }[]).forEach(g => {
+      if (!ultimaGestionMap[g.cliente_cod]) {
+        ultimaGestionMap[g.cliente_cod] = g.fecha
+        proximaAccionMap[g.cliente_cod] = {
+          accion: g.proxima_accion,
+          fecha:  g.proxima_accion_fecha,
+        }
+      }
     })
   }
 
@@ -258,14 +305,19 @@ export default async function MiCarteraPage() {
       (c.mora_31_60    || 0) > 0 ? '31-60 días'  :
       (c.mora_1_30     || 0) > 0 ? '1-30 días'   : 'Al día'
 
+    const proxInfo            = proximaAccionMap[c.cliente_cod]
+    const proxima_accion      = proxInfo?.accion ?? null
+    const proxima_accion_fecha= proxInfo?.fecha  ?? null
+
     const { en_agenda, prioridad, motivo, score } = calcularAgenda({
-      dias_mora:        c.dias_mora    || 0,
+      dias_mora:            c.dias_mora    || 0,
       mora_total,
-      mora_120_plus:    c.mora_120_plus || 0,
+      mora_120_plus:        c.mora_120_plus || 0,
       dias_sin_gestion,
       promesa_activa,
       promesa_fecha,
       promesa_monto,
+      proxima_accion_fecha,
     }, hoy)
 
     return {
@@ -282,9 +334,11 @@ export default async function MiCarteraPage() {
       promesa_monto,
       score,
       prioridad,
-      gestionado_hoy: ultima === hoy,
+      gestionado_hoy:       ultima === hoy,
       en_agenda,
       motivo,
+      proxima_accion,
+      proxima_accion_fecha,
     }
   })
 
