@@ -375,7 +375,8 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     alternateRowStyles: {
       fillColor:   [248, 250, 252],  // filas alternadas gris muy claro
     },
-    tableLineWidth: 0,               // sin borde exterior de autotable
+    tableLineWidth: 0.3,             // borde exterior gris claro igual al HTML
+    tableLineColor: [226, 232, 240], // #e2e8f0 — funciona por página en multipágina
     footStyles: {
       fillColor:  [248, 250, 252],   // gris muy claro igual que el HTML
       textColor:  [0, 59, 92],       // navy corporativo
@@ -389,13 +390,16 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       2: { cellWidth: 26 },
       3: { cellWidth: 32, halign: 'right' },
       4: { cellWidth: 32, halign: 'right' },
-      5: { cellWidth: 32 },
+      5: { cellWidth: 32, halign: 'center', cellPadding: { left: 8, right: 3, top: 2.5, bottom: 2.5 } },
     },
     // Guía Tipográfica Cofersa: Rojo #D80236, Naranja #FF6F00, Verde #006400
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     didParseCell: (data: any) => {
       if (data.section === 'head' && (data.column.index === 3 || data.column.index === 4)) {
         data.cell.styles.halign = 'right'
+      }
+      if (data.section === 'head' && data.column.index === 5) {
+        data.cell.styles.halign = 'center'
       }
       if (data.section !== 'body' || data.column.index !== 5) return
       const v = String(data.cell.raw ?? '')
