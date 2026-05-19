@@ -22,6 +22,50 @@ const PERIODOS = [
   { label: 'Todo',   value: 'todo',   sub: 'historial completo' },
 ]
 const CERRADOS = ['Resuelta', 'Cerrada', 'Rechazada', 'APROBADA', 'RECHAZADA']
+
+// ── Listas estáticas de filtros — idénticas al form-nueva-gestion ──────
+const TIPOS_FILTRO: { value: string; label: string }[] = [
+  { value: 'Todos',    label: 'Todos los tipos' },
+  { value: 'LLAMADA',  label: 'Llamada' },
+  { value: 'WHATSAPP', label: 'WhatsApp' },
+  { value: 'CORREO',   label: 'Correo' },
+  { value: 'INTERNA',  label: 'Gestión Interna' },
+  { value: 'VISITA',   label: 'Visita' },
+]
+
+const RESULTADOS_FILTRO: string[] = [
+  'Todos los resultados',
+  // Contacto exitoso
+  'Compromiso de pago confirmado',
+  'Cliente indica pago realizado',
+  'Solicitud de convenio',
+  // Reclamos
+  'Reclamo comercial',
+  'Reclamo logístico',
+  'Requiere revisión interna',
+  // Llamada / WhatsApp sin éxito
+  'No contestó',
+  'Número ocupado',
+  'Llamar después',
+  'Contacto inválido',
+  // WhatsApp
+  'Mensaje enviado',
+  'Visto sin respuesta',
+  'Sin respuesta',
+  // Correo
+  'Correo enviado',
+  'Pendiente respuesta',
+  'Correo inválido',
+  // Interna
+  'Validación comercial',
+  'Validación logística',
+  'Validación crédito',
+  'Escalado coordinación',
+  'Seguimiento interno',
+  // Visita
+  'Cliente visitado',
+  'No localizado',
+]
 const POR_PAGINA = 25
 
 function hoyISO() {
@@ -86,7 +130,8 @@ export default function TablaGestiones({
   const filtradas = useMemo(() => {
     return base.filter(g => {
       if (!enPeriodo(g.fecha)) return false
-      if (fTipo   !== 'Todos' && g.tipo      !== fTipo)   return false
+      // Normalizar tipo legacy (ej. "WhatsApp" → "WHATSAPP") antes de comparar
+      if (fTipo !== 'Todos' && (g.tipo ?? '').toUpperCase() !== fTipo) return false
       if (fResult !== 'Todos' && g.resultado !== fResult) return false
       if (fAnalista !== 'Todos' && g.analista_email !== fAnalista) return false
       if (tag === 'promesa'    && !g.promesa_id)        return false
@@ -130,8 +175,8 @@ export default function TablaGestiones({
   const paginas = Array.from({ length: totalPag }, (_, i) => i + 1)
     .filter(p => Math.abs(p - pagActual) <= 2 || p === 1 || p === totalPag)
 
-  const tiposUnicos   = useMemo(() => ['Todos', ...Array.from(new Set(base.map(g => g.tipo)))], [base])
-  const resultUnicos  = useMemo(() => ['Todos', ...Array.from(new Set(base.map(g => g.resultado)))], [base])
+  // Filtros de tipo y resultado: listas estáticas (idénticas al form activo)
+  // — evita que valores legacy de BD aparezcan en el dropdown.
 
   const selCls = 'text-[12px] text-gray-700 bg-white focus:outline-none'
   const selSty = { border: '0.5px solid #e2e8f0', borderRadius: 7, padding: '5px 8px' }
@@ -201,10 +246,14 @@ export default function TablaGestiones({
         </div>
 
         <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={selCls} style={selSty}>
-          {tiposUnicos.map(t => <option key={t} value={t}>{t === 'Todos' ? 'Todos los tipos' : t}</option>)}
+          {TIPOS_FILTRO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         <select value={fResult} onChange={e => setFResult(e.target.value)} className={selCls} style={selSty}>
-          {resultUnicos.map(r => <option key={r} value={r}>{r === 'Todos' ? 'Todos los resultados' : r}</option>)}
+          {RESULTADOS_FILTRO.map(r => (
+            <option key={r} value={r === 'Todos los resultados' ? 'Todos' : r}>
+              {r}
+            </option>
+          ))}
         </select>
         {rol === 'COORDINADOR' && (
           <select value={fAnalista} onChange={e => setFAnalista(e.target.value)} className={selCls} style={selSty}>
