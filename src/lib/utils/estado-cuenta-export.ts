@@ -290,11 +290,11 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'D')
 
-    // Label centrado en zona cyan — texto blanco
+    // Label centrado en zona cyan — texto blanco, tamaño legible
     doc.setTextColor(255, 255, 255)
-    doc.setFontSize(6)
+    doc.setFontSize(7.5)
     doc.setFont('helvetica', 'bold')
-    doc.text(k.label, cx, y + 4.5, { align: 'center', maxWidth: kpiW - 6 })
+    doc.text(k.label, cx, y + 4.8, { align: 'center', maxWidth: kpiW - 4 })
 
     // Valor centrado en zona blanca — navy corporativo
     doc.setTextColor(0, 59, 92)     // #003B5C navy Cofersa
@@ -341,6 +341,9 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     })
 
   // Anchos fijos: 42+22+26+32+32+32 = 186 = CW
+  // Guardamos y como tableStartY para dibujar el borde redondeado después
+  const tableStartY = y
+
   autoTable(doc, {
     startY:   y,
     margin:   { left: ML, right: MR },
@@ -358,60 +361,59 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     styles: {
       fontSize:    8,
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
-      lineWidth:   0.15,             // líneas entre filas — mismo estilo que el email HTML
-      lineColor:   [226, 232, 240],  // #e2e8f0 gris claro
+      lineWidth:   0,   // sin líneas de celda — evita artefactos amarillos en PDF viewer
     },
     headStyles: {
       fillColor:   [0, 158, 227],    // #009ee3 cyan corporativo Cofersa
       textColor:   [255, 255, 255],  // blanco
       fontStyle:   'bold',
-      fontSize:    7,
-      cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
-      lineWidth:   0.15,
-      lineColor:   [0, 128, 192],    // #0080c0 ligeramente más oscuro
+      fontSize:    8.5,              // mismo peso visual que el HTML
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      lineWidth:   0,
     },
     alternateRowStyles: {
       fillColor:   [248, 250, 252],  // filas alternadas en gris muy claro
     },
-    tableLineColor: [226, 232, 240], // borde exterior — autotable lo dibuja correcto por página
-    tableLineWidth: 0.15,            // tabla plana profesional (multipágina sin artefactos)
+    tableLineWidth: 0,               // sin borde exterior — lo dibujamos nosotros con roundedRect
     footStyles: {
-      fillColor: [248, 250, 252],
-      textColor: [30, 41, 59],
-      fontStyle: 'bold',
-      lineWidth: { top: 0.4 },
-      lineColor: [203, 213, 225],
+      fillColor:  [248, 250, 252],
+      textColor:  [0, 59, 92],       // navy corporativo
+      fontStyle:  'bold',
+      fontSize:   8,
+      lineWidth:  0,
     },
     columnStyles: {
-      0: { cellWidth: 42, fontStyle: 'bold' },    // Documento
-      1: { cellWidth: 22 },                        // Emision
-      2: { cellWidth: 26 },                        // Vencimiento
-      3: { cellWidth: 32, halign: 'right' },       // Monto — mismo color que texto normal
-      4: { cellWidth: 32, halign: 'right' },       // Saldo  — mismo color que Monto (sin rojo)
-      5: { cellWidth: 32 },                        // Estado — colores corporativos vía didParseCell
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 26 },
+      3: { cellWidth: 32, halign: 'right' },
+      4: { cellWidth: 32, halign: 'right' },
+      5: { cellWidth: 32 },
     },
-    // Colores y alineación por celda
     // Guía Tipográfica Cofersa: Rojo #D80236, Naranja #FF6F00, Verde #006400
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     didParseCell: (data: any) => {
-      // Alinear a la derecha los encabezados de Monto y Saldo (col 3 y 4)
       if (data.section === 'head' && (data.column.index === 3 || data.column.index === 4)) {
         data.cell.styles.halign = 'right'
       }
-      // Colores corporativos para la columna Estado (col 5, solo body)
       if (data.section !== 'body' || data.column.index !== 5) return
       const v = String(data.cell.raw ?? '')
-      if (v.startsWith('Vencida'))       data.cell.styles.textColor = [216,   2,  54]  // #D80236 rojo
-      else if (v === 'Vence hoy')        data.cell.styles.textColor = [255, 111,   0]  // #FF6F00 naranja
-      else if (v.startsWith('Vence en')) data.cell.styles.textColor = [  0, 100,   0]  // #006400 verde
+      if (v.startsWith('Vencida'))       data.cell.styles.textColor = [216,   2,  54]  // rojo
+      else if (v === 'Vence hoy')        data.cell.styles.textColor = [255, 111,   0]  // naranja
+      else if (v.startsWith('Vence en')) data.cell.styles.textColor = [  0, 100,   0]  // verde
     },
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tableFinalY = (doc as any).lastAutoTable?.finalY ?? y + 60
+
+  // Borde redondeado cyan sobre la tabla — igual al HTML (border-radius: 8px)
+  doc.setDrawColor(0, 158, 227)   // #009ee3 cyan
+  doc.setLineWidth(0.3)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(doc as any).roundedRect(ML, tableStartY, CW, tableFinalY - tableStartY, 2, 2, 'D')
+
   y = tableFinalY + 6
-  // Tabla plana: autotable ya dibujó el borde exterior recto correctamente en
-  // cada página (estándar profesional para documentos imprimibles multipágina).
 
   // ─── PIE DE PÁGINA — ejecutivo de cuenta ─────────────────────────────
   if (y + 14 > 285) { doc.addPage(); y = 15 }
