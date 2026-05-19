@@ -41,10 +41,19 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+  // ── Remitente real del correo = usuario logueado que envía ───────────
+  // El From debe ser SIEMPRE quien envía: su nombre + su correo.
+  const { data: remitenteRow } = await supabase
+    .from('usuarios')
+    .select('nombre')
+    .ilike('email', user.email!)
+    .limit(1)
+    .single()
+  const nombreRemitente = (remitenteRow as { nombre: string } | null)?.nombre ?? user.email!
+
   // ── Cliente: condición de pago + analista ASIGNADO ───────────────────
-  // El "Ejecutivo de cuenta" debe ser SIEMPRE el analista dueño de la cartera,
-  // no quien envía el correo. (El remitente real del Gmail sí es el usuario
-  // logueado por restricción de la API de Gmail — eso no se muestra al cliente.)
+  // El "Ejecutivo de cuenta" del pie (PDF + HTML) debe ser SIEMPRE el
+  // analista dueño de la cartera, independientemente de quién envíe.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: maestroRow } = await (supabase as any)
     .from('maestro_clientes')
@@ -469,7 +478,7 @@ export async function POST(req: NextRequest) {
     const htmlBase64 = Buffer.from(htmlBody, 'utf-8').toString('base64')
 
     const rawLines = [
-      `From: ${encH(nombreAnalista)} <${user.email}>`,
+      `From: ${encH(nombreRemitente)} <${user.email}>`,
       `To: ${to_email.trim()}`,
       ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Subject: ${encH(subject)}`,
@@ -512,7 +521,7 @@ export async function POST(req: NextRequest) {
   } else {
     // ── Email simple text/html ─────────────────────────────────────────
     const rawEmail = [
-      `From: ${encH(nombreAnalista)} <${user.email}>`,
+      `From: ${encH(nombreRemitente)} <${user.email}>`,
       `To: ${to_email.trim()}`,
       ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
       `Subject: ${encH(subject)}`,
