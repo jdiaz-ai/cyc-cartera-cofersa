@@ -41,18 +41,34 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  // ── Datos del analista (nombre, teléfono, whatsapp) ──────────────────
+  // ── Cliente: condición de pago + analista ASIGNADO ───────────────────
+  // El "Ejecutivo de cuenta" debe ser SIEMPRE el analista dueño de la cartera,
+  // no quien envía el correo. (El remitente real del Gmail sí es el usuario
+  // logueado por restricción de la API de Gmail — eso no se muestra al cliente.)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: maestroRow } = await (supabase as any)
+    .from('maestro_clientes')
+    .select('condicion_pago, analista_email')
+    .eq('cliente_cod', cliente_cod)
+    .limit(1)
+    .single()
+  const condicionPago  = (maestroRow as { condicion_pago?: string } | null)?.condicion_pago ?? '—'
+  const analistaEmailAsignado =
+    (maestroRow as { analista_email?: string } | null)?.analista_email ?? user.email!
+
+  // ── Datos del analista asignado (nombre, teléfono, whatsapp) ──────────
   const { data: usuarioRow } = await supabase
     .from('usuarios')
     .select('nombre, telefono, whatsapp')
-    .ilike('email', user.email!)
+    .ilike('email', analistaEmailAsignado)
     .limit(1)
     .single()
 
   const analista = usuarioRow as { nombre: string; telefono?: string | null; whatsapp?: string | null } | null
-  const nombreAnalista    = analista?.nombre       ?? user.email!
+  const nombreAnalista    = analista?.nombre       ?? analistaEmailAsignado
   const telefonoAnalista  = analista?.telefono     ?? null
   const whatsappAnalista  = analista?.whatsapp     ?? null
+  const emailAnalista     = analistaEmailAsignado
 
   // ── Facturas del cliente con saldo > 0 ───────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,15 +95,6 @@ export async function POST(req: NextRequest) {
   const cuentasUSD = cuentas.filter(c => c.moneda === 'USD' && c.tipo === 'cuenta')
   const sinpeCRC   = cuentas.find(c => c.tipo === 'sinpe' && c.moneda === 'CRC')
 
-  // ── Condición de pago del cliente ─────────────────────────────────────
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: maestroRow } = await (supabase as any)
-    .from('maestro_clientes')
-    .select('condicion_pago')
-    .eq('cliente_cod', cliente_cod)   // columna real en la tabla
-    .limit(1)
-    .single()
-  const condicionPago = (maestroRow as { condicion_pago?: string } | null)?.condicion_pago ?? '—'
 
   // ── Fecha y hora Costa Rica ───────────────────────────────────────────
   const hoyDate = new Date(Date.now() - 6 * 3600_000)  // UTC-6 approx
@@ -262,7 +269,7 @@ export async function POST(req: NextRequest) {
   // ── HTML — footer analista ────────────────────────────────────────────
   const footerContacto = [
     `<strong>${nombreAnalista}</strong>`,
-    user.email,
+    emailAnalista,
     telefonoAnalista  ? `Tel: ${telefonoAnalista}` : null,
     whatsappAnalista  ? `WA: ${whatsappAnalista}`  : null,
   ].filter(Boolean).join(' &nbsp;·&nbsp; ')

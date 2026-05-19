@@ -143,20 +143,21 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (jsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-  // ── Cargar Liberation Sans Bold (soporta ₡ U+20A1; Helvetica built-in no lo tiene) ──
-  // El archivo está en public/fonts/ y se sirve desde el mismo origen.
-  // Si falla (por cualquier razón) se usa Helvetica como fallback.
-  let libSansBoldLoaded = false
+  // ── Cargar Nunito Bold (font corporativo; SÍ incluye ₡ U+20A1, verificado) ──
+  // Helvetica built-in es Latin-1 y no tiene ₡. Nunito es el font de marca de
+  // Cofersa y coincide con el render del correo HTML. Archivo en public/fonts/.
+  // Si el fetch falla por cualquier razón, se usa Helvetica como fallback.
+  let nunitoBoldLoaded = false
   try {
-    const buf   = await fetch('/fonts/LiberationSans-Bold.ttf').then(r => r.arrayBuffer())
+    const buf   = await fetch('/fonts/Nunito-Bold.ttf').then(r => r.arrayBuffer())
     const bytes = new Uint8Array(buf)
     let bin = ''
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-    doc.addFileToVFS('LiberationSans-Bold.ttf', btoa(bin))
-    doc.addFont('LiberationSans-Bold.ttf', 'LibSans', 'bold')
-    libSansBoldLoaded = true
+    doc.addFileToVFS('Nunito-Bold.ttf', btoa(bin))
+    doc.addFont('Nunito-Bold.ttf', 'Nunito', 'bold')
+    nunitoBoldLoaded = true
   } catch {
-    libSansBoldLoaded = false
+    nunitoBoldLoaded = false
   }
 
   const PW = 210
@@ -255,7 +256,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   const kpis = [
     { label: 'SALDO TOTAL PENDIENTE', value: fmtPDFLabel(totalSaldo) },
     { label: 'TOTAL VENCIDO',          value: fmtPDFLabel(totalVenc)  },
-    { label: 'FACTURAS PENDIENTES',    value: `${nPend} documentos`   },
+    { label: 'FACTURAS PENDIENTES',    value: `${nPend}`              },
   ]
   kpis.forEach((k, i) => {
     const x  = ML + i * (kpiW + 2)
@@ -294,10 +295,10 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     doc.setFont('helvetica', 'bold')
     doc.text(k.label, cx, y + 4.5, { align: 'center', maxWidth: kpiW - 6 })
 
-    // Valor centrado en zona blanca — LibSans si está disponible (renderiza ₡ correctamente)
+    // Valor centrado en zona blanca — Nunito si cargó (renderiza ₡ correctamente)
     doc.setTextColor(30, 41, 59)      // #1e293b casi negro
     doc.setFontSize(9)
-    doc.setFont(libSansBoldLoaded ? 'LibSans' : 'helvetica', 'bold')
+    doc.setFont(nunitoBoldLoaded ? 'Nunito' : 'helvetica', 'bold')
     doc.text(k.value, cx, y + LABEL_ZONE_H + 6.5, { align: 'center', maxWidth: kpiW - 6 })
     doc.setFont('helvetica', 'bold')   // restablecer para el resto del documento
   })
@@ -339,7 +340,6 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     })
 
   // Anchos fijos: 42+22+26+32+32+32 = 186 = CW
-  const tableStartY = y   // guardado para el borde redondeado posterior
   autoTable(doc, {
     startY:   y,
     margin:   { left: ML, right: MR },
@@ -372,8 +372,8 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     alternateRowStyles: {
       fillColor:   [248, 250, 252],  // filas alternadas en gris muy claro
     },
-    tableLineColor: [226, 232, 240], // (referencia de color — borde exterior vía roundedRect)
-    tableLineWidth: 0,               // sin borde rectangular; se reemplaza por roundedRect abajo
+    tableLineColor: [226, 232, 240], // borde exterior — autotable lo dibuja correcto por página
+    tableLineWidth: 0.15,            // tabla plana profesional (multipágina sin artefactos)
     footStyles: {
       fillColor: [248, 250, 252],
       textColor: [30, 41, 59],
@@ -409,20 +409,8 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tableFinalY = (doc as any).lastAutoTable?.finalY ?? y + 60
   y = tableFinalY + 6
-
-  // ── Borde exterior redondeado de la tabla (igual que las otras cards) ──────
-  // 1. Máscaras de esquina blancas: cubren el fill rectangular de autotable en las esquinas
-  const CR = 2   // radio en mm, igual al del resto de cards
-  doc.setFillColor(255, 255, 255)
-  doc.rect(ML,           tableStartY,      CR, CR, 'F')   // esquina sup-izq
-  doc.rect(ML + CW - CR, tableStartY,      CR, CR, 'F')   // esquina sup-der
-  doc.rect(ML,           tableFinalY - CR, CR, CR, 'F')   // esquina inf-izq
-  doc.rect(ML + CW - CR, tableFinalY - CR, CR, CR, 'F')   // esquina inf-der
-  // 2. Borde redondeado sobre las máscaras
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.15)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(doc as any).roundedRect(ML, tableStartY, CW, tableFinalY - tableStartY, CR, CR, 'S')
+  // Tabla plana: autotable ya dibujó el borde exterior recto correctamente en
+  // cada página (estándar profesional para documentos imprimibles multipágina).
 
   // ─── SINPE (compacto, si existe) ──────────────────────────────────────
   const sinpe = cuentas.find(c => c.tipo === 'sinpe')

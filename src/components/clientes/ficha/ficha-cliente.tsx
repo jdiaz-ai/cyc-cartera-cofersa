@@ -72,10 +72,13 @@ interface Props {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   solicitudes:    any[]
   solicitanteMap: Record<string, string>  // solicitante_id → nombre
-  analistaNombre: string
-  userEmail:      string
-  esCoordinador:  boolean
-  backHref?:      string   // destino del botón Volver (default: /clientes)
+  analistaNombre:   string
+  analistaEmail:    string         // correo del analista ASIGNADO al cliente
+  analistaTelefono: string | null
+  analistaWhatsapp: string | null
+  userEmail:        string
+  esCoordinador:    boolean
+  backHref?:        string   // destino del botón Volver (default: /clientes)
 }
 
 // ── Colores de estado del cliente (rgba 15% bg + sólido text) ──────────
@@ -130,7 +133,8 @@ function facturaEnTramo(f: Factura, tramo: string, hoy: string): boolean {
 // ══════════════════════════════════════════════════════════════════════
 export default function FichaCliente({
   cartera, maestro, facturas, gestiones, promesas, solicitudes, solicitanteMap,
-  analistaNombre, userEmail, esCoordinador, backHref,
+  analistaNombre, analistaEmail, analistaTelefono, analistaWhatsapp,
+  userEmail, esCoordinador, backHref,
 }: Props) {
   const router   = useRouter()
   const supabase = createClient()
@@ -519,7 +523,9 @@ export default function FichaCliente({
             setFiltroTramoEdoCta = {setFiltroTramoEdoCta}
             onRegistrarGestion   = {() => setModalGestion(true)}
             analistaNombre       = {analistaNombre}
-            analistaEmail        = {userEmail}
+            analistaEmail        = {analistaEmail}
+            analistaTelefono     = {analistaTelefono}
+            analistaWhatsapp     = {analistaWhatsapp}
           />
         )}
 
@@ -650,8 +656,10 @@ export default function FichaCliente({
           contribuyente  = {cartera.contribuyente}
           correo         = {maestro?.correo ?? ''}
           condicionPago  = {maestro?.condicion_pago ?? null}
-          analistaEmail  = {userEmail}
-          analistaNombre = {analistaNombre}
+          analistaEmail    = {analistaEmail}
+          analistaNombre   = {analistaNombre}
+          analistaTelefono = {analistaTelefono}
+          analistaWhatsapp = {analistaWhatsapp}
           facturas       = {facturas}
           supabase       = {supabase}
           onClose        = {() => setModalEdoCta(false)}
@@ -1153,14 +1161,17 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
 // ── Modal Estado de cuenta ────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
-  condicionPago, analistaNombre, facturas, supabase, onClose, onSuccess }: {
-  clienteNombre:  string
-  clienteCod:     string
-  contribuyente:  string
-  correo:         string
-  condicionPago?: string | null
-  analistaEmail:  string   // retenido para compatibilidad (no usado, viene de supabase.auth)
-  analistaNombre: string
+  condicionPago, analistaNombre, analistaEmail, analistaTelefono, analistaWhatsapp,
+  facturas, supabase, onClose, onSuccess }: {
+  clienteNombre:    string
+  clienteCod:       string
+  contribuyente:    string
+  correo:           string
+  condicionPago?:   string | null
+  analistaEmail:    string         // correo del analista ASIGNADO al cliente
+  analistaNombre:   string
+  analistaTelefono: string | null
+  analistaWhatsapp: string | null
   facturas:       Factura[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
@@ -1202,7 +1213,9 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
           cuentas: [] as CuentaBancaria[],   // el email HTML ya lleva las cuentas desde DB
           fechaCorte,
           analistaNombre,
-          analistaEmail: session?.user?.email ?? '',
+          analistaEmail,
+          analistaTelefono,
+          analistaWhatsapp,
         }
 
         if (adjunto === 'PDF') {
@@ -1505,12 +1518,14 @@ interface TabEstadoCuentaProps {
   onRegistrarGestion:  () => void
   analistaNombre:      string
   analistaEmail:       string
+  analistaTelefono:    string | null
+  analistaWhatsapp:    string | null
 }
 
 function TabEstadoCuenta({
   facturas, clienteCod, clienteNombre, contribuyente, condicionPago,
   filtroTramoEdoCta, setFiltroTramoEdoCta, onRegistrarGestion,
-  analistaNombre, analistaEmail,
+  analistaNombre, analistaEmail, analistaTelefono, analistaWhatsapp,
 }: TabEstadoCuentaProps) {
   const hoy = hoyISO()
 
@@ -1584,6 +1599,8 @@ function TabEstadoCuenta({
                      .toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: '2-digit', year: 'numeric' }),
     analistaNombre,
     analistaEmail,
+    analistaTelefono,
+    analistaWhatsapp,
   })
 
   function handleExportarPDF() {

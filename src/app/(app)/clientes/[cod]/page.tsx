@@ -97,16 +97,24 @@ export default async function FichaClientePage({ params, searchParams }: PagePro
     }
   } catch { /* tabla aún no creada */ }
 
-  // ── Nombre del analista + rol del usuario logueado ─────────────────
-  let analistaNombre = ''
-  let esCoordinador  = false
+  // ── Datos del analista ASIGNADO al cliente + rol del usuario logueado ──
+  // El "Ejecutivo de cuenta" del estado de cuenta debe ser SIEMPRE el analista
+  // dueño de la cartera (no quien genera/envía el documento).
+  let analistaNombre   = ''
+  const analistaEmail  = maestro?.analista_email ?? ''
+  let analistaTelefono : string | null = null
+  let analistaWhatsapp : string | null = null
+  let esCoordinador    = false
   if (maestro?.analista_email) {
     const { data: anaRow } = await supabase
       .from('usuarios')
-      .select('nombre')
+      .select('nombre, telefono, whatsapp')
       .eq('email', maestro.analista_email)
       .limit(1)
-    analistaNombre = ((anaRow ?? [])[0] as { nombre: string } | undefined)?.nombre ?? ''
+    const ana = ((anaRow ?? [])[0] as { nombre: string; telefono?: string | null; whatsapp?: string | null } | undefined)
+    analistaNombre   = ana?.nombre   ?? ''
+    analistaTelefono = ana?.telefono ?? null
+    analistaWhatsapp = ana?.whatsapp ?? null
   }
   if (userEmail) {
     const { data: rolRow } = await supabase
@@ -126,10 +134,13 @@ export default async function FichaClientePage({ params, searchParams }: PagePro
       promesas        = {promesas}
       solicitudes     = {solicitudes}
       solicitanteMap  = {solicitanteMap}
-      analistaNombre  = {analistaNombre}
-      userEmail       = {userEmail}
-      esCoordinador   = {esCoordinador}
-      backHref        = {backHref}
+      analistaNombre   = {analistaNombre}
+      analistaEmail    = {analistaEmail}
+      analistaTelefono = {analistaTelefono}
+      analistaWhatsapp = {analistaWhatsapp}
+      userEmail        = {userEmail}
+      esCoordinador    = {esCoordinador}
+      backHref         = {backHref}
     />
   )
 }
