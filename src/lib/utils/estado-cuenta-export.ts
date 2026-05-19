@@ -206,40 +206,43 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   // Izquierda: CLIENTE label → nombre → Contribuyente: xxx
   // Derecha:   CONDICIÓN DE PAGO label → valor (alineado a la derecha)
   const CLIENT_H = 22
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(doc as any).roundedRect(ML, y, CW, CLIENT_H, 2, 2, 'FD')
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
+  // ── Cajón cliente — mismo estilo que el HTML ────────────────────────
+  // Fondo azul muy claro + borde azul claro + barra izquierda cyan
+  doc.setFillColor(240, 249, 255)   // #f0f9ff
+  doc.setDrawColor(186, 230, 253)   // #bae6fd borde azul claro
   doc.setLineWidth(0.2)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(doc as any).roundedRect(ML, y, CW, CLIENT_H, 2, 2, 'FD')
+  // Barra lateral izquierda cyan — acento corporativo
+  doc.setFillColor(0, 158, 227)     // #009ee3 cyan
+  doc.rect(ML, y, 2.5, CLIENT_H, 'F')
 
-  // CLIENTE label
-  doc.setTextColor(163, 163, 163)
+  // Label "CLIENTE" en cyan
+  doc.setTextColor(0, 158, 227)     // #009ee3
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
-  doc.text('CLIENTE', ML + 5, y + 5.5)
+  doc.text('CLIENTE', ML + 6, y + 5.5)
 
-  // Nombre del cliente
-  doc.setTextColor(30, 41, 59)
+  // Nombre del cliente en navy
+  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo
   doc.setFontSize(9.5)
   doc.setFont('helvetica', 'bold')
   const nom = clienteNombre.length > 50 ? clienteNombre.slice(0, 47) + '...' : clienteNombre
-  doc.text(nom, ML + 5, y + 11.5)
+  doc.text(nom, ML + 6, y + 11.5)
 
   // Contribuyente como subtítulo
   doc.setTextColor(100, 116, 139)   // #64748b
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Contribuyente: ${contribuyente}`, ML + 5, y + 17.5)
+  doc.text(`Contribuyente: ${contribuyente}`, ML + 6, y + 17.5)
 
-  // CONDICIÓN DE PAGO (derecha) — si está disponible
+  // CONDICIÓN DE PAGO (derecha)
   if (condicionPago) {
-    doc.setTextColor(163, 163, 163)
+    doc.setTextColor(0, 158, 227)   // #009ee3 cyan
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'bold')
     doc.text('CONDICIÓN DE PAGO', ML + CW - 5, y + 5.5, { align: 'right' })
-    doc.setTextColor(30, 41, 59)
+    doc.setTextColor(0, 59, 92)     // #003B5C navy
     doc.setFontSize(10)
     doc.setFont('helvetica', 'bold')
     doc.text(condicionPago, ML + CW - 5, y + 11.5, { align: 'right' })
@@ -263,40 +266,38 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     const cx = x + kpiW / 2
     const RX = 2   // radio de esquinas (mm)
 
-    // ── Card con esquinas redondeadas, dos zonas ────────────────────
-    // 1. Fill blanco completo del card (redondeado)
+    // ── Card de KPI: mismo estilo que el HTML ──────────────────────
+    // Técnica limpia sin artefactos:
+    // 1. Fondo blanco completo con bordes redondeados
     doc.setFillColor(255, 255, 255)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'F')
 
-    // 2. Fill cyan zona label — color corporativo Cofersa
+    // 2. Zona label: cyan redondeado que se extiende RX mm más abajo del label zone
+    //    (sus esquinas inferiores quedan dentro del card y se tapan con el paso 3)
     doc.setFillColor(0, 158, 227)   // #009ee3 cyan corporativo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(doc as any).roundedRect(x, y, kpiW, LABEL_ZONE_H, RX, RX, 'F')
+    ;(doc as any).roundedRect(x, y, kpiW, LABEL_ZONE_H + RX, RX, RX, 'F')
 
-    // 3. Cubrir los bordes redondeados inferiores del cyan con blanco plano
+    // 3. Zona valor: rectángulo blanco desde el borde del label hasta el fondo
+    //    Cubre las esquinas redondeadas inferiores del cyan del paso 2
     doc.setFillColor(255, 255, 255)
-    doc.rect(x, y + LABEL_ZONE_H - RX, kpiW, RX + 0.1, 'F')
+    doc.rect(x, y + LABEL_ZONE_H, kpiW, KPI_H - LABEL_ZONE_H, 'F')
 
-    // 4. Borde exterior redondeado del card — cyan corporativo
-    doc.setDrawColor(0, 158, 227)   // #009ee3 cyan
+    // 4. Borde exterior redondeado — cyan corporativo (dibujado al final sobre todo)
+    doc.setDrawColor(0, 158, 227)   // #009ee3
     doc.setLineWidth(0.2)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'D')
 
-    // 5. Línea divisora entre zonas
-    doc.setDrawColor(0, 128, 192)   // #0080c0 ligeramente más oscuro
-    doc.setLineWidth(0.15)
-    doc.line(x + RX, y + LABEL_ZONE_H, x + kpiW - RX, y + LABEL_ZONE_H)
-
     // Label centrado en zona cyan — texto blanco
-    doc.setTextColor(255, 255, 255)   // blanco sobre cyan
+    doc.setTextColor(255, 255, 255)
     doc.setFontSize(6)
     doc.setFont('helvetica', 'bold')
     doc.text(k.label, cx, y + 4.5, { align: 'center', maxWidth: kpiW - 6 })
 
-    // Valor centrado en zona blanca — Nunito si cargó (renderiza ₡ correctamente)
-    doc.setTextColor(30, 41, 59)      // #1e293b casi negro
+    // Valor centrado en zona blanca — navy corporativo
+    doc.setTextColor(0, 59, 92)     // #003B5C navy Cofersa
     doc.setFontSize(9)
     doc.setFont(nunitoBoldLoaded ? 'Nunito' : 'helvetica', 'bold')
     doc.text(k.value, cx, y + LABEL_ZONE_H + 6.5, { align: 'center', maxWidth: kpiW - 6 })
@@ -412,37 +413,24 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   // Tabla plana: autotable ya dibujó el borde exterior recto correctamente en
   // cada página (estándar profesional para documentos imprimibles multipágina).
 
-  // ─── SINPE (compacto, si existe) ──────────────────────────────────────
-  const sinpe = cuentas.find(c => c.tipo === 'sinpe')
-  if (sinpe) {
-    if (y + 12 > 282) { doc.addPage(); y = 15 }
-    doc.setFillColor(236, 253, 245)
-    doc.setDrawColor(167, 243, 208)
-    doc.setLineWidth(0.2)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(doc as any).roundedRect(ML, y, CW, 10, 2, 2, 'FD')
-    doc.setTextColor(5, 150, 105)
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'bold')
-    doc.text(`SINPE Movil: ${sinpe.numero}`, ML + 4, y + 7)
-    y += 14
-  }
-
   // ─── PIE DE PÁGINA — ejecutivo de cuenta ─────────────────────────────
   if (y + 14 > 285) { doc.addPage(); y = 15 }
 
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
+  // Mismo estilo que el HTML: fondo gris muy claro con borde superior
+  doc.setFillColor(248, 250, 252)   // #f8fafc
+  doc.setDrawColor(226, 232, 240)   // #e2e8f0
   doc.setLineWidth(0.2)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(doc as any).roundedRect(ML, y, CW, 14, 2, 2, 'FD')
 
-  doc.setTextColor(148, 163, 184)
+  // Label "EJECUTIVO DE CUENTA" en cyan
+  doc.setTextColor(0, 158, 227)     // #009ee3 cyan
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
   doc.text('EJECUTIVO DE CUENTA', ML + 4, y + 5)
 
-  doc.setTextColor(30, 41, 59)
+  // Datos de contacto en navy
+  doc.setTextColor(0, 59, 92)       // #003B5C navy
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   const contactParts = [analistaNombre, analistaEmail]
@@ -450,7 +438,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
   if (analistaWhatsapp) contactParts.push(`WA: ${analistaWhatsapp}`)
   doc.text(contactParts.join('  |  '), ML + 4, y + 11, { maxWidth: CW * 0.72 })
 
-  doc.setTextColor(148, 163, 184)
+  doc.setTextColor(0, 158, 227)     // #009ee3 cyan
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
   doc.text(`Cofersa © 2026   Cod: ${clienteCod}`, PW - MR - 2, y + 11, { align: 'right' })
