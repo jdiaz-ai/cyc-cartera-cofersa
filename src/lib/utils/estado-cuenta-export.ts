@@ -341,8 +341,9 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     })
 
   // Anchos fijos: 42+22+26+32+32+32 = 186 = CW
-  // Guardamos y como tableStartY para dibujar el borde redondeado después
-  const tableStartY = y
+  // Capturamos la posición exacta de la fila Total con didDrawCell
+  let footY = 0
+  let footH = 0
 
   autoTable(doc, {
     startY:   y,
@@ -361,22 +362,22 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     styles: {
       fontSize:    8,
       cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
-      lineWidth:   0,   // sin líneas de celda — evita artefactos amarillos en PDF viewer
+      lineWidth:   0,   // sin líneas — evita artefactos de color en PDF viewer
     },
     headStyles: {
       fillColor:   [0, 158, 227],    // #009ee3 cyan corporativo Cofersa
       textColor:   [255, 255, 255],  // blanco
       fontStyle:   'bold',
-      fontSize:    8.5,              // mismo peso visual que el HTML
+      fontSize:    8.5,
       cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
       lineWidth:   0,
     },
     alternateRowStyles: {
-      fillColor:   [248, 250, 252],  // filas alternadas en gris muy claro
+      fillColor:   [248, 250, 252],  // filas alternadas gris muy claro
     },
-    tableLineWidth: 0,               // sin borde exterior — lo dibujamos nosotros con roundedRect
+    tableLineWidth: 0,               // sin borde exterior de autotable
     footStyles: {
-      fillColor:  [248, 250, 252],
+      fillColor:  [248, 250, 252],   // gris muy claro igual que el HTML
       textColor:  [0, 59, 92],       // navy corporativo
       fontStyle:  'bold',
       fontSize:   8,
@@ -402,16 +403,27 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       else if (v === 'Vence hoy')        data.cell.styles.textColor = [255, 111,   0]  // naranja
       else if (v.startsWith('Vence en')) data.cell.styles.textColor = [  0, 100,   0]  // verde
     },
+    // Capturamos posición exacta del footer para el borde redondeado posterior
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    didDrawCell: (data: any) => {
+      if (data.section === 'foot' && data.column.index === 0) {
+        footY = data.cell.y
+        footH = data.cell.height
+      }
+    },
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tableFinalY = (doc as any).lastAutoTable?.finalY ?? y + 60
 
-  // Borde redondeado cyan sobre la tabla — igual al HTML (border-radius: 8px)
-  doc.setDrawColor(0, 158, 227)   // #009ee3 cyan
-  doc.setLineWidth(0.3)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(doc as any).roundedRect(ML, tableStartY, CW, tableFinalY - tableStartY, 2, 2, 'D')
+  // Borde redondeado cyan únicamente en la fila "Total" — funciona en multipágina
+  // (rodear toda la tabla con roundedRect falla cuando hay saltos de página)
+  if (footY > 0) {
+    doc.setDrawColor(0, 158, 227)   // #009ee3 cyan
+    doc.setLineWidth(0.4)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(doc as any).roundedRect(ML, footY, CW, footH, 2, 2, 'D')
+  }
 
   y = tableFinalY + 6
 
