@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient }             from '@/lib/supabase/server'
+import { resolveGmailToken }        from '@/lib/utils/gmail-token'
 
 /**
  * POST /api/clientes/estado-cuenta
@@ -18,23 +19,18 @@ export async function POST(req: NextRequest) {
     to_email?:       string
     cc_emails?:      string[]
     observaciones?:  string
-    providerToken?:  string | null
+    providerToken?:        string | null
+    providerRefreshToken?: string | null
     adjunto?:        { base64: string; mimeType: string; filename: string } | null
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
   const { cliente_cod, cliente_nombre, contribuyente, to_email,
-          cc_emails, observaciones, providerToken, adjunto } = body
+          cc_emails, observaciones, providerToken, providerRefreshToken, adjunto } = body
 
   if (!cliente_cod || !to_email?.trim()) {
     return NextResponse.json({ error: 'cliente_cod y to_email son requeridos' }, { status: 400 })
-  }
-  if (!providerToken) {
-    return NextResponse.json(
-      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },
-      { status: 401 },
-    )
   }
 
   const supabase = await createClient()
@@ -464,6 +460,15 @@ export async function POST(req: NextRequest) {
 </body>
 </html>`
 
+  // ── Resolver token Gmail (renueva automáticamente si expiró) ─────────
+  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+  if (!gmailToken) {
+    return NextResponse.json(
+      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },
+      { status: 401 },
+    )
+  }
+
   // ── Construir y enviar email ──────────────────────────────────────────
   const encH = (str: string) => `=?UTF-8?B?${Buffer.from(str, 'utf-8').toString('base64')}?=`
   const subject = `Estado de cuenta — ${cliente_nombre ?? cliente_cod}`
@@ -506,7 +511,7 @@ export async function POST(req: NextRequest) {
     try {
       const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${providerToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${gmailToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ raw: encodedEmail }),
       })
       if (r.ok) {
@@ -537,7 +542,7 @@ export async function POST(req: NextRequest) {
     try {
       const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${providerToken}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${gmailToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ raw: encodedEmail }),
       })
       if (r.ok) {

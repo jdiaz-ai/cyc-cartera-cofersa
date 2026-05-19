@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient }             from '@/lib/supabase/server'
+import { resolveGmailToken }        from '@/lib/utils/gmail-token'
 
 // POST /api/solicitudes
 // { tipo, destinatario?, cliente_cod, cliente_nombre, justificacion,
@@ -21,7 +22,8 @@ export async function POST(req: NextRequest) {
     motivo_nota?: string
     documento_ref?: string
     fecha_limite?: string
-    providerToken?: string | null
+    providerToken?:        string | null
+    providerRefreshToken?: string | null
     // ── Catálogo nuevo (Centro Operativo de Solicitudes) ──────────────
     area?: string
     prioridad?: string
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
   const { tipo, destinatario, cliente_cod, cliente_nombre,
     para_email, cc_emails, datos,
     monto_actual, monto_solicitado, monto, motivo_nota, documento_ref, fecha_limite,
-    providerToken } = body
+    providerToken, providerRefreshToken } = body
 
   // FIX 1: el formulario nuevo envía `descripcion`; el legacy `justificacion`.
   // Aceptar ambos para compatibilidad.
@@ -144,7 +146,8 @@ export async function POST(req: NextRequest) {
     let emailTo:   string | null = null
     let emailError: string | null = null
 
-    if (providerToken) {
+    const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+    if (gmailToken) {
       const { data: solRow } = await supabase
         .from('usuarios').select('nombre').eq('id', solicitanteId).single()
       const nombreSolicitante = (solRow as { nombre: string } | null)?.nombre ?? user.email!
@@ -277,7 +280,7 @@ export async function POST(req: NextRequest) {
           'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
           {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${providerToken}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${gmailToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ raw: encoded }),
           },
         )
@@ -290,7 +293,7 @@ export async function POST(req: NextRequest) {
         emailError = 'Error de red al contactar Gmail API.'
       }
     } else {
-      emailError = 'Sesión de Google no disponible — solicitud creada sin correo.'
+      emailError = 'Token de Google no disponible y no se pudo renovar. Cerrá sesión y volvé a ingresar.'
     }
 
     return NextResponse.json({
@@ -303,9 +306,9 @@ export async function POST(req: NextRequest) {
   // RAMA LEGACY — wizard de la ficha (con correo + notificación)
   // ════════════════════════════════════════════════════════════════════
 
-  // Verificar provider_token ANTES del INSERT — si el token expiró no queremos
-  // guardar la solicitud y que el usuario crea que falló (causaría duplicados).
-  if (!providerToken) {
+  // Resolver token Gmail ANTES del INSERT — si no hay token válido, rechazar.
+  const gmailTokenLegacy = await resolveGmailToken(providerToken, providerRefreshToken)
+  if (!gmailTokenLegacy) {
     return NextResponse.json(
       { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.' },
       { status: 401 }
@@ -470,7 +473,7 @@ export async function POST(req: NextRequest) {
       {
         method:  'POST',
         headers: {
-          'Authorization': `Bearer ${providerToken}`,
+          'Authorization': `Bearer ${gmailTokenLegacy}`,
           'Content-Type':  'application/json',
         },
         body: JSON.stringify({ raw: encodedEmail }),

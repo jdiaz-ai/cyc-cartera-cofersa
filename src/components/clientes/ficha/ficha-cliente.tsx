@@ -1078,9 +1078,10 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
     if (!mensaje.trim()) { setError('Escribí un mensaje.'); return }
     setLoading(true); setError('')
 
-    // ── 1. Obtener provider_token (Gmail) ─────────────────────────────
+    // ── 1. Obtener tokens (Gmail) ──────────────────────────────────────
     const { data: { session } } = await supabase.auth.getSession()
-    const providerToken = session?.provider_token ?? null
+    const providerToken        = session?.provider_token         ?? null
+    const providerRefreshToken = session?.provider_refresh_token ?? null
 
     // ── 2. Enviar email vía Gmail API ──────────────────────────────────
     const emailRes = await fetch('/api/clientes/email-cobro', {
@@ -1091,6 +1092,7 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
         asunto:        asunto.trim(),
         mensaje:       mensaje.trim(),
         providerToken,
+        providerRefreshToken,
         clienteNombre: clienteNombre,
         clienteCod:    clienteCod,
       }),
@@ -1195,9 +1197,10 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
     if (!para.trim()) { setError('Ingresá un correo destinatario'); return }
     setLoading(true); setError('')
 
-    // ── 1. Provider token ─────────────────────────────────────────
+    // ── 1. Tokens de Gmail ────────────────────────────────────────
     const { data: { session } } = await supabase.auth.getSession()
-    const providerToken = session?.provider_token ?? null
+    const providerToken        = session?.provider_token         ?? null
+    const providerRefreshToken = session?.provider_refresh_token ?? null
 
     // ── 2. Generar adjunto si corresponde ─────────────────────────
     let adjuntoData: { base64: string; mimeType: string; filename: string } | null = null
@@ -1248,13 +1251,14 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        cliente_cod:    clienteCod,
-        cliente_nombre: clienteNombre,
+        cliente_cod:           clienteCod,
+        cliente_nombre:        clienteNombre,
         contribuyente,
-        to_email:       para.trim(),
-        observaciones:  observaciones.trim() || undefined,
+        to_email:              para.trim(),
+        observaciones:         observaciones.trim() || undefined,
         providerToken,
-        adjunto:        adjuntoData,
+        providerRefreshToken,
+        adjunto:               adjuntoData,
       }),
     })
 

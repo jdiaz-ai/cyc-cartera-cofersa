@@ -241,7 +241,8 @@ export default function FormSolicitudNueva({
     setLoading(true); setError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const providerToken = session?.provider_token ?? null
+      const providerToken        = session?.provider_token         ?? null
+      const providerRefreshToken = session?.provider_refresh_token ?? null
 
       // ── Upload adjuntos a Supabase Storage ──────────────────────────
       // Mismo bucket y patrón que TabReportarPago:
@@ -287,6 +288,7 @@ export default function FormSolicitudNueva({
           responsable_email:      respEmail.trim(),
           observaciones_internas: observaciones.trim() || undefined,
           providerToken,
+          providerRefreshToken,
           datos: {
             // Facturas del sistema (multi-selección)
             facturas:            factCancelada ? null : (facturasSet.size > 0 ? Array.from(facturasSet) : null),
@@ -302,6 +304,12 @@ export default function FormSolicitudNueva({
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error ?? 'Error al crear la solicitud'); setLoading(false); return }
+      // Si el email falló, mostrar aviso pero igual marcar como éxito
+      if (d.email_error) {
+        setError(`Solicitud creada (${d.numero ?? ''}) pero el correo no pudo enviarse: ${d.email_error}`)
+        setLoading(false)
+        return
+      }
       setDone(true)
       setTimeout(() => volver(), 1000)
     } catch {

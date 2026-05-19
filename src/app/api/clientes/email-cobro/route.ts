@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient }             from '@/lib/supabase/server'
+import { resolveGmailToken }        from '@/lib/utils/gmail-token'
 
 /**
  * POST /api/clientes/email-cobro
@@ -13,23 +14,18 @@ export async function POST(req: NextRequest) {
     to?:            string
     asunto?:        string
     mensaje?:       string
-    providerToken?: string | null
+    providerToken?:        string | null
+    providerRefreshToken?: string | null
     clienteNombre?: string
     clienteCod?:    string
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { to, asunto, mensaje, providerToken, clienteNombre, clienteCod } = body
+  const { to, asunto, mensaje, providerToken, providerRefreshToken, clienteNombre, clienteCod } = body
 
   if (!to?.trim() || !asunto?.trim() || !mensaje?.trim()) {
     return NextResponse.json({ error: 'to, asunto y mensaje son requeridos' }, { status: 400 })
-  }
-  if (!providerToken) {
-    return NextResponse.json(
-      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },
-      { status: 401 },
-    )
   }
 
   const supabase = await createClient()
@@ -118,6 +114,15 @@ export async function POST(req: NextRequest) {
     .replace(/\//g, '_')
     .replace(/=+$/, '')
 
+  // ── Resolver token Gmail (renueva si expiró) ──────────────────────────
+  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+  if (!gmailToken) {
+    return NextResponse.json(
+      { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },
+      { status: 401 },
+    )
+  }
+
   // ── Gmail API ─────────────────────────────────────────────────────────
   try {
     const gmailRes = await fetch(
@@ -125,7 +130,7 @@ export async function POST(req: NextRequest) {
       {
         method:  'POST',
         headers: {
-          'Authorization': `Bearer ${providerToken}`,
+          'Authorization': `Bearer ${gmailToken}`,
           'Content-Type':  'application/json',
         },
         body: JSON.stringify({ raw: encodedEmail }),

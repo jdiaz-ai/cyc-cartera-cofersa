@@ -826,10 +826,11 @@ export default function ModalNuevaSolicitud({
     setError('')
 
     try {
-      // Obtener provider_token para Gmail API — viene de la sesión OAuth de Google
+      // Obtener tokens para Gmail API — viene de la sesión OAuth de Google
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
-      const providerToken = session?.provider_token ?? null
+      const providerToken        = session?.provider_token         ?? null
+      const providerRefreshToken = session?.provider_refresh_token ?? null
 
       const res = await fetch('/api/solicitudes', {
         method:  'POST',
@@ -847,6 +848,7 @@ export default function ModalNuevaSolicitud({
           monto_solicitado: datos['limite_solicitado']
             ? parseFloat(datos['limite_solicitado']) : undefined,
           providerToken,
+          providerRefreshToken,
         }),
       })
 
