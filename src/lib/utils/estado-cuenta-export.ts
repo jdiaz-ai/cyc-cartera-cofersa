@@ -269,28 +269,28 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'F')
 
-    // 2. Fill gris zona label (redondeado en la parte superior)
-    doc.setFillColor(241, 245, 249)   // #f1f5f9
+    // 2. Fill cyan zona label — color corporativo Cofersa
+    doc.setFillColor(0, 158, 227)   // #009ee3 cyan corporativo
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, LABEL_ZONE_H, RX, RX, 'F')
 
-    // 3. Cubrir los bordes redondeados inferiores del gris con blanco plano
+    // 3. Cubrir los bordes redondeados inferiores del cyan con blanco plano
     doc.setFillColor(255, 255, 255)
     doc.rect(x, y + LABEL_ZONE_H - RX, kpiW, RX + 0.1, 'F')
 
-    // 4. Borde exterior redondeado del card
-    doc.setDrawColor(226, 232, 240)   // #e2e8f0
+    // 4. Borde exterior redondeado del card — cyan corporativo
+    doc.setDrawColor(0, 158, 227)   // #009ee3 cyan
     doc.setLineWidth(0.2)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(doc as any).roundedRect(x, y, kpiW, KPI_H, RX, RX, 'D')
 
-    // 5. Línea divisora entre zonas (sin llegar a los bordes para que no se vea raro)
-    doc.setDrawColor(226, 232, 240)
+    // 5. Línea divisora entre zonas
+    doc.setDrawColor(0, 128, 192)   // #0080c0 ligeramente más oscuro
     doc.setLineWidth(0.15)
     doc.line(x + RX, y + LABEL_ZONE_H, x + kpiW - RX, y + LABEL_ZONE_H)
 
-    // Label centrado en zona gris
-    doc.setTextColor(100, 116, 139)   // #64748b gris slate
+    // Label centrado en zona cyan — texto blanco
+    doc.setTextColor(255, 255, 255)   // blanco sobre cyan
     doc.setFontSize(6)
     doc.setFont('helvetica', 'bold')
     doc.text(k.label, cx, y + 4.5, { align: 'center', maxWidth: kpiW - 6 })
@@ -324,7 +324,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
 
   // ─── DETALLE DE FACTURAS ─────────────────────────────────────────────
   y += 4   // espacio extra antes del título de la sección
-  doc.setTextColor(163, 163, 163)   // #A3A3A3 gris claro corporativo
+  doc.setTextColor(0, 59, 92)       // #003B5C navy corporativo Cofersa
   doc.setFontSize(7)
   doc.setFont('helvetica', 'bold')
   doc.text('DETALLE DE FACTURAS PENDIENTES', ML, y)
@@ -361,13 +361,13 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
       lineColor:   [226, 232, 240],  // #e2e8f0 gris claro
     },
     headStyles: {
-      fillColor:   [248, 250, 252],  // #f8fafc gris muy claro (como el HTML)
-      textColor:   [15, 28, 46],     // #0F1C2E casi negro
+      fillColor:   [0, 158, 227],    // #009ee3 cyan corporativo Cofersa
+      textColor:   [255, 255, 255],  // blanco
       fontStyle:   'bold',
       fontSize:    7,
       cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
       lineWidth:   0.15,
-      lineColor:   [226, 232, 240],
+      lineColor:   [0, 128, 192],    // #0080c0 ligeramente más oscuro
     },
     alternateRowStyles: {
       fillColor:   [248, 250, 252],  // filas alternadas en gris muy claro
