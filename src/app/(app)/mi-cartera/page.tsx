@@ -9,21 +9,21 @@ export interface CarteraRow {
   cliente_nombre:       string
   vendedor_nombre:      string
   mora_total:           number
-  dias_mora:            number    // cartera.dias_mora — días del tramo más antiguo
+  dias_mora:            number    // días del tramo más antiguo
   tramo_peor:           string
   ultima_gestion_fecha: string | null
   dias_sin_gestion:     number
   promesa_activa:       boolean
   promesa_fecha:        string | null
   promesa_monto:        number | null
-  score:                number     // para ordenar dentro del mismo nivel
+  score:                number     // 0-100 para ordenar
   prioridad:            'critico' | 'urgente' | 'seguimiento' | 'rutina'
   gestionado_hoy:       boolean
-  en_agenda:            boolean    // cumple alguna regla V1
-  motivo:               string     // texto explicativo generado
-  // ── Próxima acción (de la última gestión registrada) ──────────────
-  proxima_accion:       string | null   // 'esperar_pago' | 'recontactar' | 'escalar' | etc.
-  proxima_accion_fecha: string | null   // si es futura → cliente suprimido de la agenda
+  en_agenda:            boolean    // true = aparece en la cola del día
+  is_hard_include:      boolean    // inclusión fija — no desplazable por el tope
+  motivo:               string     // texto explicativo para el analista
+  proxima_accion:       string | null
+  proxima_accion_fecha: string | null
 }
 
 export interface KPIs {
@@ -33,7 +33,16 @@ export interface KPIs {
   sinGestion7d:    number
 }
 
-// ── Lógica V2: reglas de prioridad + supresión por próxima acción ───
+// ── Lógica V3: scoring ponderado + tope dinámico + exclusiones inteligentes ──
+// Pesos acordados: 40% monto | 35% días mora | 15% días sin gestión | 10% boost promesa
+// Mínimo mora: ₡100,000 | Tope diario: 30 (variable por hard includes)
+// Hard includes: promesa vencida, promesa hoy, mora +120d
+// Hard excludes: gestionado hoy, promesa vigente + gestión ≤ 3d, próxima acción futura
+
+const MORA_MINIMA      = 100_000   // ₡100K — por debajo no entra a la cola
+const LOG_MIN          = Math.log(MORA_MINIMA)
+const LOG_MAX          = Math.log(10_000_000)  // ₡10M = score monto máximo
+
 function calcularAgenda(p: {
   dias_mora:            number
   mora_total:           number
@@ -42,128 +51,122 @@ function calcularAgenda(p: {
   promesa_activa:       boolean
   promesa_fecha:        string | null
   promesa_monto:        number | null
-  proxima_accion_fecha: string | null   // de la última gestión registrada
+  proxima_accion_fecha: string | null
+  gestionado_hoy:       boolean
 }, hoy: string): {
-  en_agenda: boolean
-  prioridad:  CarteraRow['prioridad']
-  motivo:     string
-  score:      number
+  en_agenda:       boolean
+  is_hard_include: boolean
+  prioridad:       CarteraRow['prioridad']
+  motivo:          string
+  score:           number
 } {
   const hoyMs = new Date(hoy).getTime()
-  const dsg   = p.dias_sin_gestion === 999 ? 999 : p.dias_sin_gestion
+  const dsg   = p.dias_sin_gestion === 999 ? 30 : p.dias_sin_gestion  // 999 → trata como 30d
+
+  const OUT = (motivo = '') =>
+    ({ en_agenda: false, is_hard_include: false, prioridad: 'rutina' as const, score: 0, motivo })
 
   // ════════════════════════════════════════════════════════════════
-  // CRÍTICOS ABSOLUTOS — ignoran cualquier próxima acción programada
+  // INCLUSIONES FIJAS — siempre en cola sin importar el tope
   // ════════════════════════════════════════════════════════════════
 
-  // 1. Promesa vence HOY o ya venció
   if (p.promesa_activa && p.promesa_fecha) {
     const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
+    // Promesa rota (venció y no pagó)
     if (diasVenc > 0) {
       const montoStr = p.promesa_monto ? `${fmtCRC(p.promesa_monto)} ` : ''
       return {
-        en_agenda: true, prioridad: 'critico', score: 92,
-        motivo: `Promesa de ${montoStr}venció hace ${diasVenc} día${diasVenc !== 1 ? 's' : ''}`,
+        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 97,
+        motivo: `Promesa de ${montoStr}venció hace ${diasVenc}d — sin pago`,
       }
     }
+    // Promesa vence hoy
     if (diasVenc === 0) {
       return {
-        en_agenda: true, prioridad: 'critico', score: 93,
+        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 95,
         motivo: 'Promesa vence hoy — confirmar si pagó',
       }
     }
   }
 
-  // 2. Mora en tramo +120 días — siempre en cola
-  if (p.mora_120_plus > 0 || p.dias_mora > 120) {
+  // Mora en tramo +120 días
+  if ((p.mora_120_plus ?? 0) > 0 || p.dias_mora > 120) {
     return {
-      en_agenda: true, prioridad: 'critico', score: 85,
-      motivo: 'Mora supera 120 días — tramo crítico',
+      en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 92,
+      motivo: `Mora supera 120 días (${fmtCRC(p.mora_total)}) — crítico`,
     }
   }
 
   // ════════════════════════════════════════════════════════════════
-  // SUPRESIÓN: si la última gestión programó una próxima acción
-  // para una fecha futura, este cliente sale de la cola hasta ese día
-  // ════════════════════════════════════════════════════════════════
-  if (p.proxima_accion_fecha) {
-    const paMs = new Date(p.proxima_accion_fecha).getTime()
-    if (paMs > hoyMs) {
-      return { en_agenda: false, prioridad: 'rutina', score: 0, motivo: '' }
-    }
-  }
-
-  // ════════════════════════════════════════════════════════════════
-  // PRIORIDADES NORMALES (sin supresión activa)
+  // EXCLUSIONES — salen de la cola antes de cualquier scoring
   // ════════════════════════════════════════════════════════════════
 
-  // ── CRÍTICO ──────────────────────────────────────────────────────
-  // Mora > 90 días
-  if (p.dias_mora > 90) {
-    return {
-      en_agenda: true, prioridad: 'critico', score: 80,
-      motivo: 'Mora en tramo crítico +90 días',
-    }
-  }
-  // Sin gestión > 7d con mora > ₡500k
-  if (dsg > 7 && p.mora_total > 500_000) {
-    const d = dsg === 999 ? 'tiempo prolongado' : `${dsg} días`
-    return {
-      en_agenda: true, prioridad: 'critico', score: 75,
-      motivo: `Sin contacto hace ${d} con mora importante`,
-    }
-  }
+  // 1. Ya fue gestionado hoy
+  if (p.gestionado_hoy) return OUT()
 
-  // ── URGENTE ──────────────────────────────────────────────────────
-  // Mora 31–90 días
-  if (p.dias_mora >= 31 && p.dias_mora <= 90) {
-    const motivo = p.dias_mora <= 60
-      ? 'Mora en tramo 31-60 días'
-      : 'Mora en tramo 61-90 días'
-    return { en_agenda: true, prioridad: 'urgente', score: 65, motivo }
-  }
-  // Sin gestión > 5d con mora ₡200k–₡500k
-  if (dsg > 5 && p.mora_total > 200_000 && p.mora_total <= 500_000) {
-    const d = dsg === 999 ? 'tiempo prolongado' : `${dsg} días`
-    return {
-      en_agenda: true, prioridad: 'urgente', score: 60,
-      motivo: `Sin contacto hace ${d} con mora relevante`,
-    }
-  }
-
-  // ── SEGUIMIENTO ──────────────────────────────────────────────────
-  // Mora 1–30d con sin gestión > 3d
-  if (p.dias_mora >= 1 && p.dias_mora <= 30 && dsg > 3) {
-    const d = dsg === 999 ? 'varios días' : `${dsg} días`
-    return {
-      en_agenda: true, prioridad: 'seguimiento', score: 45,
-      motivo: `Primer vencimiento — sin contacto hace ${d}`,
-    }
-  }
-  // Promesa activa que vence en ≤ 3 días (pero no hoy ni vencida — ya capturado arriba)
+  // 2. Promesa vigente (futura) + gestión en los últimos 3 días — no molestar
   if (p.promesa_activa && p.promesa_fecha) {
     const diasParaPromesa = Math.floor(
       (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
     )
-    if (diasParaPromesa >= 1 && diasParaPromesa <= 3) {
-      return {
-        en_agenda: true, prioridad: 'seguimiento', score: 40,
-        motivo: `Promesa vence en ${diasParaPromesa} día${diasParaPromesa !== 1 ? 's' : ''} — confirmar estado`,
-      }
-    }
+    if (diasParaPromesa > 0 && dsg <= 3) return OUT()
   }
 
-  // ── RUTINA ───────────────────────────────────────────────────────
-  if (p.mora_total === 0 && dsg > 15) {
-    const d = dsg === 999 ? 'más de 15 días' : `${dsg} días`
-    return {
-      en_agenda: true, prioridad: 'rutina', score: 20,
-      motivo: `Sin contacto preventivo hace ${d}`,
-    }
+  // 3. Próxima acción programada para fecha futura
+  if (p.proxima_accion_fecha) {
+    if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
   }
 
-  // No cumple ningún criterio → fuera de la agenda
-  return { en_agenda: false, prioridad: 'rutina', score: 0, motivo: '' }
+  // 4. Mora por debajo del mínimo operativo
+  if (p.mora_total < MORA_MINIMA) return OUT()
+
+  // ════════════════════════════════════════════════════════════════
+  // SCORING PONDERADO 0–100
+  // 40% monto en mora | 35% días mora | 15% días sin gestión | 10% promesa próxima
+  // ════════════════════════════════════════════════════════════════
+
+  const montoScore  = Math.min(1, Math.max(0,
+    (Math.log(Math.max(p.mora_total, MORA_MINIMA)) - LOG_MIN) / (LOG_MAX - LOG_MIN),
+  ))
+  const moraScore   = Math.min(1, p.dias_mora / 120)
+  const gestionScore = Math.min(1, dsg / 30)
+
+  let promesaBoost = 0
+  if (p.promesa_activa && p.promesa_fecha) {
+    const dias = Math.floor((new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000)
+    if (dias <= 3)  promesaBoost = 1.0
+    else if (dias <= 7)  promesaBoost = 0.7
+    else if (dias <= 14) promesaBoost = 0.4
+  }
+
+  const score = Math.min(89, Math.max(1, Math.round(
+    (0.40 * montoScore + 0.35 * moraScore + 0.15 * gestionScore + 0.10 * promesaBoost) * 100,
+  )))
+
+  // Prioridad y motivo derivados del score
+  let prioridad: CarteraRow['prioridad']
+  let motivo: string
+
+  if (score >= 65) {
+    prioridad = 'critico'
+    motivo = p.dias_mora > 90
+      ? `Mora +${p.dias_mora}d (${fmtCRC(p.mora_total)}) — acción urgente`
+      : `Alta exposición: ${fmtCRC(p.mora_total)} en mora`
+  } else if (score >= 40) {
+    prioridad = 'urgente'
+    motivo = p.dias_mora >= 31
+      ? `Mora ${p.dias_mora}d — ${fmtCRC(p.mora_total)} pendiente`
+      : `${fmtCRC(p.mora_total)} en mora — sin gestión reciente`
+  } else if (score >= 15) {
+    prioridad = 'seguimiento'
+    const dsgLabel = p.dias_sin_gestion === 999 ? 'sin gestiones previas' : `${dsg}d sin contacto`
+    motivo = `${fmtCRC(p.mora_total)} — ${dsgLabel}`
+  } else {
+    prioridad = 'rutina'
+    motivo = `${fmtCRC(p.mora_total)} — seguimiento preventivo`
+  }
+
+  return { en_agenda: true, is_hard_include: false, prioridad, score, motivo }
 }
 
 // ── Constantes ───────────────────────────────────────────────────────
@@ -309,7 +312,9 @@ export default async function MiCarteraPage() {
     const proxima_accion      = proxInfo?.accion ?? null
     const proxima_accion_fecha= proxInfo?.fecha  ?? null
 
-    const { en_agenda, prioridad, motivo, score } = calcularAgenda({
+    const gestionado_hoy = ultima === hoy
+
+    const { en_agenda, is_hard_include, prioridad, motivo, score } = calcularAgenda({
       dias_mora:            c.dias_mora    || 0,
       mora_total,
       mora_120_plus:        c.mora_120_plus || 0,
@@ -318,6 +323,7 @@ export default async function MiCarteraPage() {
       promesa_fecha,
       promesa_monto,
       proxima_accion_fecha,
+      gestionado_hoy,
     }, hoy)
 
     return {
@@ -334,18 +340,32 @@ export default async function MiCarteraPage() {
       promesa_monto,
       score,
       prioridad,
-      gestionado_hoy:       ultima === hoy,
+      gestionado_hoy,
       en_agenda,
+      is_hard_include,
       motivo,
       proxima_accion,
       proxima_accion_fecha,
     }
   })
 
-  // Orden global: score desc → mora_total desc
+  // ── Orden global: score desc → mora_total desc ────────────────────
   rows.sort((a, b) =>
     b.score !== a.score ? b.score - a.score : b.mora_total - a.mora_total
   )
+
+  // ── Tope dinámico de la cola: ~30 por día ────────────────────────
+  // Hard includes (promesas vencidas/hoy, mora +120d) siempre aparecen.
+  // Del resto, solo entran los mejor puntuados hasta completar el cupo.
+  const TOPE_DIARIO = 30
+  const hardCods    = new Set(rows.filter(r => r.is_hard_include).map(r => r.cliente_cod))
+  const candidatos  = rows.filter(r => r.en_agenda && !r.is_hard_include)
+  const cupo        = Math.max(0, TOPE_DIARIO - hardCods.size)
+  const enCola      = new Set([
+    ...hardCods,
+    ...candidatos.slice(0, cupo).map(r => r.cliente_cod),
+  ])
+  rows.forEach(r => { if (!enCola.has(r.cliente_cod)) r.en_agenda = false })
 
   const kpis: KPIs = {
     moraTotal:       rows.reduce((s, r) => s + r.mora_total, 0),
