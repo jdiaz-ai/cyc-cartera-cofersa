@@ -326,9 +326,8 @@ export default function MiCarteraView({ rows, kpis }: Props) {
 // BRIEFING BANNER — resumen del día + barra de progreso
 // ══════════════════════════════════════════════════════════════════════════════
 function BriefingBanner({
-  cuentaPri, gestionadosHoy, pendientes,
+  gestionadosHoy, pendientes,
 }: {
-  cuentaPri:     Record<Prioridad, number>
   gestionadosHoy: number
   pendientes:    number
 }) {
@@ -339,44 +338,20 @@ function BriefingBanner({
 
   return (
     <div
-      className="rounded-xl border px-4 py-3 space-y-2.5"
+      className="rounded-xl border px-4 py-3 space-y-2"
       style={{ backgroundColor: 'white', borderColor: '#e2e8f0', borderWidth: '0.5px' }}
     >
-      {/* Fila superior: fecha + badges de urgencia + contador */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[13px] font-bold text-gray-700">
-            Agenda · {fecha}
-          </span>
-          {cuentaPri.critico > 0 && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-              style={{ backgroundColor: 'rgba(220,38,38,0.1)', color: '#dc2626' }}
-            >
-              {cuentaPri.critico} crítico{cuentaPri.critico !== 1 ? 's' : ''}
-            </span>
-          )}
-          {cuentaPri.urgente > 0 && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-              style={{ backgroundColor: 'rgba(249,115,22,0.1)', color: '#f97316' }}
-            >
-              {cuentaPri.urgente} urgente{cuentaPri.urgente !== 1 ? 's' : ''}
-            </span>
-          )}
-          {cuentaPri.seguimiento > 0 && (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-              style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#ca8a04' }}
-            >
-              {cuentaPri.seguimiento} seguimiento
-            </span>
-          )}
-        </div>
-        <span className="text-[12px] font-semibold text-gray-500 whitespace-nowrap">
-          {gestionadosHoy > 0
-            ? `${gestionadosHoy} de ${totalAgenda} gestionados · ${pct}%`
-            : `${totalAgenda} pendiente${totalAgenda !== 1 ? 's' : ''} hoy`}
+      {/* Fila: fecha · progreso del día */}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] font-bold text-gray-700">
+          Agenda · {fecha}
+        </span>
+        <span className="text-[12px] font-semibold whitespace-nowrap" style={{ color: barColor }}>
+          {pct === 100
+            ? '¡Agenda completada! ✓'
+            : gestionadosHoy > 0
+              ? `${gestionadosHoy} de ${totalAgenda} gestionados`
+              : `${pendientes} pendiente${pendientes !== 1 ? 's' : ''} hoy`}
         </span>
       </div>
 
@@ -436,7 +411,6 @@ function AgendaTab({
 
       {/* ── Briefing del día ─────────────────────────────────────── */}
       <BriefingBanner
-        cuentaPri      = {cuentaPri}
         gestionadosHoy = {hoyRows.length}
         pendientes     = {totalActivos}
       />
@@ -1086,19 +1060,22 @@ function KpiCard({
   const displayColor = muted ? '#d1d5db' : color
   return (
     <div
-      className="bg-white rounded-xl border shadow-sm px-4 py-3"
+      className="bg-white rounded-xl border shadow-sm px-4 py-4 flex flex-col items-center text-center"
       style={{ borderColor: '#e2e8f0', borderWidth: '0.5px' }}
     >
-      <div className="flex items-center justify-between mb-2">
+      {/* Ícono + label centrados en la misma línea */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span style={{ color: displayColor }}>{icon}</span>
         <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider leading-tight">
           {label}
         </span>
-        <span style={{ color: displayColor }}>{icon}</span>
       </div>
-      <p className="text-[20px] font-bold tabular-nums leading-tight" style={{ color: displayColor }}>
+      {/* Valor principal centrado */}
+      <p className="text-[22px] font-bold tabular-nums leading-tight" style={{ color: displayColor }}>
         {valor}
       </p>
-      <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>
+      {/* Sub-texto centrado */}
+      <p className="text-[11px] text-gray-400 mt-1">{sub}</p>
     </div>
   )
 }
