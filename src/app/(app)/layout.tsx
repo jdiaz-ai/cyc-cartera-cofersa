@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/sidebar'
-import type { BadgeCounts } from '@/components/sidebar'
 import Topbar from '@/components/topbar'
 import ClientWrapper from '@/components/layout/client-wrapper'
 import type { Usuario, Notificacion } from '@/types/database'
@@ -62,40 +61,15 @@ export default async function AppLayout({
 
   const notiCount = notificaciones.filter(n => !n.leida).length
 
-  // Badges de navegación para el ANALISTA
-  const badgeCounts: BadgeCounts = {}
-  if (perfil.rol === 'ANALISTA' && user.email) {
-    try {
-      const hoy = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-
-      // Gestiones registradas HOY por este analista
-      const { count: gHoy } = await supabase
-        .from('gestiones')
-        .select('*', { count: 'exact', head: true })
-        .eq('analista_email', user.email)
-        .eq('fecha', hoy)
-      badgeCounts.gestionesHoy = gHoy ?? 0
-
-      // Promesas vencidas o que vencen hoy (pendientes)
-      const { count: pVencidas } = await supabase
-        .from('promesas')
-        .select('*', { count: 'exact', head: true })
-        .eq('analista_email', user.email)
-        .eq('estado', 'PENDIENTE')
-        .lte('fecha_promesa', hoy)
-      badgeCounts.promesasVencidas = pVencidas ?? 0
-
-      // Solicitudes propias en estado PENDIENTE
-      if (usuarioId) {
-        const { count: sPend } = await supabase
-          .from('solicitudes')
-          .select('*', { count: 'exact', head: true })
-          .eq('solicitante_id', usuarioId)
-          .eq('estado', 'PENDIENTE')
-        badgeCounts.solicitudesPendientes = sPend ?? 0
-      }
-    } catch { /* badges no críticos */ }
-  }
+  // Total de usuarios activos (para el indicador de presencia del chat)
+  let totalEquipo = 5 // fallback — 5 miembros del equipo C&C
+  try {
+    const { count } = await supabase
+      .from('usuarios')
+      .select('*', { count: 'exact', head: true })
+      .eq('activo', true)
+    if (count) totalEquipo = count
+  } catch { /* fallback al valor hardcodeado */ }
 
   // Avatar URL desde Google OAuth (metadata del user)
   const avatarUrl: string | null = user.user_metadata?.avatar_url ?? null
@@ -123,7 +97,6 @@ export default async function AppLayout({
         usuario={perfil}
         notificaciones={notificaciones}
         usuarioId={usuarioId}
-        badgeCounts={badgeCounts}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar
@@ -137,7 +110,13 @@ export default async function AppLayout({
           avatarUrl={avatarUrl}
         />
         <main className="flex-1 overflow-y-auto">
-          <ClientWrapper>{children}</ClientWrapper>
+          <ClientWrapper
+            usuarioId={usuarioId}
+            nombre={perfil.nombre}
+            iniciales={perfil.iniciales}
+            color={perfil.color}
+            totalEquipo={totalEquipo}
+          >{children}</ClientWrapper>
         </main>
         <footer
           className="text-center shrink-0"

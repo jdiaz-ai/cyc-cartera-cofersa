@@ -91,6 +91,15 @@ export default function Topbar({
   const notiRef                 = useRef<HTMLDivElement>(null)
   const noLeidas                = notis.filter(n => !n.leida).length
 
+  // Tab activo para filtrar notificaciones
+  type TabNotif = 'todas' | TipoNotif
+  const [tabNotif, setTabNotif] = useState<TabNotif>('todas')
+
+  // Notificaciones filtradas según tab activo
+  const notisFiltradas = tabNotif === 'todas'
+    ? notis
+    : notis.filter(n => n.tipo === tabNotif)
+
   // ── Estado: dropdown usuario ──────────────────────────────────
   const [userOpen, setUserOpen] = useState(false)
   const userRef                 = useRef<HTMLDivElement>(null)
@@ -107,6 +116,30 @@ export default function Topbar({
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  // ── Suscripción Realtime: nuevas notificaciones llegan en vivo ────
+  useEffect(() => {
+    if (!usuarioId) return
+
+    const supabase = createClient()
+    const channel  = supabase
+      .channel(`notificaciones:${usuarioId}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'notificaciones',
+          filter: `usuario_id=eq.${usuarioId}`,
+        },
+        (payload) => {
+          setNotis(prev => [payload.new as Notificacion, ...prev])
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [usuarioId])
 
   // ── Marcar una notificación como leída ────────────────────────
   async function marcarLeida(id: string) {
@@ -238,8 +271,37 @@ export default function Topbar({
                 )}
               </div>
 
+              {/* Tabs de filtro */}
+              <div className="flex gap-1 px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid #f1f5f9' }}>
+                {(
+                  [
+                    { key: 'todas',     label: 'Todas'       },
+                    { key: 'PROMESA',   label: 'Promesas'    },
+                    { key: 'ALERTA',    label: 'Alertas'     },
+                    { key: 'SOLICITUD', label: 'Solicitudes' },
+                  ] as { key: TabNotif; label: string }[]
+                ).map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTabNotif(t.key)}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors"
+                    style={{
+                      background: tabNotif === t.key ? 'rgba(0,158,227,0.12)' : 'transparent',
+                      color:      tabNotif === t.key ? '#009ee3'              : '#94a3b8',
+                    }}
+                  >
+                    {t.label}
+                    {t.key !== 'todas' && (
+                      <span className="ml-1" style={{ opacity: 0.7 }}>
+                        {notis.filter(n => n.tipo === t.key && !n.leida).length || ''}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
               <div className="overflow-y-auto flex-1">
-                {notis.length === 0 ? (
+                {notisFiltradas.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center mb-3"
@@ -251,7 +313,7 @@ export default function Topbar({
                     <p className="text-[11px] text-gray-400 mt-1">Todo al día por ahora.</p>
                   </div>
                 ) : (
-                  notis.map((n, i) => {
+                  notisFiltradas.map((n, i) => {
                     const cfg = TIPO_CFG[n.tipo] ?? {
                       icon: <Info size={13} />, color: '#64748b', bg: '#f1f5f9',
                     }
@@ -261,7 +323,7 @@ export default function Topbar({
                         onClick={() => handleNotiClick(n)}
                         className="w-full flex items-start gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
                         style={{
-                          borderBottom:    i < notis.length - 1 ? '1px solid #f8fafc' : 'none',
+                          borderBottom:    i < notisFiltradas.length - 1 ? '1px solid #f8fafc' : 'none',
                           backgroundColor: n.leida ? 'transparent' : '#f8fbff',
                         }}
                       >

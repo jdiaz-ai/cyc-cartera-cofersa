@@ -216,6 +216,29 @@ export interface Notificacion {
   created_at: string
 }
 
+// ── Chat interno ──────────────────────────────────────────────────────
+
+export interface MensajeChat {
+  id:         string
+  usuario_id: string
+  mensaje:    string
+  created_at: string
+}
+
+/** MensajeChat con los datos del remitente ya incluidos (resultado del join) */
+export interface MensajeChatConUsuario extends MensajeChat {
+  usuario: Pick<Usuario, 'nombre' | 'iniciales' | 'color'> | null
+}
+
+/** Estado de presencia de un miembro en el canal de chat */
+export interface PresenciaChat {
+  usuario_id: string
+  nombre:     string
+  iniciales:  string
+  color:      string
+  online_at:  string
+}
+
 export interface NotaRapida {
   id: string
   usuario_id: string
@@ -241,6 +264,7 @@ export type Database = {
       coordinaciones_vendedor: { Row: CoordinacionVendedor; Insert: Partial<CoordinacionVendedor>; Update: Partial<CoordinacionVendedor> }
       notificaciones:          { Row: Notificacion;         Insert: Partial<Notificacion>;         Update: Partial<Notificacion> }
       notas_rapidas:           { Row: NotaRapida;           Insert: Partial<NotaRapida>;           Update: Partial<NotaRapida> }
+      mensajes_chat:           { Row: MensajeChat;          Insert: Partial<MensajeChat>;          Update: Partial<MensajeChat> }
       solicitud_comentarios:        { Row: SolicitudComentario;       Insert: Partial<SolicitudComentario>;       Update: Partial<SolicitudComentario> }
       solicitud_historial_estados:  { Row: SolicitudHistorialEstado;  Insert: Partial<SolicitudHistorialEstado>;  Update: Partial<SolicitudHistorialEstado> }
     }
