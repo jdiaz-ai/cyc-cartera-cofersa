@@ -10,33 +10,58 @@ export default function LoginPage() {
   const [showEmail, setShowEmail] = useState(false)
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
+  const [loginHint, setLoginHint] = useState<string | null>(null)
+  // needsInteraction = true cuando prompt:none falló (Google lo requirió)
+  const [needsInteraction, setNeedsInteraction] = useState(false)
+
+  // ── Al montar: leer cookie con el email del último login ─────
+  // y detectar si venimos de un fallo de silent auth (prompt:none)
+  useState(() => {
+    if (typeof window === 'undefined') return
+    // Cookie sic_login_hint guardada en el callback tras login exitoso
+    const match = document.cookie.match(/(?:^|;\s*)sic_login_hint=([^;]+)/)
+    if (match) setLoginHint(decodeURIComponent(match[1]))
+    // Si Google devolvió interaction_required desde prompt:none, activamos
+    // el modo interactivo para que el siguiente clic muestre select_account
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('needs_interaction')) setNeedsInteraction(true)
+  })
 
   // ── Google OAuth ──────────────────────────────────────────────
   async function handleGoogleLogin() {
     setLoading(true)
     setError(null)
     const supabase = createClient()
+
+    // Parámetros base — access_type:offline es crítico para el refresh_token
+    const queryParams: Record<string, string> = { access_type: 'offline' }
+
+    if (loginHint && !needsInteraction) {
+      // Silent login: Google autentica directamente sin mostrar ninguna pantalla.
+      // Si la sesión de Google sigue activa, el usuario llega al dashboard con 1 clic.
+      // Si falla (sesión expirada), Google redirige con error=interaction_required
+      // y el callback nos devuelve aquí con ?needs_interaction=1 para reintentar.
+      queryParams.login_hint = loginHint
+      queryParams.prompt     = 'none'
+    } else {
+      // Primera vez o fallback: muestra el selector de cuenta de Google.
+      queryParams.prompt = 'select_account'
+      // Resetear para que el próximo intento vuelva a ser silencioso
+      if (needsInteraction) setNeedsInteraction(false)
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        // Scopes adicionales para Gmail (envío) y Calendar (eventos)
+        // Scopes para Gmail (envío) y Calendar (eventos)
         scopes: [
           'email',
           'profile',
           'https://www.googleapis.com/auth/gmail.send',
           'https://www.googleapis.com/auth/calendar.events',
         ].join(' '),
-        queryParams: {
-          // 'offline' es crítico: sin él Google no emite refresh_token
-          // y el provider_token expira en 1 hora sin posibilidad de renovarlo
-          access_type: 'offline',
-          // 'select_account' muestra el selector de cuenta pero NO la pantalla de
-          // permisos en cada login. El refresh_token se persiste en usuarios.google_refresh_token
-          // (en auth/callback) la primera vez que Google lo entrega, y se reutiliza
-          // en sesiones futuras vía resolveGmailToken → fallback a BD.
-          prompt: 'select_account',
-        },
+        queryParams,
       },
     })
     if (error) {
