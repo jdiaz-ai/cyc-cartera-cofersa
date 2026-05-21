@@ -156,6 +156,11 @@ export default function FichaCliente({
   const [modalEmail,        setModalEmail]        = useState(false)
   const [modalEdoCta,       setModalEdoCta]       = useState(false)
   const [toast,             setToast]             = useState('')
+  // maestroLocal: copia mutable de maestro para reflejar ediciones inline
+  // sin recargar la página. Se actualiza vía onMaestroUpdate para que
+  // TabInformacion (que se desmonta al cambiar de tab) reciba los valores
+  // correctos al volver a montarse.
+  const [maestroLocal,      setMaestroLocal]      = useState<MaestroCliente | null>(maestro)
   const [estadoLocal,       setEstadoLocal]       = useState(maestro?.estado_manual ?? 'Normal')
   const [estadoPendiente,   setEstadoPendiente]   = useState<string | null>(null)   // estado elegido pero sin confirmar
   const [loadingEstado,     setLoadingEstado]     = useState(false)
@@ -499,7 +504,7 @@ export default function FichaCliente({
         {tab === 'Información' && (
           <TabInformacion
             cartera        = {cartera}
-            maestro        = {maestro}
+            maestro        = {maestroLocal}
             analistaNombre = {analistaNombre}
             esCoordinador  = {esCoordinador}
             mora_total     = {mora_total}
@@ -507,6 +512,7 @@ export default function FichaCliente({
             onToast        = {showToast}
             onVerTramo     = {(label) => { setFiltroTramoEdoCta(label); setTab('Estado de Cuenta') }}
             onVerEdoCta    = {() => { setFiltroTramoEdoCta('Todos'); setTab('Estado de Cuenta') }}
+            onMaestroUpdate= {(updates) => setMaestroLocal(prev => prev ? { ...prev, ...updates } : prev)}
           />
         )}
 
@@ -674,7 +680,7 @@ export default function FichaCliente({
 // ══════════════════════════════════════════════════════════════════════
 // TAB INFORMACIÓN
 // ══════════════════════════════════════════════════════════════════════
-function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_total, pct_mora, onToast, onVerTramo, onVerEdoCta }: {
+function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_total, pct_mora, onToast, onVerTramo, onVerEdoCta, onMaestroUpdate }: {
   cartera:        Cartera
   maestro:        MaestroCliente | null
   analistaNombre: string
@@ -684,6 +690,7 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
   onToast:        (msg: string) => void
   onVerTramo:     (label: string) => void
   onVerEdoCta:    () => void
+  onMaestroUpdate:(updates: Partial<MaestroCliente>) => void
 }) {
   // Estado de edición por campo
   type CampoEditable = 'nombre_cxp' | 'telefono' | 'telefono2' | 'correo'
@@ -716,8 +723,15 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
       body: JSON.stringify({ cliente_cod: cartera.cliente_cod, [campo]: valorMap[campo] }),
     })
     setSaving(false)
-    if (res.ok) { setEditando(null); onToast('Guardado correctamente') }
-    else         { onToast('Error al guardar') }
+    if (res.ok) {
+      setEditando(null)
+      onToast('Guardado correctamente')
+      // Actualizar la copia local de maestro en FichaCliente para que si el usuario
+      // cambia de tab y vuelve, TabInformacion se remonte con los valores nuevos.
+      onMaestroUpdate({ [campo]: valorMap[campo] } as Partial<MaestroCliente>)
+    } else {
+      onToast('Error al guardar')
+    }
   }
 
   function cancelar(campo: CampoEditable) {
