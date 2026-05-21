@@ -72,7 +72,7 @@ function calcularAgenda(p: {
 
   if (p.promesa_activa && p.promesa_fecha) {
     const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
-    // Promesa rota (venció y no pagó)
+    // Promesa incumplida (venció y no pagó)
     if (diasVenc > 0) {
       const montoStr = p.promesa_monto ? `${fmtCRC(p.promesa_monto)} ` : ''
       return {
