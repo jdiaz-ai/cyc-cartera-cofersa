@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     let emailTo:   string | null = null
     let emailError: string | null = null
 
-    const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+    const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken, user?.email)
     if (gmailToken) {
       const { data: solRow } = await supabase
         .from('usuarios').select('nombre').eq('id', solicitanteId).single()
@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
   // ════════════════════════════════════════════════════════════════════
 
   // Resolver token Gmail ANTES del INSERT — si no hay token válido, rechazar.
-  const gmailTokenLegacy = await resolveGmailToken(providerToken, providerRefreshToken)
+  const gmailTokenLegacy = await resolveGmailToken(providerToken, providerRefreshToken, user?.email)
   if (!gmailTokenLegacy) {
     return NextResponse.json(
       { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar para renovar el acceso.' },

@@ -6,9 +6,9 @@
  * El `provider_token` (access_token de Google) dura exactamente 1 hora.
  * Supabase NO lo renueva automáticamente. Esta utilidad:
  *   1. Devuelve el `provider_token` si aún es válido.
- *   2. Si es null/expirado, usa el `provider_refresh_token` (de larga duración)
- *      para obtener uno nuevo vía Google OAuth, sin que el usuario tenga que
- *      cerrar sesión.
+ *   2. Si es null/expirado, usa el `provider_refresh_token` de la sesión.
+ *   3. Si tampoco está en sesión (login sin prompt=consent), lo busca en
+ *      la tabla `usuarios.google_refresh_token` donde se persistió la primera vez.
  *
  * Requiere en env:
  *   GOOGLE_CLIENT_ID     — mismo que configuraste en Supabase → Auth → Google
@@ -26,18 +26,43 @@ interface TokenResponse {
  *
  * @param providerToken        session?.provider_token        (puede ser null)
  * @param providerRefreshToken session?.provider_refresh_token (puede ser null)
+ * @param userEmail            email del usuario autenticado, para buscar el
+ *                             refresh token persistido en la BD si la sesión
+ *                             no lo trae (logins sin prompt=consent).
  */
 export async function resolveGmailToken(
   providerToken:        string | null | undefined,
   providerRefreshToken: string | null | undefined,
+  userEmail?:           string | null,
 ): Promise<string | null> {
   // ── 1. Token vigente → usarlo directamente ───────────────────────
   if (providerToken) return providerToken
 
-  // ── 2. Sin refresh token → imposible renovar ─────────────────────
-  if (!providerRefreshToken) return null
+  // ── 2. Refresh token de la sesión → intentar renovar ────────────
+  let refreshToken = providerRefreshToken ?? null
 
-  // ── 3. Verificar credenciales de la app disponibles ──────────────
+  // ── 3. Sin refresh en sesión → buscar el persistido en la BD ────
+  if (!refreshToken && userEmail) {
+    try {
+      const { createClient } = await import('@/lib/supabase/server')
+      const supabase = await createClient()
+      const { data } = await supabase
+        .from('usuarios')
+        .select('google_refresh_token')
+        .ilike('email', userEmail)
+        .limit(1)
+        .single()
+      refreshToken = (data as { google_refresh_token?: string | null } | null)
+        ?.google_refresh_token ?? null
+    } catch {
+      // Fallo silencioso — continuamos sin refresh token
+    }
+  }
+
+  // ── 4. Sin refresh token por ninguna vía → imposible renovar ────
+  if (!refreshToken) return null
+
+  // ── 5. Verificar credenciales de la app disponibles ─────────────
   const clientId     = process.env.GOOGLE_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -45,7 +70,7 @@ export async function resolveGmailToken(
     return null
   }
 
-  // ── 4. Llamar a Google para renovar el access_token ──────────────
+  // ── 6. Llamar a Google para renovar el access_token ─────────────
   try {
     const res = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -53,7 +78,7 @@ export async function resolveGmailToken(
       body: new URLSearchParams({
         client_id:     clientId,
         client_secret: clientSecret,
-        refresh_token: providerRefreshToken,
+        refresh_token: refreshToken,
         grant_type:    'refresh_token',
       }).toString(),
     })

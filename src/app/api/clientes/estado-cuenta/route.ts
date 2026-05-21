@@ -408,7 +408,7 @@ export async function POST(req: NextRequest) {
 </html>`
 
   // ── Resolver token Gmail (renueva automáticamente si expiró) ─────────
-  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken, user?.email)
   if (!gmailToken) {
     return NextResponse.json(
       { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },

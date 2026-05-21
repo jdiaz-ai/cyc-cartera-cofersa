@@ -31,10 +31,11 @@ export default function LoginPage() {
           // 'offline' es crítico: sin él Google no emite refresh_token
           // y el provider_token expira en 1 hora sin posibilidad de renovarlo
           access_type: 'offline',
-          // 'consent' fuerza a Google a re-emitir el refresh_token en cada login.
-          // Necesario para usuarios que autorizaron la app antes de configurar offline.
-          // Sin esto, provider_refresh_token es null y el envío de correo falla tras 1h.
-          prompt: 'consent',
+          // 'select_account' muestra el selector de cuenta pero NO la pantalla de
+          // permisos en cada login. El refresh_token se persiste en usuarios.google_refresh_token
+          // (en auth/callback) la primera vez que Google lo entrega, y se reutiliza
+          // en sesiones futuras vía resolveGmailToken → fallback a BD.
+          prompt: 'select_account',
         },
       },
     })

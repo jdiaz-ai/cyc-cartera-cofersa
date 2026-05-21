@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     .replace(/=+$/, '')
 
   // ── Resolver token Gmail (renueva si expiró) ──────────────────────────
-  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken)
+  const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken, user?.email)
   if (!gmailToken) {
     return NextResponse.json(
       { error: 'Sesión de Google expirada. Cerrá sesión y volvé a ingresar.' },
