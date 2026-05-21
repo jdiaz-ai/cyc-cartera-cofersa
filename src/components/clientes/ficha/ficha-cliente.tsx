@@ -2205,7 +2205,7 @@ function TabGestiones({
         type="button"
         onClick={onNuevaGestion}
         title="Registrar una nueva gestión (llamada, email, visita, etc.)"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        className="fixed bottom-16 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
         style={{ backgroundColor: '#009ee3', padding: '11px 18px', borderRadius: 22 }}
       >
         <Plus size={16} /> Nueva gestión
@@ -2262,7 +2262,7 @@ function TabSolicitudes({
           `/solicitudes/nueva?cliente_cod=${encodeURIComponent(clienteCod)}&origen=ficha`,
         )}
         title="Crear una nueva solicitud para este cliente"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
+        className="fixed bottom-16 right-6 z-40 flex items-center gap-2 text-[13px] font-bold text-white shadow-lg transition hover:opacity-90 active:scale-95"
         style={{ backgroundColor: '#009ee3', padding: '11px 18px', borderRadius: 22 }}>
         <Plus size={16} /> Nueva solicitud
       </button>
