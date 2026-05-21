@@ -114,6 +114,7 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
   const [texto,      setTexto]      = useState('')
   const [tieneNuevo, setTieneNuevo] = useState(false)
   const [enviando,   setEnviando]   = useState(false)
+  const [errorEnvio, setErrorEnvio] = useState(false)
   const endRef    = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
   const prevCount = useRef(0)
@@ -143,9 +144,16 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
     const t = texto.trim()
     if (!t || enviando) return
     setEnviando(true)
+    setErrorEnvio(false)
     setTexto('')
-    await enviarMensaje(t)
+    const ok = await enviarMensaje(t)
     setEnviando(false)
+    if (!ok) {
+      // Devolver el texto para que el usuario no lo pierda y sepa que falló
+      setTexto(t)
+      setErrorEnvio(true)
+      setTimeout(() => setErrorEnvio(false), 4000)
+    }
     inputRef.current?.focus()
   }
 
@@ -227,8 +235,14 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
           {/* Input */}
           <div style={{
             padding: '10px 10px 12px', borderTop: '1px solid #e2e8f0',
-            background: 'white', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
+            background: 'white', flexShrink: 0,
           }}>
+            {errorEnvio && (
+              <p style={{ fontSize: 10, color: '#dc2626', marginBottom: 6, textAlign: 'center' }}>
+                ⚠️ No se pudo enviar. Intentá de nuevo.
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               ref={inputRef}
               value={texto}
@@ -238,7 +252,8 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
               maxLength={1000}
               disabled={enviando}
               style={{
-                flex: 1, border: '1px solid #e2e8f0', borderRadius: 10,
+                flex: 1, borderRadius: 10,
+                border: errorEnvio ? '1px solid #dc2626' : '1px solid #e2e8f0',
                 padding: '8px 12px', fontSize: 12, outline: 'none',
                 fontFamily: 'inherit', color: '#1e293b',
               }}
@@ -258,6 +273,7 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
               <Send size={14} color={texto.trim() ? 'white' : '#94a3b8'} />
             </button>
           </div>
+        </div>
         </div>
       )}
 
