@@ -412,28 +412,76 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     promCount = count ?? 0
   } catch {}
 
-  // ── Cola del día — ordenada por urgencia ─────────────────────────────
-  const clientesGestionadosHoy = new Set(misGestiones.map(g => g.cliente_cod))
+  // ── Última gestión por cliente (últimos 60 días) — para cola dinámica ──
+  // Usamos esto para:
+  //   1. Excluir clientes gestionados HOY (ya atenidos, no repetir en cola)
+  //   2. Excluir clientes con proxima_accion_fecha > hoy (programados para futuro)
+  //   3. Ordenar por días sin gestión dentro del mismo nivel de urgencia
+  interface GestionFiltro { cliente_cod: string; fecha: string; proxima_accion_fecha: string | null }
+  let gestionesFiltro: GestionFiltro[] = []
+  try {
+    const hace60d = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('gestiones')
+      .select('cliente_cod, fecha, proxima_accion_fecha')
+      .eq('analista_email', userEmail)
+      .gte('fecha', hace60d)
+      .order('fecha', { ascending: false })
+      .order('hora', { ascending: false })
+    gestionesFiltro = (data ?? []) as GestionFiltro[]
+  } catch {}
+
+  // La gestión MÁS RECIENTE por cliente (el array ya viene ordenado desc)
+  const ultimaGestionMap = new Map<string, { fecha: string; proxima_accion_fecha: string | null }>()
+  for (const g of gestionesFiltro) {
+    if (!ultimaGestionMap.has(g.cliente_cod)) {
+      ultimaGestionMap.set(g.cliente_cod, { fecha: g.fecha, proxima_accion_fecha: g.proxima_accion_fecha })
+    }
+  }
+
+  // Set 1: clientes gestionados HOY → se excluyen de la cola (ya fueron atendidos)
+  const gestionadoHoySet = new Set(misGestiones.map(g => g.cliente_cod))
+
+  // Set 2: clientes cuya última gestión tiene proxima_accion_fecha en el futuro → no tocar hasta ese día
+  const tieneProximaFuturaSet = new Set<string>()
+  for (const [cod, ult] of ultimaGestionMap) {
+    if (ult.proxima_accion_fecha && ult.proxima_accion_fecha > hoyStr) {
+      tieneProximaFuturaSet.add(cod)
+    }
+  }
+
+  // Días sin gestión por cliente (para ordenamiento dinámico dentro del mismo nivel)
+  function diasSinGestion(cod: string): number {
+    const ult = ultimaGestionMap.get(cod)
+    if (!ult) return 999 // nunca gestionado → máxima prioridad dentro del nivel
+    return Math.round((Date.now() - new Date(ult.fecha).getTime()) / 86400000)
+  }
+
+  // ── Cola del día — dinámica, excluye gestionados hoy y programados a futuro ──
   const promesasHoySet = new Set(
     misPromesas.filter(p => p.fecha_promesa === hoyStr).map(p => p.cliente_cod)
   )
 
-  const cola = misRows.map(r => {
-    let urgencia: Urgencia = 'VERDE'
-    if ((r.mora_61_90 || 0) + (r.mora_91_120 || 0) + (r.mora_120_plus || 0) > 0
-        || promesasHoySet.has(r.cliente_cod)) {
-      urgencia = 'ROJO'
-    } else if ((r.mora_31_60 || 0) > 0) {
-      urgencia = 'AMARILLO'
-    }
-    return { ...r, urgencia, gestionadoHoy: clientesGestionadosHoy.has(r.cliente_cod) }
-  })
+  const cola = misRows
+    // Excluir: gestionado hoy O con próxima acción programada para fecha futura
+    .filter(r => !gestionadoHoySet.has(r.cliente_cod) && !tieneProximaFuturaSet.has(r.cliente_cod))
+    .map(r => {
+      let urgencia: Urgencia = 'VERDE'
+      if ((r.mora_61_90 || 0) + (r.mora_91_120 || 0) + (r.mora_120_plus || 0) > 0
+          || promesasHoySet.has(r.cliente_cod)) {
+        urgencia = 'ROJO'
+      } else if ((r.mora_31_60 || 0) > 0) {
+        urgencia = 'AMARILLO'
+      }
+      return { ...r, urgencia, gestionadoHoy: false }
+    })
     .sort((a, b) => {
       const ord: Record<Urgencia, number> = { ROJO: 0, AMARILLO: 1, VERDE: 2 }
       if (ord[a.urgencia] !== ord[b.urgencia]) return ord[a.urgencia] - ord[b.urgencia]
-      return (b.mora_61_90 + b.mora_91_120 + b.mora_120_plus) - (a.mora_61_90 + a.mora_91_120 + a.mora_120_plus)
+      // Dentro del mismo nivel: más días sin gestión primero → cola siempre cambia
+      return diasSinGestion(b.cliente_cod) - diasSinGestion(a.cliente_cod)
     })
-    .slice(0, 15)
+    .slice(0, 30)
 
   // ── Google Calendar — degrada elegantemente si el token no está ───────
   let calendarEvents: CalendarEvent[] = []
