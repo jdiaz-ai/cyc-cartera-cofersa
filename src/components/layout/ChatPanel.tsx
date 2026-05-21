@@ -117,7 +117,8 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
   const [errorEnvio, setErrorEnvio] = useState(false)
   const endRef    = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
-  const prevCount = useRef(0)
+  const prevCount    = useRef(-1) // -1 = carga inicial pendiente
+  const cargaLista   = useRef(false)
 
   const { mensajes, conectados, cargando, enviarMensaje } = useChat({ usuarioId, nombre, iniciales, color })
 
@@ -130,10 +131,20 @@ export default function ChatPanel({ usuarioId, nombre, iniciales, color, totalEq
   }, [abierto, mensajes.length])
 
   // Badge de nuevo mensaje cuando el panel está cerrado
+  // Solo cuenta mensajes que llegan DESPUÉS de la carga inicial
   useEffect(() => {
+    if (cargando) return // todavía cargando — no hacer nada
+
+    if (!cargaLista.current) {
+      // Primera vez que cargando pasa a false: fijar baseline sin activar NUEVO
+      prevCount.current = mensajes.length
+      cargaLista.current = true
+      return
+    }
+
     if (!abierto && mensajes.length > prevCount.current) setTieneNuevo(true)
     prevCount.current = mensajes.length
-  }, [mensajes.length, abierto])
+  }, [mensajes.length, abierto, cargando])
 
   function necesitaSeparador(i: number): boolean {
     if (i === 0) return true
