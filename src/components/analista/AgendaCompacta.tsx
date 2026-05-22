@@ -22,7 +22,7 @@ function labelDia(ymd: string): string {
 }
 
 type ItemAgenda =
-  | { tipo: 'gestion'; id: string; cliente_cod: string; accion: string; fecha: string }
+  | { tipo: 'gestion'; id: string; cliente_cod: string; clienteNombre: string; accionLabel: string; proxima_accion: string; fecha: string }
   | { tipo: 'promesa'; id: string; cliente: string; monto: number; fecha: string }
 
 export default function AgendaCompacta({ gestiones, promesas, hoyStr }: Props) {
@@ -31,7 +31,15 @@ export default function AgendaCompacta({ gestiones, promesas, hoyStr }: Props) {
   function buildItems(fecha: string): ItemAgenda[] {
     const items: ItemAgenda[] = []
     for (const g of gestiones.filter(x => x.proxima_accion_fecha === fecha)) {
-      items.push({ tipo: 'gestion', id: g.id, cliente_cod: g.cliente_cod, accion: g.proxima_accion, fecha })
+      items.push({
+        tipo: 'gestion',
+        id: g.id,
+        cliente_cod: g.cliente_cod,
+        clienteNombre: g.cliente_nombre ?? g.cliente_cod,
+        accionLabel:   g.accion_label   ?? g.proxima_accion,
+        proxima_accion: g.proxima_accion,
+        fecha,
+      })
     }
     for (const p of promesas.filter(x => x.fecha_promesa === fecha)) {
       items.push({ tipo: 'promesa', id: p.id, cliente: p.cliente_nombre || p.cliente_cod, monto: p.monto, fecha })
@@ -85,19 +93,35 @@ export default function AgendaCompacta({ gestiones, promesas, hoyStr }: Props) {
   )
 }
 
-function AgendaItem({ item }: { item: ItemAgenda }) {
-  const dotColor = item.tipo === 'promesa' ? '#f59e0b' : '#009EE3'
-  const texto = item.tipo === 'promesa'
-    ? `${item.cliente} · ${fmtCRC(item.monto)}`
-    : `${item.cliente_cod} · ${item.accion}`
+const DOT_ACCION: Record<string, string> = {
+  escalar:         '#dc2626',  // rojo
+  esperar_pago:    '#f59e0b',  // amber
+  recontactar:     '#f59e0b',  // amber
+  crear_solicitud: '#009EE3',  // cyan
+  sin_seguimiento: '#94a3b8',  // slate
+}
 
+function AgendaItem({ item }: { item: ItemAgenda }) {
+  if (item.tipo === 'promesa') {
+    return (
+      <div className="flex items-start gap-2 px-1 py-1 rounded hover:bg-slate-50">
+        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: '#f59e0b' }} />
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium text-slate-700 truncate">{item.cliente}</p>
+          <p className="text-[9px] text-slate-400">{fmtCRC(item.monto)}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const dotColor = DOT_ACCION[item.proxima_accion] ?? '#94a3b8'
   return (
-    <div className="flex items-start gap-2">
-      <div
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1"
-        style={{ background: dotColor }}
-      />
-      <p className="text-[10px] text-slate-600 leading-tight">{texto}</p>
+    <div className="flex items-start gap-2 px-1 py-1 rounded hover:bg-slate-50">
+      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ background: dotColor }} />
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium text-slate-700 truncate">{item.clienteNombre}</p>
+        <p className="text-[9px] text-slate-400">{item.accionLabel}</p>
+      </div>
     </div>
   )
 }

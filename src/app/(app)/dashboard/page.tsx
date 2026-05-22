@@ -467,6 +467,35 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     ? ((agendaGestionesRes.value as any).data as AgendaGestion[] | null) ?? []
     : []
 
+  // ── Enriquecer agenda gestiones: nombres de clientes + labels de acción ──
+  const PROXIMA_ACCION_LABELS: Record<string, string> = {
+    esperar_pago:    'Esperar confirmación de pago',
+    sin_seguimiento: 'Sin seguimiento requerido',
+    recontactar:     'Recontactar cliente',
+    escalar:         'Escalar al coordinador',
+    crear_solicitud: 'Crear solicitud al coordinador',
+  }
+
+  if (agendaGestiones.length > 0) {
+    const codigosUnicos = [...new Set(agendaGestiones.map(g => g.cliente_cod))]
+    try {
+      const { data: clienteRows } = await supabase
+        .from('maestro_clientes')
+        .select('codigo, nombre')
+        .in('codigo', codigosUnicos)
+      const nombreMap: Record<string, string> = {}
+      for (const c of (clienteRows ?? []) as { codigo: string; nombre: string }[]) {
+        nombreMap[c.codigo] = c.nombre
+      }
+      for (const g of agendaGestiones) {
+        g.cliente_nombre = nombreMap[g.cliente_cod] ?? g.cliente_cod
+        g.accion_label   = PROXIMA_ACCION_LABELS[g.proxima_accion] ?? g.proxima_accion
+      }
+    } catch {
+      // si falla, los nombres quedan como cliente_cod (ya es el fallback)
+    }
+  }
+
   const agendaPromesas: AgendaPromesa[] = agendaPromesasRes.status === 'fulfilled' && !(agendaPromesasRes.value as any).error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? ((agendaPromesasRes.value as any).data as AgendaPromesa[] | null) ?? []

@@ -64,6 +64,8 @@ export interface AgendaGestion {
   cliente_cod:          string
   proxima_accion:       string
   proxima_accion_fecha: string
+  cliente_nombre?:      string  // enriched: nombre real del cliente
+  accion_label?:        string  // enriched: texto legible de la acción
 }
 
 export interface AgendaPromesa {
