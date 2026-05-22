@@ -420,10 +420,16 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   ])
 
   // ── Extraer datos con fallback seguro ─────────────────────────────────
-  const kpisRaw = kpisRes.status === 'fulfilled' && !(kpisRes.value as any).error
+  // El RPC puede devolver un objeto único o un array — manejamos ambos casos
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const kpisData = kpisRes.status === 'fulfilled' && !(kpisRes.value as any).error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? ((kpisRes.value as any).data as KpisAnalistaDashboard[] | null)?.[0] ?? null
+    ? (kpisRes.value as any).data
     : null
+
+  const kpisRaw: KpisAnalistaDashboard | null = Array.isArray(kpisData)
+    ? (kpisData[0] ?? null)
+    : (kpisData ?? null)
 
   const kpis: KpisAnalistaDashboard = kpisRaw ?? {
     total_clientes: 0, cartera_total: 0, mora_total: 0, no_vencido: 0,
