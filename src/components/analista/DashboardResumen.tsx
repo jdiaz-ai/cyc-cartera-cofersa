@@ -1,190 +1,275 @@
-// Columna izquierda del Dashboard Analista: KPIs + Cola del Día + Promesas.
-// La fila inferior (Mis Gestiones + Gestión Rápida) vive en dashboard/page.tsx a ancho completo.
-import {
-  Package, TrendingDown, ClipboardCheck, Handshake,
-  AlertCircle, CheckCircle2,
-} from 'lucide-react'
-import { fmtM } from '@/lib/utils/formato'
+// src/components/analista/DashboardResumen.tsx
+// Columna izquierda del Dashboard Analista: KPIs + Cola del Día + Mis Promesas.
+// Panel Por Vendedor vive en PorVendedor.tsx (full-width debajo).
 
-// ── Tipos locales ─────────────────────────────────────────────────────
-interface CarteraRowFull {
-  cliente_cod: string; cliente_nombre: string
-  no_vencido: number; mora_1_30: number; mora_31_60: number
-  mora_61_90: number; mora_91_120: number; mora_120_plus: number
-  total: number; dias_mora: number; fecha_corte: string
-}
-interface PromesaRow {
-  id: string; cliente_cod: string; monto: number
-  fecha_promesa: string; estado?: string
-}
-type Urgencia = 'ROJO' | 'AMARILLO' | 'VERDE'
-interface ColaItem extends CarteraRowFull {
-  urgencia: Urgencia
-  gestionadoHoy: boolean
-}
+import Link from 'next/link'
+import { fmtCRC } from '@/lib/utils/formato'
+import type {
+  KpisAnalistaDashboard,
+  ColaItem,
+  PrioridadCola,
+  PromesaPendiente,
+} from '@/types/dashboard-analista'
 
 export interface DashboardResumenProps {
-  misRows:    CarteraRowFull[]
-  misPromesas: PromesaRow[]
-  cola:       ColaItem[]
-  gHoyCount:  number
-  promCount:  number
-  miCartera:  number
-  miMora:     number
-  pMiMora:    number
-  hoyStr:     string
+  kpis:     KpisAnalistaDashboard
+  cola:     ColaItem[]
+  promesas: PromesaPendiente[]
+  hoyStr:   string
 }
 
-const urgCfg: Record<Urgencia, { dot: string }> = {
-  ROJO:     { dot: '#dc2626' },
-  AMARILLO: { dot: '#f59e0b' },
-  VERDE:    { dot: '#16a34a' },
+// ── Helpers de color ──────────────────────────────────────────────────
+const prioCfg: Record<PrioridadCola, { dot: string }> = {
+  ROJO:  { dot: '#dc2626' },
+  AMBAR: { dot: '#f59e0b' },
+  VERDE: { dot: '#16a34a' },
 }
 
+function accionSugerida(item: ColaItem): string {
+  if (item.prioridad === 'ROJO' && item.promesa_vencida) return 'Seguimiento urgente'
+  if (item.prioridad === 'ROJO')                         return 'Llamar hoy'
+  if (item.prioridad === 'AMBAR' && item.tiene_promesa_hoy) return 'Confirmar pago'
+  if (item.prioridad === 'AMBAR')                        return 'Contactar'
+  return 'Recordatorio'
+}
+
+// ── Componente principal ──────────────────────────────────────────────
 export default function DashboardResumen({
-  misRows, misPromesas, cola,
-  gHoyCount, promCount, miCartera, miMora, pMiMora, hoyStr,
+  kpis, cola, promesas, hoyStr,
 }: DashboardResumenProps) {
-  return (
-    <div className="flex flex-col gap-5 h-full">
+  const colaVisible   = cola.slice(0, 5)
+  const colaRestantes = cola.length
+  const promVisible   = promesas.slice(0, 4)
+  const promRestantes = Math.max(0, promesas.length - 4)
 
-      {/* ── KPIs (4 tarjetas) ─────────────────────────────────────────── */}
+  return (
+    <div className="flex flex-col gap-4">
+
+      {/* ── KPI Cards (4 tarjetas, fondo blanco) ──────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <KPICard
+
+        {/* Card 1: Mi Cartera */}
+        <KpiCard
           label="Mi Cartera"
-          valor={fmtM(miCartera)}
-          sub={`${misRows.length} clientes asignados`}
-          gradient="linear-gradient(135deg,#003B5C,#005a8e)"
-          badge={null}
-          icon={<Package size={16} />}
+          valor={fmtCRC(kpis.cartera_total)}
+          badge={`${kpis.total_clientes} clientes`}
+          badgeClass="bg-slate-100 text-slate-600"
         />
-        <KPICard
+
+        {/* Card 2: En Mora */}
+        <KpiCard
           label="En Mora"
-          valor={fmtM(miMora)}
-          sub={`${pMiMora}% de mi cartera`}
-          gradient={pMiMora > 25
-            ? 'linear-gradient(135deg,#991b1b,#dc2626)'
-            : 'linear-gradient(135deg,#065f46,#059669)'}
-          badge={`${pMiMora}%`}
-          badgeGood={pMiMora <= 25}
-          icon={<TrendingDown size={16} />}
+          valor={fmtCRC(kpis.mora_total)}
+          valorClass="text-red-700"
+          badge={`${kpis.pct_mora}% de mi cartera`}
+          badgeClass="bg-red-50 text-red-700 border border-red-200"
         />
-        <KPICard
-          label="Gestiones Hoy"
-          valor={String(gHoyCount)}
-          sub={`de ${misRows.length} clientes`}
-          gradient="linear-gradient(135deg,#0369a1,#009ee3)"
-          badge={gHoyCount > 0 ? 'activo' : null}
-          badgeGood
-          icon={<ClipboardCheck size={16} />}
-        />
-        <KPICard
+
+        {/* Card 3: Gestiones Hoy — con barra de progreso */}
+        <div className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4">
+          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
+            Gestiones Hoy
+          </p>
+          <p className="text-lg font-bold tabular-nums text-slate-900 mb-1 leading-tight">
+            {kpis.gestiones_hoy}
+            <span className="text-sm font-normal text-slate-400">/15</span>
+          </p>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#009EE3] rounded-full transition-all"
+              style={{ width: `${Math.min((kpis.gestiones_hoy / 15) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Card 4: Promesas Activas */}
+        <KpiCard
           label="Promesas Activas"
-          valor={String(promCount)}
-          sub={misPromesas.some(p => p.fecha_promesa === hoyStr) ? '⚠ vencen hoy' : 'al día'}
-          gradient={misPromesas.some(p => p.fecha_promesa === hoyStr)
-            ? 'linear-gradient(135deg,#7c2d12,#ea580c)'
-            : 'linear-gradient(135deg,#1e3a5f,#003B5C)'}
-          badge={misPromesas.some(p => p.fecha_promesa === hoyStr) ? 'urgente' : null}
-          badgeGood={false}
-          icon={<Handshake size={16} />}
+          valor={String(kpis.promesas_activas)}
+          badge={
+            kpis.promesas_vencen_hoy > 0
+              ? `${kpis.promesas_vencen_hoy} vence${kpis.promesas_vencen_hoy > 1 ? 'n' : ''} hoy`
+              : 'Al día'
+          }
+          badgeClass={
+            kpis.promesas_vencen_hoy > 0
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-emerald-50 text-emerald-700'
+          }
         />
       </div>
 
-      {/* ── Cola del día + Promesas — flex-1 para llenar la altura de la columna derecha ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 flex-1">
+      {/* ── Cola del Día + Mis Promesas en grid ───────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-4">
 
-        {/* Cola */}
-        <div className="xl:col-span-2 flex flex-col" style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.08)' }}>
-                <AlertCircle size={15} style={{ color: '#dc2626' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Cola del Día</h2>
-                <p className="text-xs text-gray-400">Prioridad: rojo → amarillo → verde</p>
-              </div>
+        {/* Cola del Día */}
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                Cola del Día
+              </p>
+              <p className="text-xs font-semibold text-slate-800 mt-0.5">
+                Prioridad de contacto
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>{cola.filter(c => c.urgencia === 'ROJO').length} 🔴</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(245,158,11,0.1)', color: '#d97706' }}>{cola.filter(c => c.urgencia === 'AMARILLO').length} 🟡</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(22,163,74,0.1)', color: '#16a34a' }}>{cola.filter(c => c.urgencia === 'VERDE').length} 🟢</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700">
+                {cola.filter(c => c.prioridad === 'ROJO').length}
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+                {cola.filter(c => c.prioridad === 'AMBAR').length}
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+                {cola.filter(c => c.prioridad === 'VERDE').length}
+              </span>
             </div>
           </div>
-          {cola.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-16 text-center">
-              <div className="text-4xl mb-3">🎉</div>
-              <p className="text-sm font-bold text-gray-500">Sin clientes asignados aún</p>
-              <p className="text-xs text-gray-300 mt-1">Pedile al coordinador que asigne tu cartera</p>
+
+          {colaVisible.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="text-xs text-slate-500">
+                Sin clientes con mora pendiente en tu cartera.
+              </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {cola.map(c => {
-                const cfg      = urgCfg[c.urgencia]
-                const moraCrit = (c.mora_61_90 || 0) + (c.mora_91_120 || 0) + (c.mora_120_plus || 0)
-                return (
-                  <div key={c.cliente_cod} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-800 truncate">{c.cliente_nombre || c.cliente_cod}</p>
-                      <p className="text-xs text-gray-400">{c.cliente_cod}</p>
+            <>
+              <div className="divide-y divide-slate-50">
+                {colaVisible.map(item => {
+                  const cfg = prioCfg[item.prioridad]
+                  const moraCrit = Math.max(0, item.mora_61_90 || 0)
+                    + Math.max(0, item.mora_91_120 || 0)
+                    + (item.mora_120_plus || 0)
+                  const diasLabel =
+                    item.dias_sin_gestion === 999
+                      ? 'Sin gestiones registradas'
+                      : item.dias_sin_gestion >= 7
+                      ? `Sin contacto ${item.dias_sin_gestion} días`
+                      : null
+
+                  return (
+                    <div
+                      key={item.cliente_cod}
+                      className="px-4 py-2.5 flex items-start gap-3"
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
+                        style={{ background: cfg.dot }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="text-xs font-semibold text-slate-800 truncate">
+                            {item.cliente_nombre || item.cliente_cod}
+                          </p>
+                          {moraCrit > 0 && (
+                            <p className="text-xs font-bold text-red-700 flex-shrink-0 tabular-nums">
+                              {fmtCRC(moraCrit)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="text-[10px] text-slate-400">{item.cliente_cod}</span>
+                          <span className="text-[10px] text-slate-300">·</span>
+                          <span className="text-[10px] text-slate-500">
+                            {accionSugerida(item)}
+                          </span>
+                          {diasLabel && (
+                            <>
+                              <span className="text-[10px] text-slate-300">·</span>
+                              <span className={`text-[10px] font-semibold ${
+                                item.dias_sin_gestion >= 7 && item.dias_sin_gestion !== 999
+                                  ? 'text-red-500'
+                                  : 'text-slate-400'
+                              }`}>
+                                {diasLabel}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    {moraCrit > 0 && (
-                      <span className="text-xs font-black text-red-600 flex-shrink-0">{fmtM(moraCrit)}</span>
-                    )}
-                    {c.gestionadoHoy && (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: 'rgba(22,163,74,0.1)', color: '#16a34a' }}>✓ hoy</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+              {colaRestantes > 5 && (
+                <div className="px-4 py-2 border-t border-slate-100 text-center">
+                  <Link
+                    href="/mi-cartera"
+                    className="text-[10px] text-[#009EE3] font-semibold hover:underline"
+                  >
+                    Ver los {colaRestantes} clientes →
+                  </Link>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Promesas pendientes */}
-        <div className="flex flex-col" style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid #F1F5F9' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
-                <Handshake size={15} style={{ color: '#009ee3' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Mis Promesas</h2>
-                <p className="text-xs text-gray-400">{promCount} pendientes</p>
-              </div>
-            </div>
+        {/* Mis Promesas */}
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+              Mis Promesas
+            </p>
+            <p className="text-xs font-semibold text-slate-800 mt-0.5">
+              {kpis.promesas_activas} pendientes
+            </p>
           </div>
-          {misPromesas.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-              <CheckCircle2 size={28} className="text-green-300 mb-3" />
-              <p className="text-sm font-semibold text-gray-400">Sin promesas pendientes</p>
+
+          {promVisible.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="text-xs text-slate-500">
+                No hay compromisos de pago pendientes.
+              </p>
             </div>
           ) : (
-            <div className="p-3 space-y-2">
-              {misPromesas.map(p => {
-                const venceHoy = p.fecha_promesa === hoyStr
-                const vencida  = p.fecha_promesa && p.fecha_promesa < hoyStr
-                return (
-                  <div key={p.id} className="rounded-xl px-3.5 py-2.5" style={{
-                    background: vencida || venceHoy ? '#FEF2F2' : '#F8FAFC',
-                    border: `1px solid ${vencida || venceHoy ? '#FECACA' : '#F1F5F9'}`,
-                  }}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-gray-800 truncate flex-1">{p.cliente_cod}</p>
-                      <p className="text-xs font-black text-gray-700 flex-shrink-0 ml-2">{fmtM(p.monto)}</p>
+            <>
+              <div className="p-3 space-y-2">
+                {promVisible.map(p => {
+                  const venceHoy = p.fecha_promesa === hoyStr
+                  const vencida  = p.fecha_promesa < hoyStr && p.estado === 'PENDIENTE'
+                  const bgClass  = vencida || venceHoy ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'
+                  const badge    = vencida ? 'VENCIDA' : venceHoy ? 'HOY' : null
+                  const badgeCls = vencida
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-amber-100 text-amber-700'
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`rounded-lg px-3 py-2 border ${bgClass}`}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <p className="text-xs font-semibold text-slate-800 truncate flex-1">
+                          {p.cliente_nombre || p.cliente_cod}
+                        </p>
+                        {badge && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${badgeCls}`}>
+                            {badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <p className="text-[10px] text-slate-400">{p.fecha_promesa}</p>
+                        <p className="text-xs font-bold text-slate-700 tabular-nums">
+                          {fmtCRC(p.monto)}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className="text-xs text-gray-400">{p.fecha_promesa}</p>
-                      {(vencida || venceHoy) && (
-                        <span className="text-xs font-bold text-red-500">{venceHoy ? 'vence hoy' : 'vencida'}</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+              {promRestantes > 0 && (
+                <div className="px-4 py-2 border-t border-slate-100 text-center">
+                  <Link
+                    href="/promesas"
+                    className="text-[10px] text-[#009EE3] font-semibold hover:underline"
+                  >
+                    Ver todas →
+                  </Link>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -192,33 +277,27 @@ export default function DashboardResumen({
   )
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────
-function KPICard({ label, valor, sub, gradient, badge, badgeGood, icon }: {
-  label: string; valor: string; sub: string; gradient: string
-  badge: string | null; badgeGood?: boolean; icon: React.ReactNode
+// ── KPI Card (fondo blanco) ───────────────────────────────────────────
+function KpiCard({
+  label, valor, valorClass = 'text-slate-900', badge, badgeClass,
+}: {
+  label:       string
+  valor:       string
+  valorClass?: string
+  badge:       string
+  badgeClass:  string
 }) {
   return (
-    <div style={{ background: gradient, borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.14)', overflow: 'hidden' }} className="p-5 relative">
-      <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '90px', height: '90px', background: 'rgba(255,255,255,0.06)', borderRadius: '50%' }} />
-      <div className="relative">
-        <div className="flex items-center justify-between mb-3">
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)' }}>
-            <span style={{ color: 'rgba(255,255,255,0.9)' }}>{icon}</span>
-          </div>
-        </div>
-        <p style={{ color: 'white', fontSize: valor.length > 8 ? '1.4rem' : '1.9rem', fontWeight: 900, lineHeight: 1.1, letterSpacing: '-0.02em' }}>{valor}</p>
-        <div className="flex items-center justify-between mt-2">
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px' }}>{sub}</p>
-          {badge && (
-            <span style={{
-              background: badgeGood ? 'rgba(74,222,128,0.25)' : 'rgba(255,100,100,0.25)',
-              color: badgeGood ? '#86efac' : '#fca5a5',
-              fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', textTransform: 'uppercase',
-            }}>{badge}</span>
-          )}
-        </div>
-      </div>
+    <div className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4">
+      <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
+        {label}
+      </p>
+      <p className={`text-lg font-bold tabular-nums mb-2 leading-tight ${valorClass}`}>
+        {valor}
+      </p>
+      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${badgeClass}`}>
+        {badge}
+      </span>
     </div>
   )
 }
