@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
-  AlertTriangle, TrendingDown, Users, ClipboardCheck,
+  TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
 } from 'lucide-react'
 import DashboardResumen from '@/components/analista/DashboardResumen'
@@ -534,5 +534,3 @@ function KPICard({ label, valor, sub, gradient, badge, badgeGood, icon }: {
   )
 }
 
-// Supress unused import warnings
-const _unused = { AlertTriangle }

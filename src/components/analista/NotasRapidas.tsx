@@ -45,6 +45,13 @@ export default function NotasRapidas({ hoyStr }: Props) {
     cargarNota()
   }, [cargarNota])
 
+  // Limpiar debounce pendiente al desmontar
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
+
   const guardarNota = useCallback(async (contenido: string) => {
     setSaveState('saving')
     try {
@@ -105,6 +112,7 @@ export default function NotasRapidas({ hoyStr }: Props) {
             onChange={e => handleChange(e.target.value)}
             placeholder="Notas del día..."
             rows={4}
+            aria-label="Notas del día"
             className="w-full resize-none border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 bg-white focus:outline-none focus:border-[#009ee3] transition"
             style={{ fontFamily: 'Nunito, sans-serif', lineHeight: '1.6' }}
           />
