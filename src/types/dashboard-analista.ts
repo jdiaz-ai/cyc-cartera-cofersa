@@ -34,6 +34,10 @@ export interface VendedorResumen {
   cartera_total:      number
   mora_total:         number
   pct_mora:           number
+  mora_tramo_1_30:    number
+  mora_tramo_31_60:   number
+  mora_tramo_61_mas:  number
+  clientes_urgentes:  number
 }
 
 // prioridad usa 'AMBAR' (sin tilde) — así viene de la RPC
