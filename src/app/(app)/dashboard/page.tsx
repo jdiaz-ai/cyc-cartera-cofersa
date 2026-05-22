@@ -4,13 +4,12 @@ import {
   AlertTriangle, TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
 } from 'lucide-react'
-import GestionRapida from '@/components/dashboard/gestion-rapida'
-import type { ClienteOpt } from '@/components/dashboard/gestion-rapida'
 import DashboardResumen from '@/components/analista/DashboardResumen'
-import CalendarioNotas from '@/components/analista/CalendarioNotas'
-import { fetchCalendarEvents } from '@/lib/services/googleCalendarService'
-import type { CalendarEvent } from '@/lib/services/googleCalendarService'
 import SaludoDashboard from '@/components/dashboard/saludo-dashboard'
+import PorVendedor    from '@/components/analista/PorVendedor'
+import AgendaCompacta from '@/components/analista/AgendaCompacta'
+import MiProgreso     from '@/components/analista/MiProgreso'
+import NotasRapidas   from '@/components/analista/NotasRapidas'
 import type {
   KpisAnalistaDashboard,
   VendedorResumen,
@@ -472,24 +471,44 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     ? ((promesasRes.value as any).data as PromesaPendiente[] | null) ?? []
     : []
 
-  // ── Placeholder return — se reemplaza en Task 8 con el layout real ────
-  // Por ahora devolvemos el layout viejo usando los datos nuevos donde sea posible
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
       <div className="px-4 sm:px-6 pt-5 pb-6">
+
+        {/* Header: saludo + strip de métricas */}
         <div className="mb-5">
-          <SaludoDashboard nombre={nombre} />
+          <SaludoDashboard nombre={nombre} kpis={kpis} />
         </div>
-        <p className="text-xs text-slate-400">
-          Datos cargados: {kpis.total_clientes} clientes · {vendedores.length} vendedores · {colaDeduplicada.length} en cola · {promesas.length} promesas
-        </p>
+
+        {/* Layout 2 columnas */}
+        <div className="flex flex-col lg:flex-row gap-5 lg:items-start">
+
+          {/* Columna principal */}
+          <div className="flex-1 min-w-0 flex flex-col gap-4">
+            <DashboardResumen
+              kpis={kpis}
+              cola={colaDeduplicada}
+              promesas={promesas}
+              hoyStr={hoyStr}
+            />
+            <PorVendedor vendedores={vendedores} />
+          </div>
+
+          {/* Columna derecha ~260px */}
+          <div className="w-full lg:w-64 xl:w-72 flex-shrink-0 flex flex-col gap-4">
+            <AgendaCompacta
+              gestiones={agendaGestiones}
+              promesas={agendaPromesas}
+              hoyStr={hoyStr}
+            />
+            <MiProgreso kpis={kpis} />
+            <NotasRapidas hoyStr={hoyStr} />
+          </div>
+
+        </div>
       </div>
     </div>
   )
-}
-
-const tipoIconAnalista: Record<string, string> = {
-  LLAMADA: '📞', CORREO: '📧', VISITA: '🏢', WHATSAPP: '💬',
 }
 
 // ── KPI Card (compartida) ─────────────────────────────────────────────
