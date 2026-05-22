@@ -11,6 +11,14 @@ import CalendarioNotas from '@/components/analista/CalendarioNotas'
 import { fetchCalendarEvents } from '@/lib/services/googleCalendarService'
 import type { CalendarEvent } from '@/lib/services/googleCalendarService'
 import SaludoDashboard from '@/components/dashboard/saludo-dashboard'
+import type {
+  KpisAnalistaDashboard,
+  VendedorResumen,
+  ColaItem as ColaItemRPC,
+  AgendaGestion,
+  AgendaPromesa,
+  PromesaPendiente,
+} from '@/types/dashboard-analista'
 
 // ── Tipos compartidos ─────────────────────────────────────────────────
 interface CarteraRow {
@@ -361,238 +369,120 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   userEmail: string
   nombre: string
 }) {
-  // ── Clientes asignados al analista ────────────────────────────────────
-  let clientesOpts: ClienteOpt[] = []
-  let clientesCods: string[] = []
-  try {
-    const { data } = await supabase.from('maestro_clientes')
-      .select('cliente_cod,cliente_nombre,contribuyente')
+  const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+
+  // ── Llamadas en paralelo ──────────────────────────────────────────────
+  const [
+    kpisRes,
+    vendedoresRes,
+    colaRes,
+    agendaGestionesRes,
+    agendaPromesasRes,
+    promesasRes,
+  ] = await Promise.allSettled([
+    // 1. KPIs
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).rpc('fn_dashboard_analista_kpis', { p_email: userEmail }),
+
+    // 2. Resumen por vendedor
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).rpc('fn_dashboard_vendedores_analista', { p_email: userEmail }),
+
+    // 3. Cola del día (traer 20, mostrar 5 en dashboard)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).rpc('fn_cola_del_dia', { p_email: userEmail, p_limit: 20 }),
+
+    // 4. Agenda: gestiones con próxima acción hoy o mañana
+    supabase.from('gestiones')
+      .select('id, cliente_cod, proxima_accion, proxima_accion_fecha')
       .eq('analista_email', userEmail)
-      .order('cliente_nombre', { ascending: true })
-    clientesOpts = ((data ?? []) as { cliente_cod: string; cliente_nombre: string; contribuyente: string }[])
-      .map(c => ({ cod: c.cliente_cod, nombre: c.cliente_nombre, contribuyente: c.contribuyente }))
-    clientesCods = clientesOpts.map(c => c.cod)
-  } catch {}
+      .in('proxima_accion_fecha', [hoyStr, manana])
+      .eq('activo', true)
+      .order('proxima_accion_fecha', { ascending: true })
+      .limit(5),
 
-  // ── Mi cartera ────────────────────────────────────────────────────────
-  let misRows: CarteraRowFull[] = []
-  let miCartera = 0, miMora = 0
-  try {
-    if (clientesCods.length > 0) {
-      const { data } = await supabase.from('cartera')
-        .select('cliente_cod,cliente_nombre,no_vencido,mora_1_30,mora_31_60,mora_61_90,mora_91_120,mora_120_plus,total,dias_mora,fecha_corte')
-        .in('cliente_cod', clientesCods.slice(0, 500))
-      misRows = (data ?? []) as CarteraRowFull[]
-      miCartera = misRows.reduce((s, r) => s + (r.total || 0), 0)
-      miMora    = misRows.reduce((s, r) => s + (r.mora_1_30 || 0) + (r.mora_31_60 || 0) + (r.mora_61_90 || 0) + (r.mora_91_120 || 0) + (r.mora_120_plus || 0), 0)
-    }
-  } catch {}
-
-  const pMiMora = pct(miMora, miCartera)
-
-  // ── Mis gestiones de hoy ──────────────────────────────────────────────
-  let misGestiones: GestionRow[] = [], gHoyCount = 0
-  try {
-    const { data, count } = await supabase.from('gestiones')
-      .select('id,cliente_cod,tipo,resultado,hora,analista_email,nota', { count: 'exact' })
-      .eq('analista_email', userEmail).eq('fecha', hoyStr)
-      .order('hora', { ascending: false })
-    misGestiones = (data ?? []) as GestionRow[]
-    gHoyCount = count ?? 0
-  } catch {}
-
-  // ── Mis promesas pendientes ───────────────────────────────────────────
-  let misPromesas: PromesaRow[] = [], promCount = 0
-  try {
-    const { data, count } = await supabase.from('promesas')
-      .select('id,cliente_cod,monto,fecha_promesa,estado', { count: 'exact' })
-      .eq('analista_email', userEmail).eq('estado', 'PENDIENTE')
-      .order('fecha_promesa', { ascending: true }).limit(8)
-    misPromesas = (data ?? []) as PromesaRow[]
-    promCount = count ?? 0
-  } catch {}
-
-  // ── Última gestión por cliente (últimos 60 días) — para cola dinámica ──
-  // Usamos esto para:
-  //   1. Excluir clientes gestionados HOY (ya atenidos, no repetir en cola)
-  //   2. Excluir clientes con proxima_accion_fecha > hoy (programados para futuro)
-  //   3. Ordenar por días sin gestión dentro del mismo nivel de urgencia
-  interface GestionFiltro { cliente_cod: string; fecha: string; proxima_accion_fecha: string | null }
-  let gestionesFiltro: GestionFiltro[] = []
-  try {
-    const hace60d = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0]
-    const { data } = await supabase
-      .from('gestiones')
-      .select('cliente_cod, fecha, proxima_accion_fecha')
+    // 5. Agenda: promesas pendientes hoy o mañana
+    supabase.from('promesas')
+      .select('id, cliente_nombre, cliente_cod, fecha_promesa, monto')
       .eq('analista_email', userEmail)
-      .gte('fecha', hace60d)
-      .order('fecha', { ascending: false })
-      .order('hora', { ascending: false })
-    gestionesFiltro = (data ?? []) as GestionFiltro[]
-  } catch {}
+      .eq('estado', 'PENDIENTE')
+      .in('fecha_promesa', [hoyStr, manana])
+      .order('fecha_promesa', { ascending: true })
+      .limit(5),
 
-  // La gestión MÁS RECIENTE por cliente (el array ya viene ordenado desc)
-  const ultimaGestionMap = new Map<string, { fecha: string; proxima_accion_fecha: string | null }>()
-  for (const g of gestionesFiltro) {
-    if (!ultimaGestionMap.has(g.cliente_cod)) {
-      ultimaGestionMap.set(g.cliente_cod, { fecha: g.fecha, proxima_accion_fecha: g.proxima_accion_fecha })
-    }
+    // 6. Mis promesas pendientes (panel lateral, máx 5)
+    supabase.from('promesas')
+      .select('id, cliente_nombre, cliente_cod, monto, fecha_promesa, estado, monto_abono_parcial')
+      .eq('analista_email', userEmail)
+      .eq('estado', 'PENDIENTE')
+      .eq('activo', true)
+      .order('fecha_promesa', { ascending: true })
+      .limit(5),
+  ])
+
+  // ── Extraer datos con fallback seguro ─────────────────────────────────
+  const kpisRaw = kpisRes.status === 'fulfilled' && !(kpisRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((kpisRes.value as any).data as KpisAnalistaDashboard[] | null)?.[0] ?? null
+    : null
+
+  const kpis: KpisAnalistaDashboard = kpisRaw ?? {
+    total_clientes: 0, cartera_total: 0, mora_total: 0, no_vencido: 0,
+    mora_1_30: 0, mora_31_60: 0, mora_61_90: 0, mora_91_120: 0, mora_120_plus: 0,
+    pct_mora: 0, gestiones_hoy: 0, promesas_activas: 0, promesas_vencen_hoy: 0,
+    clientes_urgentes: 0, meta_individual: 0, cobrado_mes_estimado: 0, meta_pct: 0,
   }
 
-  // Set 1: clientes gestionados HOY → se excluyen de la cola (ya fueron atendidos)
-  const gestionadoHoySet = new Set(misGestiones.map(g => g.cliente_cod))
+  const vendedores: VendedorResumen[] = vendedoresRes.status === 'fulfilled' && !(vendedoresRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((vendedoresRes.value as any).data as VendedorResumen[] | null) ?? []
+    : []
 
-  // Set 2: clientes cuya última gestión tiene proxima_accion_fecha en el futuro → no tocar hasta ese día
-  const tieneProximaFuturaSet = new Set<string>()
-  for (const [cod, ult] of ultimaGestionMap) {
-    if (ult.proxima_accion_fecha && ult.proxima_accion_fecha > hoyStr) {
-      tieneProximaFuturaSet.add(cod)
+  // Deduplicar cola por cliente_cod — puede haber duplicados por contribuyente
+  const colaRaw: ColaItemRPC[] = colaRes.status === 'fulfilled' && !(colaRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((colaRes.value as any).data as ColaItemRPC[] | null) ?? []
+    : []
+
+  const colaDeduplicada: ColaItemRPC[] = colaRaw.reduce((acc: ColaItemRPC[], item) => {
+    const existing = acc.find(x => x.cliente_cod === item.cliente_cod)
+    if (!existing || item.mora_total > existing.mora_total) {
+      return [...acc.filter(x => x.cliente_cod !== item.cliente_cod), item]
     }
-  }
+    return acc
+  }, []).sort((a, b) => {
+    const prioOrder: Record<string, number> = { 'ROJO': 0, 'AMBAR': 1, 'VERDE': 2 }
+    const pa = prioOrder[a.prioridad] ?? 2
+    const pb = prioOrder[b.prioridad] ?? 2
+    return pa !== pb ? pa - pb : b.mora_total - a.mora_total
+  })
 
-  // Días sin gestión por cliente (para ordenamiento dinámico dentro del mismo nivel)
-  function diasSinGestion(cod: string): number {
-    const ult = ultimaGestionMap.get(cod)
-    if (!ult) return 999 // nunca gestionado → máxima prioridad dentro del nivel
-    return Math.round((Date.now() - new Date(ult.fecha).getTime()) / 86400000)
-  }
+  const agendaGestiones: AgendaGestion[] = agendaGestionesRes.status === 'fulfilled' && !(agendaGestionesRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((agendaGestionesRes.value as any).data as AgendaGestion[] | null) ?? []
+    : []
 
-  // ── Cola del día — dinámica, excluye gestionados hoy y programados a futuro ──
-  const promesasHoySet = new Set(
-    misPromesas.filter(p => p.fecha_promesa === hoyStr).map(p => p.cliente_cod)
-  )
+  const agendaPromesas: AgendaPromesa[] = agendaPromesasRes.status === 'fulfilled' && !(agendaPromesasRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((agendaPromesasRes.value as any).data as AgendaPromesa[] | null) ?? []
+    : []
 
-  const cola = misRows
-    // Excluir: gestionado hoy O con próxima acción programada para fecha futura
-    .filter(r => !gestionadoHoySet.has(r.cliente_cod) && !tieneProximaFuturaSet.has(r.cliente_cod))
-    .map(r => {
-      let urgencia: Urgencia = 'VERDE'
-      if ((r.mora_61_90 || 0) + (r.mora_91_120 || 0) + (r.mora_120_plus || 0) > 0
-          || promesasHoySet.has(r.cliente_cod)) {
-        urgencia = 'ROJO'
-      } else if ((r.mora_31_60 || 0) > 0) {
-        urgencia = 'AMARILLO'
-      }
-      return { ...r, urgencia, gestionadoHoy: false }
-    })
-    .sort((a, b) => {
-      const ord: Record<Urgencia, number> = { ROJO: 0, AMARILLO: 1, VERDE: 2 }
-      if (ord[a.urgencia] !== ord[b.urgencia]) return ord[a.urgencia] - ord[b.urgencia]
-      // Dentro del mismo nivel: más días sin gestión primero → cola siempre cambia
-      return diasSinGestion(b.cliente_cod) - diasSinGestion(a.cliente_cod)
-    })
-    .slice(0, 30)
+  const promesas: PromesaPendiente[] = promesasRes.status === 'fulfilled' && !(promesasRes.value as any).error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((promesasRes.value as any).data as PromesaPendiente[] | null) ?? []
+    : []
 
-  // ── Google Calendar — degrada elegantemente si el token no está ───────
-  let calendarEvents: CalendarEvent[] = []
-  try {
-    // El provider_token contiene el access token de Google OAuth.
-    // Requiere scope calendar.readonly en Supabase → Auth → Google → Scopes.
-    const { data: { session } } = await supabase.auth.getSession()
-    const googleToken = session?.provider_token ?? null
-    if (googleToken) {
-      const fin30d = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0]
-      calendarEvents = await fetchCalendarEvents(googleToken, hoyStr, fin30d)
-    }
-  } catch {}
-
+  // ── Placeholder return — se reemplaza en Task 8 con el layout real ────
+  // Por ahora devolvemos el layout viejo usando los datos nuevos donde sea posible
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
       <div className="px-4 sm:px-6 pt-5 pb-6">
-
-        {/* Saludo dinámico */}
         <div className="mb-5">
           <SaludoDashboard nombre={nombre} />
         </div>
-
-        {/*
-          Layout 2 columnas:
-          - Desktop (>1024px): izquierda 60% / derecha 40%
-          - Tablet (768-1024px): izquierda 55% / derecha 45%
-          - Mobile (<768px): 1 columna, derecha debajo
-        */}
-        <div className="flex flex-col lg:flex-row gap-5 lg:items-stretch">
-
-          {/* ── Columna izquierda (60%) — KPIs + Cola + Promesas ── */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            <DashboardResumen
-              misRows={misRows}
-              misPromesas={misPromesas}
-              cola={cola}
-              gHoyCount={gHoyCount}
-              promCount={promCount}
-              miCartera={miCartera}
-              miMora={miMora}
-              pMiMora={pMiMora}
-              hoyStr={hoyStr}
-            />
-          </div>
-
-          {/* ── Columna derecha (40%) — Calendario + Notas ─────── */}
-          <div className="w-full lg:w-[42%] xl:w-[38%] flex-shrink-0">
-            <CalendarioNotas
-              eventos={calendarEvents}
-              hoyStr={hoyStr}
-            />
-          </div>
-
-        </div>
-
-        {/* ── Fila inferior FULL WIDTH — Mis Gestiones 50% | Gestión Rápida 50% ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-
-          {/* Mis gestiones hoy */}
-          <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
-                  <Activity size={15} style={{ color: '#009ee3' }} />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900">Mis Gestiones de Hoy</h2>
-                  <p className="text-xs text-gray-400">{gHoyCount} registradas</p>
-                </div>
-              </div>
-            </div>
-            {misGestiones.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="text-3xl mb-3">📋</div>
-                <p className="text-sm font-semibold text-gray-400">Sin gestiones hoy</p>
-                <p className="text-xs text-gray-300 mt-1">Usá el formulario de la derecha para registrar</p>
-              </div>
-            ) : (
-              <div className="p-3 space-y-1.5">
-                {misGestiones.map(g => (
-                  <div key={g.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{ background: '#F8FAFC' }}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: 'rgba(0,59,92,0.07)' }}>
-                      {tipoIconAnalista[g.tipo] ?? '📋'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-gray-800 truncate">{g.cliente_cod}</p>
-                      <p className="text-xs text-gray-500 truncate">{g.resultado}{g.nota ? ` · ${g.nota}` : ''}</p>
-                    </div>
-                    <span className="text-xs font-medium text-gray-400 flex-shrink-0">{g.hora?.slice(0, 5)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Gestión rápida */}
-          <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-            <div className="px-6 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid #F1F5F9' }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(0,158,227,0.1)' }}>
-                <ClipboardCheck size={15} style={{ color: '#009ee3' }} />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900">Gestión Rápida</h2>
-                <p className="text-xs text-gray-400">Registrá una gestión en segundos</p>
-              </div>
-            </div>
-            <GestionRapida clientes={clientesOpts} analistaEmail={userEmail} hoyStr={hoyStr} />
-          </div>
-
-        </div>
+        <p className="text-xs text-slate-400">
+          Datos cargados: {kpis.total_clientes} clientes · {vendedores.length} vendedores · {colaDeduplicada.length} en cola · {promesas.length} promesas
+        </p>
       </div>
     </div>
   )
