@@ -507,7 +507,7 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     : []
 
   return (
-    <div className="min-h-full" style={{ background: '#EEF2F7' }}>
+    <div className="min-h-full bg-slate-50">
       <div className="px-4 sm:px-6 pt-5 pb-6">
 
         {/* Header: saludo + strip de métricas */}

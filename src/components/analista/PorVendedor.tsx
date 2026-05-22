@@ -17,13 +17,13 @@ export default function PorVendedor({ vendedores }: Props) {
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
-        <div>
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-            Por vendedor
-          </p>
-          <p className="text-xs font-semibold text-slate-800 mt-0.5">
-            Distribución de mora por agente
-          </p>
+        <div className="flex items-center gap-2">
+          <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
+          <div>
+            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+              Por Vendedor
+            </p>
+          </div>
         </div>
         <Link
           href="/mi-cartera"

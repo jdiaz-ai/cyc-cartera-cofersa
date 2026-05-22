@@ -22,9 +22,12 @@ export default function MiProgreso({ kpis }: Props) {
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-3">
-      <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-3">
-        Mi progreso
-      </p>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+          Mi Progreso
+        </p>
+      </div>
 
       {/* Gestiones hoy */}
       <div className="mb-3">
@@ -34,7 +37,7 @@ export default function MiProgreso({ kpis }: Props) {
             {kpis.gestiones_hoy}/15
           </span>
         </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
             className="h-full bg-[#009EE3] rounded-full transition-all"
             style={{ width: `${pctGestiones}%` }}
@@ -53,7 +56,7 @@ export default function MiProgreso({ kpis }: Props) {
             {kpis.meta_pct}%
           </span>
         </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all ${metaBarColor}`}
             style={{ width: `${pctMeta}%` }}

@@ -82,19 +82,19 @@ export default function SaludoDashboard({ nombre, kpis }: Props) {
 
       {/* Strip de métricas rápidas (solo cuando se pasa kpis) */}
       {kpis && (
-        <div className="flex gap-0 items-center bg-white border border-slate-200 rounded-lg overflow-hidden flex-shrink-0">
+        <div className="flex gap-0 items-center bg-white border border-slate-200 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
           <div className="px-3 py-2 border-r border-slate-100 text-center">
-            <p className="text-sm font-bold tabular-nums text-slate-800">{kpis.gestiones_hoy}</p>
+            <p className="text-base font-bold tabular-nums text-slate-800">{kpis.gestiones_hoy}</p>
             <p className="text-[9px] text-slate-400 uppercase tracking-[0.4px]">gestiones</p>
           </div>
           <div className="px-3 py-2 border-r border-slate-100 text-center">
-            <p className={`text-sm font-bold tabular-nums ${kpis.promesas_activas > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
+            <p className={`text-base font-bold tabular-nums ${kpis.promesas_activas > 0 ? 'text-amber-600' : 'text-slate-800'}`}>
               {kpis.promesas_activas}
             </p>
             <p className="text-[9px] text-slate-400 uppercase tracking-[0.4px]">promesas</p>
           </div>
           <div className="px-3 py-2 text-center">
-            <p className={`text-sm font-bold tabular-nums ${kpis.clientes_urgentes > 0 ? 'text-red-600' : 'text-slate-800'}`}>
+            <p className={`text-base font-bold tabular-nums ${kpis.clientes_urgentes > 0 ? 'text-red-600' : 'text-slate-800'}`}>
               {kpis.clientes_urgentes}
             </p>
             <p className="text-[9px] text-slate-400 uppercase tracking-[0.4px]">urgentes</p>

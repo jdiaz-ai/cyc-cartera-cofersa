@@ -54,6 +54,7 @@ export default function DashboardResumen({
           valor={fmtCRC(kpis.cartera_total)}
           badge={`${kpis.total_clientes} clientes`}
           badgeClass="bg-slate-100 text-slate-600"
+          borderColor="#009EE3"
         />
 
         {/* Card 2: En Mora */}
@@ -63,16 +64,20 @@ export default function DashboardResumen({
           valorClass="text-red-700"
           badge={`${kpis.pct_mora}% de mi cartera`}
           badgeClass="bg-red-50 text-red-700 border border-red-200"
+          borderColor="#ef4444"
         />
 
         {/* Card 3: Gestiones Hoy — con barra de progreso */}
-        <div className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4">
+        <div
+          className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4"
+          style={{ borderTop: '3px solid #009EE3' }}
+        >
           <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
             Gestiones Hoy
           </p>
-          <p className="text-lg font-bold tabular-nums text-slate-900 mb-1 leading-tight">
+          <p className="text-3xl font-bold tabular-nums text-slate-900 mb-1 leading-tight">
             {kpis.gestiones_hoy}
-            <span className="text-sm font-normal text-slate-400">/15</span>
+            <span className="text-xl font-normal text-slate-400">/15</span>
           </p>
           <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -96,6 +101,7 @@ export default function DashboardResumen({
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
               : 'bg-emerald-50 text-emerald-700'
           }
+          borderColor="#f59e0b"
         />
       </div>
 
@@ -105,13 +111,13 @@ export default function DashboardResumen({
         {/* Cola del Día */}
         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-                Cola del Día
-              </p>
-              <p className="text-xs font-semibold text-slate-800 mt-0.5">
-                Prioridad de contacto
-              </p>
+            <div className="flex items-center gap-2">
+              <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  Cola del Día
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700">
@@ -207,13 +213,14 @@ export default function DashboardResumen({
 
         {/* Mis Promesas */}
         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-              Mis Promesas
-            </p>
-            <p className="text-xs font-semibold text-slate-800 mt-0.5">
-              {kpis.promesas_activas} pendientes
-            </p>
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+            <div className="w-[3px] h-4 bg-amber-400 rounded-full flex-shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                Mis Promesas
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{kpis.promesas_activas} pendientes</p>
+            </div>
           </div>
 
           {promVisible.length === 0 ? (
@@ -279,20 +286,24 @@ export default function DashboardResumen({
 
 // ── KPI Card (fondo blanco) ───────────────────────────────────────────
 function KpiCard({
-  label, valor, valorClass = 'text-slate-900', badge, badgeClass,
+  label, valor, valorClass = 'text-slate-900', badge, badgeClass, borderColor = '#009EE3',
 }: {
-  label:       string
-  valor:       string
-  valorClass?: string
-  badge:       string
-  badgeClass:  string
+  label:        string
+  valor:        string
+  valorClass?:  string
+  badge:        string
+  badgeClass:   string
+  borderColor?: string
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4">
+    <div
+      className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4"
+      style={{ borderTop: `3px solid ${borderColor}` }}
+    >
       <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
         {label}
       </p>
-      <p className={`text-lg font-bold tabular-nums mb-2 leading-tight ${valorClass}`}>
+      <p className={`text-2xl font-bold tabular-nums mb-2 leading-tight ${valorClass}`}>
         {valor}
       </p>
       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${badgeClass}`}>
