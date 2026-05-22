@@ -44,8 +44,11 @@ export default function LoginPage() {
       queryParams.login_hint = loginHint
       queryParams.prompt     = 'none'
     } else {
-      // Primera vez o fallback: muestra el selector de cuenta de Google.
-      queryParams.prompt = 'select_account'
+      // Primera vez o fallback: 'consent' fuerza a Google a re-emitir el
+      // provider_refresh_token incluso si el usuario ya autorizó la app antes.
+      // Esto es crítico para que gmail-token.ts pueda renovar el access_token
+      // de Gmail cuando expira (cada 60 min) sin romper el envío de correos.
+      queryParams.prompt = 'consent'
       // Resetear para que el próximo intento vuelva a ser silencioso
       if (needsInteraction) setNeedsInteraction(false)
     }
