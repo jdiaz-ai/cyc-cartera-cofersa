@@ -30,6 +30,7 @@ export interface VendedorResumen {
   vendedor_nombre:     string
   vendedor_cod:        string
   cartera_total:       number
+  no_vencido:          number
   mora_total:          number
   pct_mora:            number
   mora_tramo_1_30:     number

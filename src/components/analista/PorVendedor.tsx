@@ -16,6 +16,7 @@ function MontoCell({ v, color }: { v: number; color: string }) {
 }
 
 const COL_COLORS = {
+  aldia:   '#16a34a',   // green-600
   t1_30:   '#d97706',   // amber-600
   t31_60:  '#ea580c',   // orange-600
   t61_90:  '#ef4444',   // red-500
@@ -69,6 +70,9 @@ export default function PorVendedor({ vendedores }: Props) {
               <th className="px-4 py-2 text-left font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
                 Vendedor
               </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.aldia }}>
+                Al día
+              </th>
               <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t1_30 }}>
                 1-30d
               </th>
@@ -103,6 +107,11 @@ export default function PorVendedor({ vendedores }: Props) {
                   <p className="text-xs font-semibold text-slate-800 leading-tight">
                     {v.vendedor_nombre}
                   </p>
+                </td>
+
+                {/* Al día */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.no_vencido} color={COL_COLORS.aldia} />
                 </td>
 
                 {/* 1-30d */}
@@ -157,6 +166,11 @@ export default function PorVendedor({ vendedores }: Props) {
               <tr className="border-t-2 border-slate-200 bg-slate-50">
                 <td className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                   Total
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.aldia }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.no_vencido, 0))}
+                  </span>
                 </td>
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t1_30 }}>
