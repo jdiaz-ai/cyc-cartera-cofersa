@@ -1,18 +1,18 @@
 // src/components/analista/PorVendedor.tsx
-// Tabla de aging por vendedor — una fila por vendedor con los 5 tramos individuales.
+// Tabla de aging por vendedor — una fila por vendedor con los 6 tramos + cartera.
 
 import Link from 'next/link'
-import { fmtM } from '@/lib/utils/formato'
+import { fmtCRC } from '@/lib/utils/formato'
 import type { VendedorResumen } from '@/types/dashboard-analista'
 
 interface Props {
   vendedores: VendedorResumen[]
 }
 
-/** Muestra un monto o un guión si el valor es 0 */
+/** Muestra un monto completo o un guión si el valor es 0 */
 function MontoCell({ v, color }: { v: number; color: string }) {
   if (v <= 0) return <span className="text-slate-300">—</span>
-  return <span style={{ color }} className="font-semibold tabular-nums">{fmtM(v)}</span>
+  return <span style={{ color }} className="font-semibold tabular-nums">{fmtCRC(v)}</span>
 }
 
 const COL_COLORS = {
@@ -22,7 +22,6 @@ const COL_COLORS = {
   t61_90:  '#ef4444',   // red-500
   t91_120: '#dc2626',   // red-600
   t120p:   '#991b1b',   // red-800
-  total:   '#1e293b',   // slate-900
 }
 
 export default function PorVendedor({ vendedores }: Props) {
@@ -70,6 +69,9 @@ export default function PorVendedor({ vendedores }: Props) {
               <th className="px-4 py-2 text-left font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
                 Vendedor
               </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
+                Cartera
+              </th>
               <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.aldia }}>
                 Al día
               </th>
@@ -92,7 +94,7 @@ export default function PorVendedor({ vendedores }: Props) {
                 Mora Total
               </th>
               <th className="px-4 py-2 text-right font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
-                %
+                % Mora
               </th>
             </tr>
           </thead>
@@ -107,6 +109,11 @@ export default function PorVendedor({ vendedores }: Props) {
                   <p className="text-xs font-semibold text-slate-800 leading-tight">
                     {v.vendedor_nombre}
                   </p>
+                </td>
+
+                {/* Cartera */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <span className="text-slate-600 font-semibold tabular-nums">{fmtCRC(v.cartera_total)}</span>
                 </td>
 
                 {/* Al día */}
@@ -142,7 +149,7 @@ export default function PorVendedor({ vendedores }: Props) {
                 {/* Mora Total */}
                 <td className="px-3 py-2.5 text-right whitespace-nowrap">
                   <span className="text-xs font-bold tabular-nums text-slate-800">
-                    {fmtM(v.mora_total)}
+                    {fmtCRC(v.mora_total)}
                   </span>
                 </td>
 
@@ -167,43 +174,56 @@ export default function PorVendedor({ vendedores }: Props) {
                 <td className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                   Total
                 </td>
+                {/* Cartera total */}
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums text-slate-600">
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.cartera_total, 0))}
+                  </span>
+                </td>
+                {/* Al día */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.aldia }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.no_vencido, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.no_vencido, 0))}
                   </span>
                 </td>
+                {/* 1-30d */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t1_30 }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_1_30, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_tramo_1_30, 0))}
                   </span>
                 </td>
+                {/* 31-60d */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t31_60 }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_31_60, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_tramo_31_60, 0))}
                   </span>
                 </td>
+                {/* 61-90d */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t61_90 }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_61_90, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_tramo_61_90, 0))}
                   </span>
                 </td>
+                {/* 91-120d */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t91_120 }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_91_120, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_tramo_91_120, 0))}
                   </span>
                 </td>
+                {/* +120d */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t120p }}>
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_120_plus, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_tramo_120_plus, 0))}
                   </span>
                 </td>
+                {/* Mora Total */}
                 <td className="px-3 py-2 text-right">
                   <span className="text-xs font-black tabular-nums text-slate-900">
-                    {fmtM(vendedores.reduce((s, v) => s + v.mora_total, 0))}
+                    {fmtCRC(vendedores.reduce((s, v) => s + v.mora_total, 0))}
                   </span>
                 </td>
+                {/* % Mora total */}
                 <td className="px-4 py-2 text-right">
-                  {/* % del total de mora sobre total de cartera */}
                   {(() => {
                     const totMora    = vendedores.reduce((s, v) => s + v.mora_total, 0)
                     const totCartera = vendedores.reduce((s, v) => s + v.cartera_total, 0)
