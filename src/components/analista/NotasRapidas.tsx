@@ -75,7 +75,7 @@ export default function NotasRapidas({ hoyStr }: Props) {
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex-1">
+    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden flex-1" style={{ borderTop: '3px solid #009EE3' }}>
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FileText size={13} style={{ color: '#009ee3' }} />

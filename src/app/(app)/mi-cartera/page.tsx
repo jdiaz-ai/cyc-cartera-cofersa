@@ -67,9 +67,16 @@ function calcularAgenda(p: {
     ({ en_agenda: false, is_hard_include: false, prioridad: 'rutina' as const, score: 0, motivo })
 
   // ════════════════════════════════════════════════════════════════
-  // INCLUSIONES FIJAS — siempre en cola sin importar el tope
+  // PASO 1 — EXCLUSIÓN ABSOLUTA: ya fue gestionado hoy
+  // Sale siempre, aunque haya promesa vencida o mora +120d.
+  // El analista ya actuó hoy; mañana aparece si sigue pendiente.
   // ════════════════════════════════════════════════════════════════
+  if (p.gestionado_hoy) return OUT()
 
+  // ════════════════════════════════════════════════════════════════
+  // PASO 2 — HARD INCLUDES: promesas vencidas o que vencen hoy
+  // Son situaciones urgentes que superan cualquier fecha programada.
+  // ════════════════════════════════════════════════════════════════
   if (p.promesa_activa && p.promesa_fecha) {
     const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
     // Promesa incumplida (venció y no pagó)
@@ -89,7 +96,20 @@ function calcularAgenda(p: {
     }
   }
 
-  // Mora en tramo +120 días
+  // ════════════════════════════════════════════════════════════════
+  // PASO 3 — EXCLUSIÓN POR PRÓXIMA ACCIÓN FUTURA
+  // Si el analista programó una fecha de seguimiento, se respeta.
+  // Aplica incluso para cuentas con mora +120d: el analista tomó
+  // una decisión explícita al gestionar y programar esa fecha.
+  // ════════════════════════════════════════════════════════════════
+  if (p.proxima_accion_fecha) {
+    if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // PASO 4 — HARD INCLUDE: mora en tramo +120 días
+  // Solo llega aquí si no hay fecha futura programada (paso 3).
+  // ════════════════════════════════════════════════════════════════
   if ((p.mora_120_plus ?? 0) > 0 || p.dias_mora > 120) {
     return {
       en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 92,
@@ -98,13 +118,10 @@ function calcularAgenda(p: {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // EXCLUSIONES — salen de la cola antes de cualquier scoring
+  // PASO 5 — EXCLUSIONES ADICIONALES
   // ════════════════════════════════════════════════════════════════
 
-  // 1. Ya fue gestionado hoy
-  if (p.gestionado_hoy) return OUT()
-
-  // 2. Promesa vigente (futura) + gestión en los últimos 3 días — no molestar
+  // Promesa vigente (futura) + gestión reciente — no molestar
   if (p.promesa_activa && p.promesa_fecha) {
     const diasParaPromesa = Math.floor(
       (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
@@ -112,12 +129,7 @@ function calcularAgenda(p: {
     if (diasParaPromesa > 0 && dsg <= 3) return OUT()
   }
 
-  // 3. Próxima acción programada para fecha futura
-  if (p.proxima_accion_fecha) {
-    if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
-  }
-
-  // 4. Mora por debajo del mínimo operativo
+  // Mora por debajo del mínimo operativo
   if (p.mora_total < MORA_MINIMA) return OUT()
 
   // ════════════════════════════════════════════════════════════════

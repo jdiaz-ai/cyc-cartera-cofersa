@@ -51,7 +51,7 @@ export default function AgendaCompacta({ gestiones, promesas, hoyStr }: Props) {
   const itemsManana = buildItems(mananaStr)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-3">
+    <div className="bg-white border border-slate-200 rounded-lg p-3" style={{ borderTop: '3px solid #009EE3' }}>
       <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-3">
         Agenda
       </p>

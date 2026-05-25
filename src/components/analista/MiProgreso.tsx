@@ -21,7 +21,7 @@ export default function MiProgreso({ kpis }: Props) {
     kpis.meta_pct >= 50 ? 'text-amber-600'   : 'text-slate-700'
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-3">
+    <div className="bg-white border border-slate-200 rounded-lg p-3" style={{ borderTop: '3px solid #009EE3' }}>
       <div className="flex items-center gap-2 mb-3">
         <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
         <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">

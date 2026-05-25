@@ -109,7 +109,7 @@ export default function DashboardResumen({
       <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-4">
 
         {/* Cola del Día */}
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden" style={{ borderTop: '3px solid #dc2626' }}>
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
@@ -212,7 +212,7 @@ export default function DashboardResumen({
         </div>
 
         {/* Mis Promesas */}
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden" style={{ borderTop: '3px solid #f59e0b' }}>
           <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
             <div className="w-[3px] h-4 bg-amber-400 rounded-full flex-shrink-0" />
             <div>

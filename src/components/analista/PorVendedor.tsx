@@ -14,7 +14,7 @@ export default function PorVendedor({ vendedores }: Props) {
   const restantes = Math.max(0, vendedores.length - 5)
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden" style={{ borderTop: '3px solid #009EE3' }}>
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
         <div className="flex items-center gap-2">

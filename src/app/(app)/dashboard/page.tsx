@@ -516,7 +516,7 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
         </div>
 
         {/* Layout 2 columnas */}
-        <div className="flex flex-col lg:flex-row gap-5 lg:items-start">
+        <div className="flex flex-col lg:flex-row gap-5 lg:items-stretch">
 
           {/* Columna principal */}
           <div className="flex-1 min-w-0 flex flex-col gap-4">
