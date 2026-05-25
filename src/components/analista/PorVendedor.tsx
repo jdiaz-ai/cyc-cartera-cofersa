@@ -1,29 +1,57 @@
 // src/components/analista/PorVendedor.tsx
-// Panel de distribución de mora por vendedor. Full-width debajo de Cola+Promesas.
+// Tabla de aging por vendedor — una fila por vendedor con los 5 tramos individuales.
 
 import Link from 'next/link'
-import { fmtCRC } from '@/lib/utils/formato'
+import { fmtM } from '@/lib/utils/formato'
 import type { VendedorResumen } from '@/types/dashboard-analista'
 
 interface Props {
   vendedores: VendedorResumen[]
 }
 
+/** Muestra un monto o un guión si el valor es 0 */
+function MontoCell({ v, color }: { v: number; color: string }) {
+  if (v <= 0) return <span className="text-slate-300">—</span>
+  return <span style={{ color }} className="font-semibold tabular-nums">{fmtM(v)}</span>
+}
+
+const COL_COLORS = {
+  t1_30:   '#d97706',   // amber-600
+  t31_60:  '#ea580c',   // orange-600
+  t61_90:  '#ef4444',   // red-500
+  t91_120: '#dc2626',   // red-600
+  t120p:   '#991b1b',   // red-800
+  total:   '#1e293b',   // slate-900
+}
+
 export default function PorVendedor({ vendedores }: Props) {
-  const visibles  = vendedores.slice(0, 5)
-  const restantes = Math.max(0, vendedores.length - 5)
+  if (vendedores.length === 0) {
+    return (
+      <div
+        className="bg-white border border-slate-200 rounded-lg overflow-hidden"
+        style={{ borderTop: '3px solid #009EE3' }}
+      >
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Por Vendedor</p>
+        </div>
+        <div className="px-4 py-8 text-center">
+          <p className="text-xs text-slate-500">Sin datos de vendedores disponibles.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden" style={{ borderTop: '3px solid #009EE3' }}>
+    <div
+      className="bg-white border border-slate-200 rounded-lg overflow-hidden"
+      style={{ borderTop: '3px solid #009EE3' }}
+    >
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
-          <div>
-            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-              Por Vendedor
-            </p>
-          </div>
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Por Vendedor</p>
         </div>
         <Link
           href="/mi-cartera"
@@ -33,98 +61,155 @@ export default function PorVendedor({ vendedores }: Props) {
         </Link>
       </div>
 
-      {/* Cabecera de columnas */}
-      <div className="px-4 py-2 grid grid-cols-[1fr_auto_auto_auto] gap-3 bg-slate-50 border-b border-slate-100">
-        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.4px]">Vendedor</span>
-        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.4px]">Cartera</span>
-        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.4px]">Mora</span>
-        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-[0.4px]">%</span>
-      </div>
-
-      {visibles.length === 0 ? (
-        <div className="px-4 py-8 text-center">
-          <p className="text-xs text-slate-500">Sin datos de vendedores disponibles.</p>
-        </div>
-      ) : (
-        <>
-          {visibles.map(v => {
-            const moraBase = v.mora_total || 1
-            const pct1_30  = Math.round((v.mora_tramo_1_30  / moraBase) * 100)
-            const pct31_60 = Math.round((v.mora_tramo_31_60 / moraBase) * 100)
-            const pct61mas = Math.round((v.mora_tramo_61_mas / moraBase) * 100)
-
-            return (
-              <div
+      {/* Tabla con scroll horizontal en pantallas pequeñas */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-[11px]" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100">
+              <th className="px-4 py-2 text-left font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
+                Vendedor
+              </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t1_30 }}>
+                1-30d
+              </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t31_60 }}>
+                31-60d
+              </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t61_90 }}>
+                61-90d
+              </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t91_120 }}>
+                91-120d
+              </th>
+              <th className="px-3 py-2 text-right font-semibold uppercase tracking-[0.4px] whitespace-nowrap" style={{ color: COL_COLORS.t120p }}>
+                +120d
+              </th>
+              <th className="px-3 py-2 text-right font-semibold text-slate-500 uppercase tracking-[0.4px] whitespace-nowrap">
+                Mora Total
+              </th>
+              <th className="px-4 py-2 text-right font-semibold text-slate-400 uppercase tracking-[0.4px] whitespace-nowrap">
+                %
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {vendedores.map((v, i) => (
+              <tr
                 key={v.vendedor_cod}
-                className="px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors last:border-b-0"
+                className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`}
               >
-                {/* Línea 1: nombre + datos principales */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
-                      {v.vendedor_nombre}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      {v.clientes_asignados} asig · {v.clientes_con_saldo} con saldo
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-[9px] text-slate-400 leading-none mb-0.5">Cartera</p>
-                      <p className="text-[11px] font-medium tabular-nums text-slate-600">
-                        {fmtCRC(v.cartera_total)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[9px] text-slate-400 leading-none mb-0.5">Mora</p>
-                      <p className="text-[11px] font-semibold tabular-nums text-slate-800">
-                        {fmtCRC(v.mora_total)}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums min-w-[38px] text-center ${
-                      v.pct_mora >= 40 ? 'bg-red-50 text-red-700 border border-red-200'      :
-                      v.pct_mora >= 20 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                                         'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    }`}>
-                      {v.pct_mora}%
-                    </span>
-                  </div>
-                </div>
+                {/* Nombre del vendedor */}
+                <td className="px-4 py-2.5 whitespace-nowrap">
+                  <p className="text-xs font-semibold text-slate-800 leading-tight">
+                    {v.vendedor_nombre}
+                  </p>
+                </td>
 
-                {/* Línea 2: mini aging bar + leyenda + badge urgentes */}
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex h-1.5 rounded-full overflow-hidden flex-1 bg-slate-100">
-                    {pct1_30  > 0 && <div style={{ width: `${pct1_30}%`  }} className="bg-amber-400 h-full" />}
-                    {pct31_60 > 0 && <div style={{ width: `${pct31_60}%`}} className="bg-orange-500 h-full" />}
-                    {pct61mas > 0 && <div style={{ width: `${pct61mas}%`}} className="bg-red-500 h-full" />}
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {pct1_30  > 0 && <span className="text-[9px] text-amber-600">{pct1_30}% 1-30d</span>}
-                    {pct31_60 > 0 && <span className="text-[9px] text-orange-600">{pct31_60}% 31-60d</span>}
-                    {pct61mas > 0 && <span className="text-[9px] text-red-600">{pct61mas}% +61d</span>}
-                  </div>
-                  {v.clientes_urgentes > 0 && (
-                    <span className="text-[9px] font-semibold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded flex-shrink-0">
-                      {v.clientes_urgentes} urgente{v.clientes_urgentes > 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                {/* 1-30d */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.mora_tramo_1_30} color={COL_COLORS.t1_30} />
+                </td>
 
-          {restantes > 0 && (
-            <div className="px-4 py-2 text-center border-t border-slate-100">
-              <Link
-                href="/mi-cartera"
-                className="text-[10px] text-[#009EE3] font-semibold hover:underline"
-              >
-                Ver los {vendedores.length} vendedores →
-              </Link>
-            </div>
+                {/* 31-60d */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.mora_tramo_31_60} color={COL_COLORS.t31_60} />
+                </td>
+
+                {/* 61-90d */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.mora_tramo_61_90} color={COL_COLORS.t61_90} />
+                </td>
+
+                {/* 91-120d */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.mora_tramo_91_120} color={COL_COLORS.t91_120} />
+                </td>
+
+                {/* +120d */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <MontoCell v={v.mora_tramo_120_plus} color={COL_COLORS.t120p} />
+                </td>
+
+                {/* Mora Total */}
+                <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <span className="text-xs font-bold tabular-nums text-slate-800">
+                    {fmtM(v.mora_total)}
+                  </span>
+                </td>
+
+                {/* % Mora — badge con color semáforo */}
+                <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums ${
+                    v.pct_mora >= 40 ? 'bg-red-50 text-red-700 border border-red-200'      :
+                    v.pct_mora >= 20 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                      'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}>
+                    {v.pct_mora}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+
+          {/* Totales */}
+          {vendedores.length > 1 && (
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 bg-slate-50">
+                <td className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Total
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t1_30 }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_1_30, 0))}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t31_60 }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_31_60, 0))}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t61_90 }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_61_90, 0))}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t91_120 }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_91_120, 0))}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: COL_COLORS.t120p }}>
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_tramo_120_plus, 0))}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="text-xs font-black tabular-nums text-slate-900">
+                    {fmtM(vendedores.reduce((s, v) => s + v.mora_total, 0))}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {/* % del total de mora sobre total de cartera */}
+                  {(() => {
+                    const totMora    = vendedores.reduce((s, v) => s + v.mora_total, 0)
+                    const totCartera = vendedores.reduce((s, v) => s + v.cartera_total, 0)
+                    const pct        = totCartera > 0 ? Math.round((totMora / totCartera) * 100 * 10) / 10 : 0
+                    return (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums ${
+                        pct >= 40 ? 'bg-red-50 text-red-700 border border-red-200'      :
+                        pct >= 20 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                    'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        {pct}%
+                      </span>
+                    )
+                  })()}
+                </td>
+              </tr>
+            </tfoot>
           )}
-        </>
-      )}
+        </table>
+      </div>
     </div>
   )
 }

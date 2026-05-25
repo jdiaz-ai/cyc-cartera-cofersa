@@ -69,7 +69,7 @@ export default function DashboardResumen({
 
         {/* Card 3: Gestiones Hoy — con barra de progreso */}
         <div
-          className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4"
+          className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4 text-center"
           style={{ borderTop: '3px solid #009EE3' }}
         >
           <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
@@ -297,7 +297,7 @@ function KpiCard({
 }) {
   return (
     <div
-      className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4"
+      className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4 text-center"
       style={{ borderTop: `3px solid ${borderColor}` }}
     >
       <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">

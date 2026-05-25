@@ -27,17 +27,16 @@ export interface KpisAnalistaDashboard {
 }
 
 export interface VendedorResumen {
-  vendedor_nombre:    string
-  vendedor_cod:       string
-  clientes_asignados: number
-  clientes_con_saldo: number
-  cartera_total:      number
-  mora_total:         number
-  pct_mora:           number
-  mora_tramo_1_30:    number
-  mora_tramo_31_60:   number
-  mora_tramo_61_mas:  number
-  clientes_urgentes:  number
+  vendedor_nombre:     string
+  vendedor_cod:        string
+  cartera_total:       number
+  mora_total:          number
+  pct_mora:            number
+  mora_tramo_1_30:     number
+  mora_tramo_31_60:    number
+  mora_tramo_61_90:    number
+  mora_tramo_91_120:   number
+  mora_tramo_120_plus: number
 }
 
 // prioridad usa 'AMBAR' (sin tilde) — así viene de la RPC
