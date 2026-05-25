@@ -6,14 +6,16 @@ import { resolveGmailToken }        from '@/lib/utils/gmail-token'
  * POST /api/clientes/email-cobro
  * Envía un email de cobro personalizado usando la cuenta Gmail del analista.
  *
- * Body: { to, asunto, mensaje, providerToken, clienteNombre, clienteCod }
+ * Body: { to, cc?, asunto, mensaje, adjunto?, providerToken, clienteNombre, clienteCod }
  * Returns: { email_sent: true } | { error: string }
  */
 export async function POST(req: NextRequest) {
   let body: {
     to?:            string
+    cc?:            string[]
     asunto?:        string
     mensaje?:       string
+    adjunto?:       { base64: string; mimeType: string; filename: string } | null
     providerToken?:        string | null
     providerRefreshToken?: string | null
     clienteNombre?: string
@@ -22,7 +24,7 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { to, asunto, mensaje, providerToken, providerRefreshToken, clienteNombre, clienteCod } = body
+  const { to, cc, asunto, mensaje, adjunto, providerToken, providerRefreshToken, clienteNombre, clienteCod } = body
 
   if (!to?.trim() || !asunto?.trim() || !mensaje?.trim()) {
     return NextResponse.json({ error: 'to, asunto y mensaje son requeridos' }, { status: 400 })
@@ -98,21 +100,7 @@ export async function POST(req: NextRequest) {
     ? `${asunto.trim()} - ${clienteNombre}`
     : asunto.trim()
 
-  const rawEmail = [
-    `From: ${encH(nombreAnalista)} <${user.email}>`,
-    `To: ${to.trim()}`,
-    `Subject: ${encH(fullSubject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    htmlBody,
-  ].join('\r\n')
-
-  const encodedEmail = Buffer.from(rawEmail)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  const ccList = (cc ?? []).filter(Boolean)
 
   // ── Resolver token Gmail (renueva si expiró) ──────────────────────────
   const gmailToken = await resolveGmailToken(providerToken, providerRefreshToken, user?.email)
@@ -122,6 +110,62 @@ export async function POST(req: NextRequest) {
       { status: 401 },
     )
   }
+
+  // ── Construir MIME (simple o multipart/mixed si hay adjunto) ──────────
+  let rawEmail: string
+
+  if (adjunto?.base64) {
+    // Multipart/mixed con adjunto
+    const boundary = `----SIC_COBRO_${Date.now()}`
+    const headers = [
+      `From: ${encH(nombreAnalista)} <${user.email}>`,
+      `To: ${to.trim()}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
+      `Subject: ${encH(fullSubject)}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ]
+
+    const safeFilenameHeader = encH(adjunto.filename)
+
+    rawEmail = [
+      ...headers,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      htmlBody,
+      '',
+      `--${boundary}`,
+      `Content-Type: ${adjunto.mimeType}`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename=${safeFilenameHeader}`,
+      '',
+      // Split base64 into 76-char lines (RFC 2045)
+      adjunto.base64.match(/.{1,76}/g)?.join('\r\n') ?? adjunto.base64,
+      '',
+      `--${boundary}--`,
+    ].join('\r\n')
+  } else {
+    // Email simple sin adjunto
+    rawEmail = [
+      `From: ${encH(nombreAnalista)} <${user.email}>`,
+      `To: ${to.trim()}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
+      `Subject: ${encH(fullSubject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody,
+    ].join('\r\n')
+  }
+
+  const encodedEmail = Buffer.from(rawEmail)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
 
   // ── Gmail API ─────────────────────────────────────────────────────────
   try {

@@ -103,10 +103,20 @@ async function loadImageAsDataUrl(src: string): Promise<string | null> {
 // PDF
 // ══════════════════════════════════════════════════════════════════════
 
+/** Sanitiza el nombre del cliente para usarlo en un nombre de archivo */
+export function safeFilename(name: string): string {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quitar acentos
+    .replace(/[^a-zA-Z0-9\s]/g, '')                  // solo alfanumérico + espacio
+    .trim()
+    .replace(/\s+/g, '-')                             // espacios → guión
+    .slice(0, 60)
+}
+
 /** Descarga el PDF directamente en el navegador */
 export async function exportarEstadoCuentaPDF(params: EstadoCuentaExportParams): Promise<void> {
   const doc  = await buildEstadoCuentaDoc(params)
-  const safe = params.clienteCod.replace(/[^a-zA-Z0-9-]/g, '')
+  const safe = safeFilename(params.clienteNombre)
   doc.save(`estado-cuenta-${safe}.pdf`)
 }
 
@@ -470,7 +480,7 @@ async function buildEstadoCuentaDoc(params: EstadoCuentaExportParams): Promise<a
 
 /** Descarga el Excel directamente en el navegador */
 export function exportarEstadoCuentaExcel(params: EstadoCuentaExportParams): void {
-  const { clienteCod } = params
+  const safe = safeFilename(params.clienteNombre)
   generarEstadoCuentaExcelBuffer(params).then(buffer => {
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -478,7 +488,7 @@ export function exportarEstadoCuentaExcel(params: EstadoCuentaExportParams): voi
     const url = URL.createObjectURL(blob)
     const a   = document.createElement('a')
     a.href     = url
-    a.download = `estado-cuenta-${clienteCod.replace(/[^a-zA-Z0-9-]/g, '')}.xlsx`
+    a.download = `estado-cuenta-${safe}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   })

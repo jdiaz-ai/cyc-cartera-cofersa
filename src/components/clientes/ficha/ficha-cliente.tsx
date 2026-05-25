@@ -11,7 +11,7 @@ import {
 import {
   exportarEstadoCuentaPDF, exportarEstadoCuentaExcel,
   generarEstadoCuentaBase64, generarEstadoCuentaExcelBase64,
-  calcAging, estadoLabelExport,
+  calcAging, estadoLabelExport, safeFilename,
   type CuentaBancaria,
 } from '@/lib/utils/estado-cuenta-export'
 import { fmtM, fmtCRC, fmtCRC2, fmtFecha, hoyISO } from '@/lib/utils/formato'
@@ -643,14 +643,19 @@ export default function FichaCliente({
       {/* ── Modal Email de cobro ─────────────────────────────────── */}
       {modalEmail && (
         <ModalEmailCobro
-          clienteNombre = {cartera.cliente_nombre}
-          clienteCod    = {cartera.cliente_cod}
-          contribuyente = {cartera.contribuyente}
-          correo        = {maestro?.correo ?? ''}
-          analistaEmail = {userEmail}
-          supabase      = {supabase}
-          onClose       = {() => setModalEmail(false)}
-          onSuccess     = {() => { setModalEmail(false); showToast('Email registrado'); router.refresh() }}
+          clienteNombre    = {cartera.cliente_nombre}
+          clienteCod       = {cartera.cliente_cod}
+          contribuyente    = {cartera.contribuyente}
+          correo           = {maestro?.correo ?? ''}
+          analistaEmail    = {userEmail}
+          analistaNombre   = {analistaNombre}
+          analistaTelefono = {analistaTelefono}
+          analistaWhatsapp = {analistaWhatsapp}
+          condicionPago    = {maestro?.condicion_pago ?? null}
+          facturas         = {facturas}
+          supabase         = {supabase}
+          onClose          = {() => setModalEmail(false)}
+          onSuccess        = {() => { setModalEmail(false); showToast('Email registrado'); router.refresh() }}
         />
       )}
 
@@ -1065,13 +1070,26 @@ function ActionBtn({ icon, label, onClick, disabled, title, style }: {
 
 // ── Modal Email de cobro ──────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, analistaEmail, supabase, onClose, onSuccess }: {
-  clienteNombre: string; clienteCod: string; contribuyente: string
-  correo: string; analistaEmail: string
+function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, analistaEmail,
+  analistaNombre, analistaTelefono, analistaWhatsapp, condicionPago,
+  facturas, supabase, onClose, onSuccess }: {
+  clienteNombre:    string
+  clienteCod:       string
+  contribuyente:    string
+  correo:           string
+  analistaEmail:    string
+  analistaNombre:   string
+  analistaTelefono: string | null
+  analistaWhatsapp: string | null
+  condicionPago:    string | null
+  facturas:         Factura[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any
-  onClose: () => void; onSuccess: () => void
+  onClose:   () => void
+  onSuccess: () => void
 }) {
+  type TipoAdjunto = 'Ninguno' | 'PDF' | 'Excel'
+
   const ASUNTOS_COBRO = [
     'Gestión de cobro',
     'Recordatorio de pago',
@@ -1080,11 +1098,14 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
     'Confirmación de acuerdo de pago',
   ] as const
 
-  const [para,    setPara]    = useState(correo)
-  const [asunto,  setAsunto]  = useState<string>('Gestión de cobro')
-  const [mensaje, setMensaje] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [para,       setPara]       = useState(correo)
+  const [cc,         setCc]         = useState('')
+  const [asunto,     setAsunto]     = useState<string>('Gestión de cobro')
+  const [mensaje,    setMensaje]    = useState('')
+  const [adjunto,    setAdjunto]    = useState<TipoAdjunto>('Ninguno')
+  const [loading,    setLoading]    = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('Enviando...')
+  const [error,      setError]      = useState('')
 
   async function handleEnviar(e: React.FormEvent) {
     e.preventDefault()
@@ -1097,38 +1118,89 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
     const providerToken        = session?.provider_token         ?? null
     const providerRefreshToken = session?.provider_refresh_token ?? null
 
-    // ── 2. Enviar email vía Gmail API ──────────────────────────────────
+    // ── 2. Generar adjunto si corresponde ─────────────────────────────
+    let adjuntoData: { base64: string; mimeType: string; filename: string } | null = null
+    if (adjunto !== 'Ninguno' && facturas.length > 0) {
+      try {
+        const fechaCorte = new Date(Date.now() - 6 * 3600_000)
+          .toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: '2-digit', year: 'numeric' })
+        const exportParams = {
+          facturas: facturas.filter(f => (f.saldo ?? 0) > 0),
+          clienteNombre, contribuyente, clienteCod,
+          condicionPago: condicionPago ?? null,
+          cuentas: [] as CuentaBancaria[],
+          fechaCorte,
+          analistaNombre,
+          analistaEmail,
+          analistaTelefono,
+          analistaWhatsapp,
+        }
+        if (adjunto === 'PDF') {
+          setLoadingMsg('Generando PDF...')
+          const base64 = await generarEstadoCuentaBase64(exportParams)
+          adjuntoData = {
+            base64,
+            mimeType: 'application/pdf',
+            filename: `estado-cuenta-${safeFilename(clienteNombre)}.pdf`,
+          }
+        } else {
+          setLoadingMsg('Generando Excel...')
+          const base64 = await generarEstadoCuentaExcelBase64(exportParams)
+          adjuntoData = {
+            base64,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename: `estado-cuenta-${safeFilename(clienteNombre)}.xlsx`,
+          }
+        }
+      } catch {
+        setError('Error al generar el adjunto. Intentá sin adjunto.')
+        setLoading(false); setLoadingMsg('Enviando...')
+        return
+      }
+    }
+
+    // ── 3. Enviar email vía Gmail API ──────────────────────────────────
+    setLoadingMsg('Enviando...')
+    // Parsear Para y CC: separar por ; o , y limpiar espacios
+    const toList = para.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+    const ccList = cc.trim()
+      ? cc.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+      : []
+
     const emailRes = await fetch('/api/clientes/email-cobro', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        to:            para.trim(),
+        to:            toList.join(', '),
+        cc:            ccList,
         asunto:        asunto.trim(),
         mensaje:       mensaje.trim(),
+        adjunto:       adjuntoData,
         providerToken,
         providerRefreshToken,
-        clienteNombre: clienteNombre,
-        clienteCod:    clienteCod,
+        clienteNombre,
+        clienteCod,
       }),
     })
     if (!emailRes.ok) {
       const j = await emailRes.json().catch(() => ({}))
       setError((j as { error?: string }).error ?? 'Error al enviar el correo')
-      setLoading(false)
+      setLoading(false); setLoadingMsg('Enviando...')
       return
     }
 
-    // ── 3. Registrar gestión automática ───────────────────────────────
-    const hoyCR  = new Date(Date.now() - 6 * 3600 * 1000)
-    const fecha  = hoyCR.toISOString().split('T')[0]
-    const hora   = hoyCR.toISOString().split('T')[1].slice(0, 8)
+    // ── 4. Registrar gestión automática ───────────────────────────────
+    const hoyCR = new Date(Date.now() - 6 * 3600 * 1000)
+    const fecha = hoyCR.toISOString().split('T')[0]
+    const hora  = hoyCR.toISOString().split('T')[1].slice(0, 8)
+    const todosDestinatarios = [...toList, ...ccList].join(', ')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: gErr } = await supabase.from('gestiones').insert({
       cliente_cod: clienteCod, contribuyente, analista_email: analistaEmail,
       fecha, hora, tipo: 'CORREO', resultado: 'Email enviado',
-      nota: `[${asunto}] Email enviado a ${para}. ${mensaje}`,
+      nota: `[${asunto}] Email enviado a ${todosDestinatarios}. ${mensaje}`,
     } as any)
-    setLoading(false)
+    setLoading(false); setLoadingMsg('Enviando...')
     if (gErr) { setError('Error al registrar gestión: ' + gErr.message); return }
     onSuccess()
   }
@@ -1146,10 +1218,25 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
       </div>
       <form onSubmit={handleEnviar} className="p-5 space-y-3">
         {error && <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-[12px] text-red-700 font-semibold">{error}</div>}
+
+        {/* Para */}
         <div>
           <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Para</label>
-          <input type="email" value={para} onChange={e => setPara(e.target.value)} className={inputCls} placeholder="correo@empresa.com" />
+          <input type="text" value={para} onChange={e => setPara(e.target.value)} className={inputCls}
+            placeholder="correo@empresa.com; otro@empresa.com" />
+          <p className="text-[10px] text-gray-400 mt-0.5">Separar varios correos con punto y coma (;)</p>
         </div>
+
+        {/* CC */}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
+            CC <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span>
+          </label>
+          <input type="text" value={cc} onChange={e => setCc(e.target.value)} className={inputCls}
+            placeholder="copia@empresa.com; otro@empresa.com" />
+        </div>
+
+        {/* Asunto */}
         <div>
           <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Asunto</label>
           <select value={asunto} onChange={e => setAsunto(e.target.value)} className={inputCls}>
@@ -1158,15 +1245,48 @@ function ModalEmailCobro({ clienteNombre, clienteCod, contribuyente, correo, ana
             ))}
           </select>
         </div>
+
+        {/* Mensaje */}
         <div>
           <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Mensaje</label>
-          <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={4} className={inputCls + ' resize-none'} placeholder="Escribí el mensaje de cobro..." />
+          <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={4}
+            className={inputCls + ' resize-none'} placeholder="Escribí el mensaje de cobro..." />
         </div>
+
+        {/* Adjunto */}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">
+            <Paperclip size={10} className="inline mr-1" />
+            Adjuntar estado de cuenta
+          </label>
+          <div className="flex gap-2">
+            {(['Ninguno', 'PDF', 'Excel'] as TipoAdjunto[]).map(op => (
+              <button
+                key={op}
+                type="button"
+                onClick={() => setAdjunto(op)}
+                className={`flex-1 py-2 rounded-xl text-[12px] font-semibold border transition ${
+                  adjunto === op
+                    ? 'bg-[#009ee3] border-[#009ee3] text-white'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {op === 'Ninguno' ? 'Sin adjunto' : op}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <p className="text-[10px] text-gray-400">Se registrará una gestión de tipo EMAIL automáticamente.</p>
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">Cancelar</button>
-          <button type="submit" disabled={loading} className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90" style={{ backgroundColor: '#009ee3' }}>
-            {loading ? 'Registrando...' : 'Enviar y registrar'}
+          <button type="button" onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-[13px] font-semibold text-gray-600 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" disabled={loading}
+            className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white transition disabled:opacity-60 hover:opacity-90"
+            style={{ backgroundColor: '#009ee3' }}>
+            {loading ? loadingMsg : 'Enviar y registrar'}
           </button>
         </div>
       </form>
@@ -1241,7 +1361,7 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
           adjuntoData = {
             base64,
             mimeType: 'application/pdf',
-            filename: `estado-cuenta-${clienteCod}.pdf`,
+            filename: `estado-cuenta-${safeFilename(clienteNombre)}.pdf`,
           }
         } else {
           setLoadingMsg('Generando Excel...')
@@ -1249,7 +1369,7 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
           adjuntoData = {
             base64,
             mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            filename: `estado-cuenta-${clienteCod}.xlsx`,
+            filename: `estado-cuenta-${safeFilename(clienteNombre)}.xlsx`,
           }
         }
       } catch {
@@ -1313,10 +1433,10 @@ function ModalEstadoCuenta({ clienteNombre, clienteCod, contribuyente, correo,
               Destinatario
             </label>
             <input
-              type="email"
+              type="text"
               value={para}
               onChange={e => { setPara(e.target.value); setError('') }}
-              placeholder="correo@empresa.com"
+              placeholder="correo@empresa.com; otro@empresa.com"
               className={inputCls}
             />
             {!correo && (
