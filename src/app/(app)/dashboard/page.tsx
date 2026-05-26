@@ -11,6 +11,8 @@ import PorVendedor    from '@/components/analista/PorVendedor'
 import AgendaCompacta from '@/components/analista/AgendaCompacta'
 import MiProgreso     from '@/components/analista/MiProgreso'
 import NotasRapidas   from '@/components/analista/NotasRapidas'
+import TendenciaCarteraChart from '@/components/coordinador/TendenciaCarteraChart'
+import type { HistoricoCarteraRow } from '@/components/coordinador/TendenciaCarteraChart'
 import type {
   KpisAnalistaDashboard,
   VendedorResumen,
@@ -182,6 +184,17 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     const { data } = await supabase.from('config_sistema').select('valor').eq('clave', 'META_MENSUAL').single()
     meta = Number((data as { valor: string } | null)?.valor || 0)
   } catch {}
+
+  // ── Histórico de mora (para gráfica de tendencia) ────────────────────
+  let historico: HistoricoCarteraRow[] = []
+  try {
+    const { data: histData } = await supabase
+      .from('historico_cartera')
+      .select('fecha, cartera_total, mora_total, mora_31_plus, pct_mora, pct_mora_31, n_en_mora')
+      .order('fecha', { ascending: true })
+      .limit(90)
+    historico = (histData ?? []) as HistoricoCarteraRow[]
+  } catch { /* tabla puede no existir aún */ }
 
   // ── Alertas ───────────────────────────────────────────────────────────
   const alertas: Alerta[] = []
@@ -374,6 +387,9 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             )}
           </div>
         </div>
+
+        {/* Tendencia de Mora */}
+        <TendenciaCarteraChart data={historico} />
 
         {/* Mi Equipo + Gestiones Recientes */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
