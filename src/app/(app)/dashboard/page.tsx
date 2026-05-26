@@ -3,6 +3,7 @@ import { fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
   TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
+  AlertTriangle, Percent,
 } from 'lucide-react'
 import DashboardResumen from '@/components/analista/DashboardResumen'
 import SaludoDashboard from '@/components/dashboard/saludo-dashboard'
@@ -111,8 +112,11 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     }
   } catch {}
 
-  const pMora = pct(mora, cartera)
-  const dso   = cartera ? Math.round((mora / cartera) * 30) : 0
+  const pMora    = pct(mora, cartera)
+  const dso      = cartera ? Math.round((mora / cartera) * 30) : 0
+  // Monto vencido >30 días (31-60 + 61-90 + 91-120 + 120+) y su % sobre cartera total
+  const venc30   = Math.max(0, m31) + Math.max(0, m61) + Math.max(0, m91) + Math.max(0, m120)
+  const pVenc30  = pct(venc30, cartera)
 
   // ── Gestiones ────────────────────────────────────────────────────────
   let gHoy = 0, gestiones: GestionRow[] = []
@@ -210,12 +214,64 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-          <KPICard label="Cartera Total"      valor={fmtM(cartera)}                                             sub={`${String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')} clientes`} accentColor="#003B5C"                        badge={null}                         icon={<Shield size={16}/>}        />
-          <KPICard label="Total en Mora"      valor={fmtM(mora)}                                               sub={`${nMora} clientes`}                                                   accentColor={pMora>20?"#ef4444":"#16a34a"}  badge={`${pMora}%`}                  badgeGood={pMora<=20} icon={<TrendingDown size={16}/>}   />
-          <KPICard label="Gestiones Hoy"      valor={String(gHoy)}                                             sub="registradas hoy"                                                       accentColor="#009ee3"                        badge={gHoy>0?'activo':null}          badgeGood icon={<ClipboardCheck size={16}/>} />
-          <KPICard label="Promesas Pend."     valor={String(nPromesas)}                                        sub={promVencidas.length>0?`${promVencidas.length} vencen hoy`:'Al día'}   accentColor={promVencidas.length>0?"#f59e0b":"#003B5C"} badge={promVencidas.length>0?'urgente':null} badgeGood={false} icon={<Handshake size={16}/>} />
-          <KPICard label="Clientes Activos"   valor={String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}  sub={`${nMora} con mora`}                                                   accentColor="#009ee3"                        badge={null}                         icon={<Users size={16}/>}         />
-          <KPICard label="DSO"                valor={`${dso}d`}                                                sub="benchmark < 40 días"                                                   accentColor={dso>40?"#ef4444":"#16a34a"}    badge={dso>40?'↑ alto':'✓ ok'}       badgeGood={dso<=40} icon={<Timer size={16}/>} />
+          {/* 1. Cartera Total */}
+          <KPICard
+            label="Cartera Total"
+            valor={fmtM(cartera)}
+            sub={`${String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes activos`}
+            accentColor="#003B5C"
+            badge={null}
+            icon={<Shield size={16} />}
+          />
+          {/* 2. Mora Total */}
+          <KPICard
+            label="Mora Total"
+            valor={fmtM(mora)}
+            sub={`${String(nMora).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes en mora`}
+            accentColor="#ef4444"
+            badge={null}
+            icon={<TrendingDown size={16} />}
+          />
+          {/* 3. Venc >30D / Cartera */}
+          <KPICard
+            label="Venc >30D / Cartera"
+            valor={`${pVenc30}%`}
+            sub={`${fmtM(venc30)} vencido`}
+            accentColor={pVenc30 > 10 ? '#ea580c' : '#16a34a'}
+            badge={pVenc30 > 10 ? '↑ alto' : '✓ ok'}
+            badgeGood={pVenc30 <= 10}
+            icon={<AlertTriangle size={16} />}
+          />
+          {/* 4. % Mora / Cartera */}
+          <KPICard
+            label="% Mora / Cartera"
+            valor={`${pMora}%`}
+            sub="Benchmark <15%"
+            accentColor={pMora > 15 ? '#ef4444' : '#16a34a'}
+            badge={pMora > 15 ? '↑ alto' : '✓ ok'}
+            badgeGood={pMora <= 15}
+            icon={<Percent size={16} />}
+          />
+          {/* 5. DSO */}
+          <KPICard
+            label="DSO Actual"
+            valor={`${dso}d`}
+            sub="días promedio de cobro"
+            accentColor={dso > 40 ? '#ef4444' : '#16a34a'}
+            badge={dso > 40 ? '↑ alto' : '✓ ok'}
+            badgeGood={dso <= 40}
+            icon={<Timer size={16} />}
+          />
+          {/* 6. Gestiones Hoy */}
+          <KPICard
+            label="Gestiones Hoy"
+            valor={String(gHoy)}
+            sub={`${analistas.length} analistas activos`}
+            accentColor="#009ee3"
+            badge={gHoy > 0 ? 'activo' : 'sin gestiones'}
+            badgeGood={gHoy > 0}
+            icon={<ClipboardCheck size={16} />}
+          />
         </div>
 
         {/* Aging + Alertas */}
