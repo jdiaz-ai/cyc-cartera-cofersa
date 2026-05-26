@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import Sidebar from '@/components/sidebar'
 import Topbar from '@/components/topbar'
 import ClientWrapper from '@/components/layout/client-wrapper'
@@ -74,31 +75,23 @@ export default async function AppLayout({
   // Avatar URL desde Google OAuth (metadata del user)
   const avatarUrl: string | null = user.user_metadata?.avatar_url ?? null
 
-  // Última sincronización: notificación SYNC más reciente (cualquier usuario)
-  // Fallback: updated_at más reciente de cartera (funciona para coordinador)
+  // Última sincronización: notificación SYNC más reciente de cualquier usuario
+  // Usa service role para bypassear RLS (el coordinador no recibe estas notis)
   let ultimaSync = ''
   try {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: notiSync } = await (supabase as any)
+    const { data } = await (admin as any)
       .from('notificaciones')
       .select('created_at')
       .eq('tipo', 'SYNC')
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
-    if (notiSync?.created_at) {
-      ultimaSync = notiSync.created_at
-    } else {
-      // Fallback: updated_at más reciente en cartera
-      const { data: carteraRow } = await supabase
-        .from('cartera')
-        .select('updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single()
-      const row = carteraRow as { updated_at: string } | null
-      if (row?.updated_at) ultimaSync = row.updated_at
-    }
+    if (data?.created_at) ultimaSync = data.created_at
   } catch { /* sin datos aún */ }
 
   return (
