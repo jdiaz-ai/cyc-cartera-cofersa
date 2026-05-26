@@ -74,17 +74,18 @@ export default async function AppLayout({
   // Avatar URL desde Google OAuth (metadata del user)
   const avatarUrl: string | null = user.user_metadata?.avatar_url ?? null
 
-  // Última sincronización: updated_at más reciente de cartera
+  // Última sincronización: created_at de la notificación SYNC más reciente
   let ultimaSync = ''
   try {
-    const { data } = await supabase
-      .from('cartera')
-      .select('updated_at')
-      .order('updated_at', { ascending: false })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('notificaciones')
+      .select('created_at')
+      .eq('tipo', 'SYNC')
+      .order('created_at', { ascending: false })
       .limit(1)
       .single()
-    const row = data as { updated_at: string } | null
-    if (row?.updated_at) ultimaSync = row.updated_at
+    if (data?.created_at) ultimaSync = data.created_at
   } catch { /* sin datos aún */ }
 
   return (
