@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 import {
-  Bell, RefreshCw, CheckCheck, ClipboardList, Handshake,
+  Bell, CheckCheck, ClipboardList, Handshake,
   AlertTriangle, RefreshCwIcon, Info, ChevronDown, User, LogOut,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -52,10 +52,21 @@ function nombreCorto(nombre: string): string {
   return partes.slice(0, 2).join(' ')
 }
 
+// ── Formatea ISO UTC → "DD/MM/YYYY · H:MM AM/PM" en hora CR (UTC-6) ──
+function fmtSync(iso: string): string {
+  const d  = new Date(new Date(iso).getTime() - 6 * 60 * 60 * 1000)
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const yy = d.getUTCFullYear()
+  const h  = d.getUTCHours()
+  const mi = String(d.getUTCMinutes()).padStart(2, '0')
+  return `${dd}/${mm}/${yy} · ${h % 12 || 12}:${mi} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
 // ── Props ─────────────────────────────────────────────────────────
 interface TopbarProps {
   notiCount:      number
-  fechaCorte?:    string
+  ultimaSync?:    string   // ISO UTC — updated_at más reciente de cartera
   notificaciones: Notificacion[]
   usuarioId:      string
   // Chip de usuario
@@ -68,7 +79,7 @@ interface TopbarProps {
 // ── Componente ────────────────────────────────────────────────────
 export default function Topbar({
   // notiCount ya no se usa: el conteo se recalcula desde `notis` localmente
-  fechaCorte,
+  ultimaSync,
   notificaciones: init,
   usuarioId,
   nombre,
@@ -196,12 +207,15 @@ export default function Topbar({
       <div className="flex items-center gap-3">
 
         {/* Chip de sincronización */}
-        <div className="hidden sm:flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-          <span className="text-gray-400" style={{ fontSize: '11px' }}>
-            {fechaCorte ? `Corte: ${fechaCorte}` : 'Sincronización 3× al día'}
+        <div
+          className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+          title="Última sincronización con Softland"
+        >
+          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#16a34a' }} />
+          <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 600 }}>
+            {ultimaSync ? fmtSync(ultimaSync) : 'Sin datos aún'}
           </span>
-          <RefreshCw size={10} className="text-gray-300 ml-0.5" />
         </div>
 
         <div className="hidden sm:block w-px h-5 bg-gray-100" />

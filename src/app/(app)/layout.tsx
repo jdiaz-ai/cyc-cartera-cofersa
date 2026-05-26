@@ -74,21 +74,17 @@ export default async function AppLayout({
   // Avatar URL desde Google OAuth (metadata del user)
   const avatarUrl: string | null = user.user_metadata?.avatar_url ?? null
 
-  // Fecha del último corte Softland (para el topbar)
-  let fechaCorte = ''
+  // Última sincronización: updated_at más reciente de cartera
+  let ultimaSync = ''
   try {
     const { data } = await supabase
       .from('cartera')
-      .select('fecha_corte')
+      .select('updated_at')
+      .order('updated_at', { ascending: false })
       .limit(1)
       .single()
-    const carteraRow = data as { fecha_corte: string } | null
-    if (carteraRow?.fecha_corte) {
-      const d = new Date(carteraRow.fecha_corte)
-      if (!isNaN(d.getTime())) {
-        fechaCorte = `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`
-      }
-    }
+    const row = data as { updated_at: string } | null
+    if (row?.updated_at) ultimaSync = row.updated_at
   } catch { /* sin datos aún */ }
 
   return (
@@ -101,7 +97,7 @@ export default async function AppLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar
           notiCount={notiCount}
-          fechaCorte={fechaCorte}
+          ultimaSync={ultimaSync}
           notificaciones={notificaciones}
           usuarioId={usuarioId}
           nombre={perfil.nombre}
