@@ -626,7 +626,7 @@ function KPICard({ label, valor, sub, accentColor, badge, badgeGood, icon }: {
       </p>
       <p
         className="font-black tabular-nums text-slate-900 leading-tight"
-        style={{ fontSize: valor.length > 8 ? '1.3rem' : '1.75rem' }}
+        style={{ fontSize: '1.55rem' }}
       >
         {valor}
       </p>
