@@ -241,8 +241,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             valor={`${pVenc301}%`}
             sub={`${fmtKPI(venc30)} vencido`}
             accentColor={pVenc30 > 10 ? '#ea580c' : '#16a34a'}
-            badge={pVenc30 > 10 ? '↑ alto' : '✓ ok'}
-            badgeGood={pVenc30 <= 10}
+            badge={null}
             icon={<AlertTriangle size={16} />}
           />
           {/* 4. % Mora / Cartera */}
@@ -251,8 +250,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             valor={`${pMora1}%`}
             sub="Benchmark <15%"
             accentColor={pMora > 15 ? '#ef4444' : '#16a34a'}
-            badge={pMora > 15 ? '↑ alto' : '✓ ok'}
-            badgeGood={pMora <= 15}
+            badge={null}
             icon={<Percent size={16} />}
           />
           {/* 5. DSO */}
@@ -261,8 +259,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             valor={`${dso}d`}
             sub="días promedio de cobro"
             accentColor={dso > 40 ? '#ef4444' : '#16a34a'}
-            badge={dso > 40 ? '↑ alto' : '✓ ok'}
-            badgeGood={dso <= 40}
+            badge={null}
             icon={<Timer size={16} />}
           />
           {/* 6. Gestiones Hoy */}
@@ -271,8 +268,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             valor={String(gHoy)}
             sub={`${analistas.length} analistas activos`}
             accentColor="#009ee3"
-            badge={gHoy > 0 ? 'activo' : 'sin gestiones'}
-            badgeGood={gHoy > 0}
+            badge={null}
             icon={<ClipboardCheck size={16} />}
           />
         </div>
