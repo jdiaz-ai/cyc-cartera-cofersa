@@ -210,12 +210,12 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-          <KPICard label="Cartera Total"       valor={fmtM(cartera)}   sub={`${String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')} clientes`}    gradient="linear-gradient(135deg,#003B5C,#005a8e)"   badge={null}              icon={<Shield size={16}/>}       />
-          <KPICard label="Total en Mora"        valor={fmtM(mora)}      sub={`${nMora} clientes`}                                                       gradient={pMora>20?"linear-gradient(135deg,#991b1b,#dc2626)":"linear-gradient(135deg,#065f46,#059669)"} badge={`${pMora}%`} badgeGood={pMora<=20} icon={<TrendingDown size={16}/>} />
-          <KPICard label="Gestiones Hoy"        valor={String(gHoy)}    sub="registradas hoy"                                                           gradient="linear-gradient(135deg,#0369a1,#009ee3)"   badge={gHoy>0?'activo':null} badgeGood icon={<ClipboardCheck size={16}/>} />
-          <KPICard label="Promesas Pendientes"  valor={String(nPromesas)} sub={promVencidas.length>0?`⚠ ${promVencidas.length} vencen hoy`:'al día'}    gradient={promVencidas.length>0?"linear-gradient(135deg,#7c2d12,#ea580c)":"linear-gradient(135deg,#1e3a5f,#003B5C)"} badge={promVencidas.length>0?'urgente':null} badgeGood={false} icon={<Handshake size={16}/>} />
-          <KPICard label="Clientes Activos"     valor={String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')} sub={`${nMora} con mora`}                gradient="linear-gradient(135deg,#1d4ed8,#3b82f6)"   badge={null}              icon={<Users size={16}/>}        />
-          <KPICard label="DSO"                  valor={`${dso}d`}       sub="benchmark < 40 días"                                                       gradient={dso>40?"linear-gradient(135deg,#991b1b,#ef4444)":"linear-gradient(135deg,#065f46,#059669)"} badge={dso>40?'↑ alto':'✓ ok'} badgeGood={dso<=40} icon={<Timer size={16}/>} />
+          <KPICard label="Cartera Total"      valor={fmtM(cartera)}                                             sub={`${String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')} clientes`} accentColor="#003B5C"                        badge={null}                         icon={<Shield size={16}/>}        />
+          <KPICard label="Total en Mora"      valor={fmtM(mora)}                                               sub={`${nMora} clientes`}                                                   accentColor={pMora>20?"#ef4444":"#16a34a"}  badge={`${pMora}%`}                  badgeGood={pMora<=20} icon={<TrendingDown size={16}/>}   />
+          <KPICard label="Gestiones Hoy"      valor={String(gHoy)}                                             sub="registradas hoy"                                                       accentColor="#009ee3"                        badge={gHoy>0?'activo':null}          badgeGood icon={<ClipboardCheck size={16}/>} />
+          <KPICard label="Promesas Pend."     valor={String(nPromesas)}                                        sub={promVencidas.length>0?`${promVencidas.length} vencen hoy`:'Al día'}   accentColor={promVencidas.length>0?"#f59e0b":"#003B5C"} badge={promVencidas.length>0?'urgente':null} badgeGood={false} icon={<Handshake size={16}/>} />
+          <KPICard label="Clientes Activos"   valor={String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g,'.')}  sub={`${nMora} con mora`}                                                   accentColor="#009ee3"                        badge={null}                         icon={<Users size={16}/>}         />
+          <KPICard label="DSO"                valor={`${dso}d`}                                                sub="benchmark < 40 días"                                                   accentColor={dso>40?"#ef4444":"#16a34a"}    badge={dso>40?'↑ alto':'✓ ok'}       badgeGood={dso<=40} icon={<Timer size={16}/>} />
         </div>
 
         {/* Aging + Alertas */}
@@ -547,24 +547,42 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
 }
 
 // ── KPI Card (compartida) ─────────────────────────────────────────────
-function KPICard({ label, valor, sub, gradient, badge, badgeGood, icon }: {
-  label: string; valor: string; sub: string; gradient: string
+function KPICard({ label, valor, sub, accentColor, badge, badgeGood, icon }: {
+  label: string; valor: string; sub: string; accentColor: string
   badge: string | null; badgeGood?: boolean; icon: React.ReactNode
 }) {
   return (
-    <div style={{background:gradient,borderRadius:'16px',boxShadow:'0 4px 24px rgba(0,0,0,0.14)',overflow:'hidden'}} className="p-5 relative">
-      <div style={{position:'absolute',top:'-20px',right:'-20px',width:'90px',height:'90px',background:'rgba(255,255,255,0.06)',borderRadius:'50%'}}/>
-      <div className="relative">
-        <div className="flex items-center justify-between mb-3">
-          <p style={{color:'rgba(255,255,255,0.7)',fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>{label}</p>
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'rgba(255,255,255,0.15)'}}><span style={{color:'rgba(255,255,255,0.9)'}}>{icon}</span></div>
-        </div>
-        <p style={{color:'white',fontSize:valor.length>8?'1.4rem':'1.9rem',fontWeight:900,lineHeight:1.1,letterSpacing:'-0.02em'}}>{valor}</p>
-        <div className="flex items-center justify-between mt-2">
-          <p style={{color:'rgba(255,255,255,0.6)',fontSize:'11px'}}>{sub}</p>
-          {badge && <span style={{background:badgeGood?'rgba(74,222,128,0.25)':'rgba(255,100,100,0.25)',color:badgeGood?'#86efac':'#fca5a5',fontSize:'10px',fontWeight:700,padding:'2px 8px',borderRadius:'20px',textTransform:'uppercase'}}>{badge}</span>}
-        </div>
+    <div
+      className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col items-center text-center"
+      style={{ borderTop: `3px solid ${accentColor}` }}
+    >
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center mb-3"
+        style={{ background: `${accentColor}1a` }}
+      >
+        <span style={{ color: accentColor }}>{icon}</span>
       </div>
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 leading-none">
+        {label}
+      </p>
+      <p
+        className="font-black tabular-nums text-slate-900 leading-tight"
+        style={{ fontSize: valor.length > 8 ? '1.3rem' : '1.75rem' }}
+      >
+        {valor}
+      </p>
+      <p className="text-[11px] text-slate-400 mt-1 leading-snug">{sub}</p>
+      {badge && (
+        <span
+          className="mt-2 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide"
+          style={{
+            background: badgeGood ? '#f0fdf4' : '#fef2f2',
+            color:      badgeGood ? '#15803d' : '#dc2626',
+          }}
+        >
+          {badge}
+        </span>
+      )}
     </div>
   )
 }
