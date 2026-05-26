@@ -299,25 +299,36 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
               </div>
             </div>
 
-            {/* Tabla reporte — sin mini barras */}
+            {/* Tabla reporte con barra proporcional */}
             <div className="px-4 pb-4">
               {/* Encabezados */}
-              <div className="flex items-center px-3 pb-1.5 border-b border-slate-100">
-                <span className="flex-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
+              <div className="flex items-center px-3 pb-1.5 border-b border-slate-100 gap-3">
+                <span className="w-28 flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
+                <span className="flex-1"/>
                 <span className="w-36 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
                 <span className="w-16 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Cart.</span>
               </div>
               {/* Filas */}
-              {aging.map((t, i) => (
-                <div key={t.label} className="flex items-center px-3 py-1.5 rounded-lg" style={{background: i%2===1 ? '#f8fafc' : 'transparent'}}>
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:t.color}}/>
-                    <span className="text-[13px] font-semibold text-gray-700">{t.label}</span>
-                  </div>
-                  <span className="w-36 text-right text-[13px] font-bold tabular-nums text-gray-900">{fmtKPI(Math.max(0,t.v))}</span>
-                  <span className="w-16 text-right text-[13px] font-bold tabular-nums" style={{color:t.color}}>{pct1(Math.max(0,t.v),cartera)}%</span>
-                </div>
-              ))}
+              {(() => {
+                const maxV = Math.max(...aging.map(a => Math.max(0, a.v)))
+                return aging.map((t, i) => {
+                  const barW = maxV > 0 ? (Math.max(0, t.v) / maxV) * 100 : 0
+                  return (
+                    <div key={t.label} className="flex items-center px-3 py-1.5 rounded-lg gap-3" style={{background: i%2===1 ? '#f8fafc' : 'transparent'}}>
+                      <div className="flex items-center gap-2 w-28 flex-shrink-0">
+                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:t.color}}/>
+                        <span className="text-[13px] font-semibold text-gray-700">{t.label}</span>
+                      </div>
+                      {/* Barra proporcional sutil */}
+                      <div className="flex-1 h-[5px] rounded-full" style={{background:'#f1f5f9'}}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{width:`${Math.max(barW,barW>0?1:0)}%`,background:t.color,opacity:0.45}}/>
+                      </div>
+                      <span className="w-36 text-right text-[13px] font-bold tabular-nums text-gray-900">{fmtKPI(Math.max(0,t.v))}</span>
+                      <span className="w-16 text-right text-[13px] font-bold tabular-nums" style={{color:t.color}}>{pct1(Math.max(0,t.v),cartera)}%</span>
+                    </div>
+                  )
+                })
+              })()}
               {/* Subtotal: Mora Total (≥1 día vencido) */}
               <div className="flex items-center px-3 py-2 mt-2 rounded-lg" style={{background:'#fef2f2',border:'1px solid #fecaca'}}>
                 <div className="flex items-center gap-2 flex-1">
