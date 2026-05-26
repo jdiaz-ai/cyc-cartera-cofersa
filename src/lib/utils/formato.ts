@@ -95,6 +95,18 @@ export function hoyISO(): string {
 }
 
 /**
+ * Formatea montos grandes para KPIs del coordinador.
+ * Siempre en millones, 1 decimal, punto de miles, coma decimal.
+ * Ejemplo: 5_092_800_000 → "₡5.092,8 M" | 469_000_000 → "₡469,0 M"
+ */
+export function fmtKPI(n: number | null | undefined): string {
+  const millones = (Number(n) || 0) / 1_000_000
+  const parts    = millones.toFixed(1).split('.')
+  const entero   = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `₡${entero},${parts[1]} M`
+}
+
+/**
  * Monto completo con 2 decimales y puntos de miles — solo para la Ficha del Cliente.
  * Limpia decimales raros de Supabase con Math.round(*100)/100.
  * Ejemplo: 97342156.891 → "₡97.342.156,89"

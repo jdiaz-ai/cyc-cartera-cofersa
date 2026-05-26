@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { fmtM, fmtFecha, hoyISO } from '@/lib/utils/formato'
+import { fmtM, fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
   TrendingDown, Users, ClipboardCheck,
   Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
@@ -50,7 +50,8 @@ type NivelAlerta = 'ROJO' | 'AMARILLO' | 'CYAN'
 interface Alerta { nivel: NivelAlerta; texto: string }
 type Urgencia = 'ROJO' | 'AMARILLO' | 'VERDE'
 
-function pct(a: number, b: number) { return b ? Math.round((a / b) * 100) : 0 }
+function pct(a: number, b: number)  { return b ? Math.round((a / b) * 100) : 0 }
+function pct1(a: number, b: number) { return b ? (Math.round((a / b) * 1000) / 10).toFixed(1) : '0.0' }
 
 // ── Página principal (detecta rol) ────────────────────────────────────
 export default async function DashboardPage() {
@@ -112,11 +113,13 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     }
   } catch {}
 
-  const pMora    = pct(mora, cartera)
+  const pMora    = pct(mora, cartera)       // entero — para lógica de color
+  const pMora1   = pct1(mora, cartera)      // "27.3" — para mostrar en card
   const dso      = cartera ? Math.round((mora / cartera) * 30) : 0
   // Monto vencido >30 días (31-60 + 61-90 + 91-120 + 120+) y su % sobre cartera total
   const venc30   = Math.max(0, m31) + Math.max(0, m61) + Math.max(0, m91) + Math.max(0, m120)
-  const pVenc30  = pct(venc30, cartera)
+  const pVenc30  = pct(venc30, cartera)     // entero — para lógica de color
+  const pVenc301 = pct1(venc30, cartera)    // "9.4"  — para mostrar en card
 
   // ── Gestiones ────────────────────────────────────────────────────────
   let gHoy = 0, gestiones: GestionRow[] = []
@@ -217,7 +220,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           {/* 1. Cartera Total */}
           <KPICard
             label="Cartera Total"
-            valor={fmtM(cartera)}
+            valor={fmtKPI(cartera)}
             sub={`${String(nClientes).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes activos`}
             accentColor="#003B5C"
             badge={null}
@@ -226,7 +229,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           {/* 2. Mora Total */}
           <KPICard
             label="Mora Total"
-            valor={fmtM(mora)}
+            valor={fmtKPI(mora)}
             sub={`${String(nMora).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes en mora`}
             accentColor="#ef4444"
             badge={null}
@@ -235,8 +238,8 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           {/* 3. Venc >30D / Cartera */}
           <KPICard
             label="Venc >30D / Cartera"
-            valor={`${pVenc30}%`}
-            sub={`${fmtM(venc30)} vencido`}
+            valor={`${pVenc301}%`}
+            sub={`${fmtKPI(venc30)} vencido`}
             accentColor={pVenc30 > 10 ? '#ea580c' : '#16a34a'}
             badge={pVenc30 > 10 ? '↑ alto' : '✓ ok'}
             badgeGood={pVenc30 <= 10}
@@ -245,7 +248,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           {/* 4. % Mora / Cartera */}
           <KPICard
             label="% Mora / Cartera"
-            valor={`${pMora}%`}
+            valor={`${pMora1}%`}
             sub="Benchmark <15%"
             accentColor={pMora > 15 ? '#ef4444' : '#16a34a'}
             badge={pMora > 15 ? '↑ alto' : '✓ ok'}
