@@ -281,33 +281,52 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
                 <div><h2 className="text-sm font-bold text-gray-900">Distribución de Cartera · Aging</h2><p className="text-xs text-gray-400">6 tramos · {fechaCorte}</p></div>
               </div>
-              <p className="text-sm font-black text-gray-900 hidden sm:block">{fmtM(cartera)}</p>
+              <p className="text-sm font-black text-gray-900 hidden sm:block">{fmtKPI(cartera)}</p>
             </div>
-            <div className="px-6 pt-4 pb-1">
+
+            {/* Barra apilada + leyenda completa (6 tramos siempre) */}
+            <div className="px-6 pt-4 pb-3">
               <div className="h-2.5 rounded-full overflow-hidden flex gap-0.5 mb-3">
-                {aging.map(t => { const p=pct(t.v,cartera); return p>0?<div key={t.label} style={{width:`${p}%`,background:t.color,borderRadius:'3px'}} title={`${t.label}: ${p}%`}/>:null })}
+                {aging.map(t => { const p=pct(Math.max(0,t.v),cartera); return p>0?<div key={t.label} style={{width:`${p}%`,background:t.color,borderRadius:'3px'}} title={`${t.label}: ${pct1(Math.max(0,t.v),cartera)}%`}/>:null })}
               </div>
-              <div className="flex gap-4 flex-wrap mb-4">
-                {aging.map(t => pct(t.v,cartera)>0&&<div key={t.label} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-sm" style={{background:t.color}}/><span className="text-xs text-gray-500">{t.label}</span></div>)}
-              </div>
-            </div>
-            <div className="px-4 pb-4 space-y-1.5">
-              {aging.map(t => {
-                const p=pct(t.v,cartera), maxV=Math.max(...aging.map(a=>a.v)), barW=maxV>0?Math.round((t.v/maxV)*100):0
-                return (
-                  <div key={t.label} className="rounded-xl px-4 py-2.5 flex items-center gap-4" style={{background:t.bg,border:`1px solid ${t.border}`}}>
-                    <div className="w-24 flex-shrink-0"><p className="text-xs font-bold" style={{color:t.color}}>{t.label}</p></div>
-                    <div className="flex-1 h-1.5 rounded-full" style={{background:'rgba(255,255,255,0.6)'}}><div className="h-full rounded-full" style={{width:`${Math.max(barW,2)}%`,background:t.color}}/></div>
-                    <p className="w-28 text-right text-sm font-black text-gray-900 flex-shrink-0">{fmtM(t.v)}</p>
-                    <span className="w-12 text-right text-xs font-bold flex-shrink-0" style={{color:t.color}}>{p}%</span>
+              <div className="flex gap-4 flex-wrap">
+                {aging.map(t => (
+                  <div key={t.label} className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{background:t.color}}/>
+                    <span className="text-[11px] text-gray-500">{t.label}</span>
                   </div>
-                )
-              })}
+                ))}
+              </div>
             </div>
-            <div className="px-6 py-3 flex flex-wrap items-center gap-6" style={{background:'#F8FAFC',borderTop:'1px solid #F1F5F9'}}>
-              <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-400 uppercase tracking-wider">DSO</span><span className={`text-sm font-black ${dso>40?'text-red-600':'text-green-600'}`}>{dso} días</span></div>
-              <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-400 uppercase tracking-wider">% Mora</span><span className={`text-sm font-black ${pMora>20?'text-red-600':'text-green-600'}`}>{pMora}%</span></div>
-              <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mora +90d</span><span className="text-sm font-black text-gray-800">{fmtM(m91+m120)}</span></div>
+
+            {/* Tabla reporte — sin mini barras */}
+            <div className="px-4 pb-4">
+              {/* Encabezados */}
+              <div className="flex items-center px-3 pb-1.5 border-b border-slate-100">
+                <span className="flex-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
+                <span className="w-36 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
+                <span className="w-16 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Cart.</span>
+              </div>
+              {/* Filas */}
+              {aging.map((t, i) => (
+                <div key={t.label} className="flex items-center px-3 py-1.5 rounded-lg" style={{background: i%2===1 ? '#f8fafc' : 'transparent'}}>
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:t.color}}/>
+                    <span className="text-[13px] font-semibold text-gray-700">{t.label}</span>
+                  </div>
+                  <span className="w-36 text-right text-[13px] font-bold tabular-nums text-gray-900">{fmtKPI(Math.max(0,t.v))}</span>
+                  <span className="w-16 text-right text-[13px] font-bold tabular-nums" style={{color:t.color}}>{pct1(Math.max(0,t.v),cartera)}%</span>
+                </div>
+              ))}
+              {/* Subtotal: Mora Total (≥1 día vencido) */}
+              <div className="flex items-center px-3 py-2 mt-2 rounded-lg" style={{background:'#fef2f2',border:'1px solid #fecaca'}}>
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:'#ef4444'}}/>
+                  <span className="text-[13px] font-black text-red-700 uppercase tracking-wide">Mora Total</span>
+                </div>
+                <span className="w-36 text-right text-[13px] font-black tabular-nums text-red-700">{fmtKPI(mora)}</span>
+                <span className="w-16 text-right text-[13px] font-black tabular-nums text-red-700">{pMora1}%</span>
+              </div>
             </div>
           </div>
 
