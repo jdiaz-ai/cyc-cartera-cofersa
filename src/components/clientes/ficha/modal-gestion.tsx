@@ -4,6 +4,14 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { X, Send, CheckCircle2, Handshake } from 'lucide-react'
 
+// ── Helper: formato monto CR (punto miles, coma decimal) ───────────────
+function fmtMontoInput(raw: string): string {
+  const clean  = raw.replace(/[^0-9,]/g, '')
+  const [intPart = '', decPart] = clean.split(',')
+  const intFmt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return decPart !== undefined ? `${intFmt},${decPart.slice(0, 2)}` : intFmt
+}
+
 // ── Constantes ─────────────────────────────────────────────────────────
 const TIPOS     = ['LLAMADA', 'CORREO', 'WHATSAPP', 'VISITA'] as const
 const RESULTADOS = [
@@ -209,8 +217,8 @@ export default function ModalGestion({
                 <input
                   type="text"
                   value={promesaMonto}
-                  onChange={e => setPromesaMonto(e.target.value.replace(/[^0-9.,]/g, ''))}
-                  placeholder="Ej: 500000"
+                  onChange={e => setPromesaMonto(fmtMontoInput(e.target.value))}
+                  placeholder="Ej: 756.974,50"
                   className={inputCls}
                 />
               </div>

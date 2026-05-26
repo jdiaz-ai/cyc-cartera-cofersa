@@ -2062,19 +2062,49 @@ const TIPO_ICONOS: Record<string, React.ReactNode> = {
 }
 
 // ── Modal Editar Gestión ──────────────────────────────────────────────
+type TipoEdicion = 'LLAMADA' | 'WHATSAPP' | 'CORREO' | 'INTERNA' | 'VISITA'
+const TIPOS_EDICION: { value: TipoEdicion; label: string }[] = [
+  { value: 'LLAMADA',  label: 'Llamada'        },
+  { value: 'WHATSAPP', label: 'WhatsApp'        },
+  { value: 'CORREO',   label: 'Correo'          },
+  { value: 'INTERNA',  label: 'Gestión Interna' },
+  { value: 'VISITA',   label: 'Visita'          },
+]
+const RESULTADOS_EDICION: Record<TipoEdicion, string[]> = {
+  LLAMADA:  ['Compromiso de pago confirmado','Cliente indica pago realizado','Solicitud de convenio','Reclamo comercial','Reclamo logístico','Requiere revisión interna','No contestó','Número ocupado','Llamar después','Contacto inválido'],
+  WHATSAPP: ['Compromiso de pago confirmado','Cliente indica pago realizado','Solicitud de convenio','Reclamo comercial','Reclamo logístico','Requiere revisión interna','Mensaje enviado','Visto sin respuesta','Sin respuesta','Contacto inválido'],
+  CORREO:   ['Compromiso de pago confirmado','Cliente indica pago realizado','Solicitud de convenio','Reclamo comercial','Reclamo logístico','Requiere revisión interna','Correo enviado','Pendiente respuesta','Correo inválido'],
+  INTERNA:  ['Validación comercial','Validación logística','Validación crédito','Escalado coordinación','Seguimiento interno'],
+  VISITA:   ['Cliente visitado','No localizado','Compromiso de pago confirmado','Solicitud de convenio','Reclamo comercial','Reclamo logístico'],
+}
+function normalizarTipoEdicion(t: string): TipoEdicion {
+  const u = t.toUpperCase()
+  if (u === 'EMAIL')  return 'CORREO'
+  if (u === 'OTRAS')  return 'INTERNA'
+  const validos: TipoEdicion[] = ['LLAMADA','WHATSAPP','CORREO','INTERNA','VISITA']
+  return validos.includes(u as TipoEdicion) ? u as TipoEdicion : 'LLAMADA'
+}
+
 function ModalEditarGestion({ gestion, onClose, onSuccess }: {
   gestion:   Gestion
   onClose:   () => void
   onSuccess: () => void
 }) {
-  const [tipo,      setTipo]      = useState(gestion.tipo)
-  const [resultado, setResultado] = useState(gestion.resultado)
+  const tipoInicial = normalizarTipoEdicion(gestion.tipo)
+  const [tipo,      setTipo]      = useState<TipoEdicion>(tipoInicial)
+  const [resultado, setResultado] = useState(() => {
+    const opciones = RESULTADOS_EDICION[normalizarTipoEdicion(gestion.tipo)]
+    return opciones.includes(gestion.resultado) ? gestion.resultado : opciones[0]
+  })
   const [nota,      setNota]      = useState(gestion.nota ?? '')
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState('')
 
-  const TIPOS     = ['Llamada', 'Email', 'WhatsApp', 'Visita', 'Otras']
-  const RESULTADOS = ['Promesa OK', 'No contestó', 'No ubicado', 'Pagó', 'Email enviado', 'Pendiente', 'Aceptó convenio', 'Llamar más tarde']
+  function handleTipoChange(nuevoTipo: TipoEdicion) {
+    setTipo(nuevoTipo)
+    const opciones = RESULTADOS_EDICION[nuevoTipo]
+    if (!opciones.includes(resultado)) setResultado(opciones[0])
+  }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
@@ -2103,14 +2133,14 @@ function ModalEditarGestion({ gestion, onClose, onSuccess }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Tipo</label>
-            <select value={tipo} onChange={e => setTipo(e.target.value)} className={inputCls}>
-              {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+            <select value={tipo} onChange={e => handleTipoChange(e.target.value as TipoEdicion)} className={inputCls}>
+              {TIPOS_EDICION.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Resultado</label>
             <select value={resultado} onChange={e => setResultado(e.target.value)} className={inputCls}>
-              {RESULTADOS.map(r => <option key={r} value={r}>{r}</option>)}
+              {RESULTADOS_EDICION[tipo].map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
         </div>

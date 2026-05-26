@@ -13,6 +13,14 @@ import type { NuevaGestionBody } from '@/app/api/clientes/gestiones/nueva/route'
 import { AREAS, getTiposPorArea } from '@/lib/solicitudes/catalogo'
 import type { AreaKey } from '@/lib/solicitudes/catalogo'
 
+// ── Helper: formato monto CR (punto miles, coma decimal) ───────────────
+function fmtMontoInput(raw: string): string {
+  const clean   = raw.replace(/[^0-9,]/g, '')          // solo dígitos y coma
+  const [intPart = '', decPart] = clean.split(',')
+  const intFmt  = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return decPart !== undefined ? `${intFmt},${decPart.slice(0, 2)}` : intFmt
+}
+
 // ── Tipos ──────────────────────────────────────────────────────────────
 type Tipo = 'LLAMADA' | 'WHATSAPP' | 'CORREO' | 'INTERNA' | 'VISITA'
 
@@ -471,8 +479,8 @@ export default function FormNuevaGestion({
               <div>
                 <label className={labelCls}>Monto compromiso *</label>
                 <input type="text" value={compromisoMonto}
-                  onChange={e => setCompromisoMonto(e.target.value.replace(/[^0-9.,]/g, ''))}
-                  placeholder="Ej: 450000" className={inputCls} />
+                  onChange={e => setCompromisoMonto(fmtMontoInput(e.target.value))}
+                  placeholder="Ej: 756.974,50" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Fecha compromiso *</label>
@@ -563,8 +571,8 @@ export default function FormNuevaGestion({
               <div>
                 <label className={labelCls}>Monto total *</label>
                 <input type="text" value={convMonto}
-                  onChange={e => setConvMonto(e.target.value.replace(/[^0-9.,]/g, ''))}
-                  placeholder="Ej: 1200000" className={inputCls} />
+                  onChange={e => setConvMonto(fmtMontoInput(e.target.value))}
+                  placeholder="Ej: 1.200.000,00" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Cantidad de cuotas *</label>
