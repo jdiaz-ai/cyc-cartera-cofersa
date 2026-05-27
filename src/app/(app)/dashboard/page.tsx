@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
   TrendingDown, ClipboardCheck, Target,
-  Activity, Shield, Timer, AlertTriangle, Percent,
+  Activity, Shield, Timer, AlertTriangle, Percent, Calculator,
 } from 'lucide-react'
 import MiEquipoCard, { type AnalistaEquipo } from '@/components/coordinador/MiEquipoCard'
 import DashboardResumen from '@/components/analista/DashboardResumen'
@@ -206,6 +206,16 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     { label: '+120 días',   v: m120, color: '#7f1d1d', bg: 'rgba(127,29,29,0.10)',   border: 'rgba(127,29,29,0.25)' },
   ]
 
+  // ── Avalúo de Riesgo (fórmula corporativa) ────────────────────────────
+  const riesgoNV    = Math.max(0, nv)   * 0.15
+  const riesgo130   = Math.max(0, m130) * 0.20
+  const riesgo31    = Math.max(0, m31)  * 0.25
+  const riesgo61    = Math.max(0, m61)  * 0.25
+  const riesgo91    = Math.max(0, m91)  * 0.25
+  const riesgo120   = Math.max(0, m120) * 1.00
+  const totalRiesgo = riesgoNV + riesgo130 + riesgo31 + riesgo61 + riesgo91 + riesgo120
+  const avaluoPct   = cartera > 0 ? (totalRiesgo / cartera) * 100 : 0
+
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
       <div className="px-6 pt-5 pb-6 space-y-5">
@@ -271,97 +281,66 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           />
         </div>
 
-        {/* Aging + Mi Equipo + Meta */}
+        {/* Aging + Avalúo de Riesgo + Mi Equipo + Meta */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <div className="flex flex-col" style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', borderTop:'3px solid #003B5C', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid #F1F5F9' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
-                <div><h2 className="text-sm font-bold text-gray-900">Distribución de Cartera · Aging</h2><p className="text-xs text-gray-400">6 tramos · {fechaCorte}</p></div>
-              </div>
-              <p className="text-sm font-black text-gray-900 hidden sm:block">{fmtKPI(cartera)}</p>
-            </div>
 
-            {/* Barra apilada + leyenda completa (6 tramos siempre) */}
-            <div className="px-6 pt-4 pb-3">
-              <div className="h-2.5 rounded-full overflow-hidden flex gap-0.5 mb-3">
-                {aging.map(t => { const p=pct(Math.max(0,t.v),cartera); return p>0?<div key={t.label} style={{width:`${p}%`,background:t.color,borderRadius:'3px'}} title={`${t.label}: ${pct1(Math.max(0,t.v),cartera)}%`}/>:null })}
-              </div>
-              <div className="flex gap-4 flex-wrap">
-                {aging.map(t => (
-                  <div key={t.label} className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{background:t.color}}/>
-                    <span className="text-[11px] text-gray-500">{t.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Columna izquierda: Aging simplificado + Avalúo de Riesgo */}
+          <div className="flex flex-col gap-5">
 
-            {/* Tabla reporte con barra proporcional */}
-            <div className="px-4 pb-4">
-              {/* Encabezados */}
-              <div className="flex items-center px-3 pb-1.5 border-b border-slate-100 gap-3">
-                <span className="w-28 flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
-                <span className="flex-1"/>
-                <span className="w-36 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
-                <span className="w-16 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Cart.</span>
-              </div>
-              {/* Filas */}
-              {(() => {
-                const maxV = Math.max(...aging.map(a => Math.max(0, a.v)))
-                return aging.map((t, i) => {
-                  const barW = maxV > 0 ? (Math.max(0, t.v) / maxV) * 100 : 0
-                  return (
-                    <div key={t.label} className="flex items-center px-3 py-1.5 rounded-lg gap-3" style={{background: i%2===1 ? '#f8fafc' : 'transparent'}}>
-                      <div className="flex items-center gap-2 w-28 flex-shrink-0">
-                        <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:t.color}}/>
-                        <span className="text-[13px] font-semibold text-gray-700">{t.label}</span>
-                      </div>
-                      {/* Barra proporcional sutil */}
-                      <div className="flex-1 h-[5px] rounded-full" style={{background:'#f1f5f9'}}>
-                        <div className="h-full rounded-full transition-all duration-500" style={{width:`${Math.max(barW,barW>0?1:0)}%`,background:t.color,opacity:0.45}}/>
-                      </div>
-                      <span className="w-36 text-right text-[13px] font-bold tabular-nums text-gray-900">{fmtKPI(Math.max(0,t.v))}</span>
-                      <span className="w-16 text-right text-[13px] font-bold tabular-nums" style={{color:t.color}}>{pct1(Math.max(0,t.v),cartera)}%</span>
-                    </div>
-                  )
-                })
-              })()}
-              {/* Subtotal: Mora Total (≥1 día vencido) */}
-              <div className="flex items-center px-3 py-2 mt-2 rounded-lg" style={{background:'#fef2f2',border:'1px solid #fecaca'}}>
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:'#ef4444'}}/>
-                  <span className="text-[13px] font-black text-red-700 uppercase tracking-wide">Mora Total</span>
+            {/* Card: Distribución de Cartera · Aging */}
+            <div style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', borderTop:'3px solid #003B5C', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
+              <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid #F1F5F9' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
+                  <div><h2 className="text-sm font-bold text-gray-900">Distribución de Cartera · Aging</h2><p className="text-xs text-gray-400">6 tramos · {fechaCorte}</p></div>
                 </div>
-                <span className="w-36 text-right text-[13px] font-black tabular-nums text-red-700">{fmtKPI(mora)}</span>
-                <span className="w-16 text-right text-[13px] font-black tabular-nums text-red-700">{pMora1}%</span>
+                <p className="text-sm font-black text-gray-900 hidden sm:block">{fmtKPI(cartera)}</p>
               </div>
-            </div>
-
-            {/* ── Concentración de riesgo — anchored to bottom ─────────── */}
-            <div className="flex-1 flex flex-col justify-end px-4 pb-5">
-              <div className="pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Concentración de riesgo</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fef2f2' }}>
-                    <p className="text-sm font-black tabular-nums text-red-700">{fmtKPI(Math.max(0,m61)+Math.max(0,m91)+Math.max(0,m120))}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">Mora crítica &gt;60d</p>
+              <div className="px-4 pb-4">
+                <div className="flex items-center px-3 pt-3 pb-1.5 border-b border-slate-100 gap-3">
+                  <span className="w-28 flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
+                  <span className="flex-1"/>
+                  <span className="w-36 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
+                  <span className="w-16 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Cart.</span>
+                </div>
+                {(() => {
+                  const maxV = Math.max(...aging.map(a => Math.max(0, a.v)))
+                  return aging.map((t, i) => {
+                    const barW = maxV > 0 ? (Math.max(0, t.v) / maxV) * 100 : 0
+                    return (
+                      <div key={t.label} className="flex items-center px-3 py-1.5 rounded-lg gap-3" style={{background: i%2===1 ? '#f8fafc' : 'transparent'}}>
+                        <div className="flex items-center gap-2 w-28 flex-shrink-0">
+                          <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:t.color}}/>
+                          <span className="text-[13px] font-semibold text-gray-700">{t.label}</span>
+                        </div>
+                        <div className="flex-1 h-[5px] rounded-full" style={{background:'#f1f5f9'}}>
+                          <div className="h-full rounded-full transition-all duration-500" style={{width:`${Math.max(barW,barW>0?1:0)}%`,background:t.color,opacity:0.45}}/>
+                        </div>
+                        <span className="w-36 text-right text-[13px] font-bold tabular-nums text-gray-900">{fmtKPI(Math.max(0,t.v))}</span>
+                        <span className="w-16 text-right text-[13px] font-bold tabular-nums" style={{color:t.color}}>{pct1(Math.max(0,t.v),cartera)}%</span>
+                      </div>
+                    )
+                  })
+                })()}
+                <div className="flex items-center px-3 py-2 mt-2 rounded-lg" style={{background:'#fef2f2',border:'1px solid #fecaca'}}>
+                  <div className="flex items-center gap-2 flex-1">
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{background:'#ef4444'}}/>
+                    <span className="text-[13px] font-black text-red-700 uppercase tracking-wide">Mora Total</span>
                   </div>
-                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fef2f2' }}>
-                    <p className="text-sm font-black tabular-nums text-red-700">{String(nMora).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">En mora actualmente</p>
-                  </div>
-                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fff7ed' }}>
-                    <p className="text-sm font-black tabular-nums" style={{ color: '#ea580c' }}>{fmtKPI(venc30)}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">Vencido &gt;30 días</p>
-                  </div>
-                  <div className="rounded-xl px-3 py-2.5" style={{ background: pMora > 15 ? '#fef2f2' : '#f0fdf4' }}>
-                    <p className="text-sm font-black tabular-nums" style={{ color: pMora > 15 ? '#dc2626' : '#16a34a' }}>{pMora1}%</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">% mora sobre cartera</p>
-                  </div>
+                  <span className="w-36 text-right text-[13px] font-black tabular-nums text-red-700">{fmtKPI(mora)}</span>
+                  <span className="w-16 text-right text-[13px] font-black tabular-nums text-red-700">{pMora1}%</span>
                 </div>
               </div>
             </div>
+
+            {/* Card: Avalúo de Riesgo */}
+            <AvaluoRiesgoCard
+              nv={nv} m130={m130} m31={m31} m61={m61} m91={m91} m120={m120}
+              cartera={cartera}
+              riesgoNV={riesgoNV} riesgo130={riesgo130} riesgo31={riesgo31}
+              riesgo61={riesgo61} riesgo91={riesgo91} riesgo120={riesgo120}
+              totalRiesgo={totalRiesgo} avaluoPct={avaluoPct}
+            />
           </div>
 
           {/* Columna derecha: Meta Mensual + Mi Equipo */}
@@ -650,6 +629,109 @@ function MetaMensualCard({ cobrado, meta, diaActual, diasRestantes, pctMeta, pro
             <p className="text-base font-black tabular-nums text-gray-900">{fmtKPI(proyeccion)}</p>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Proyección</p>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Avalúo de Riesgo Card ─────────────────────────────────────────────
+function AvaluoRiesgoCard({
+  nv, m130, m31, m61, m91, m120, cartera,
+  riesgoNV, riesgo130, riesgo31, riesgo61, riesgo91, riesgo120,
+  totalRiesgo, avaluoPct,
+}: {
+  nv: number; m130: number; m31: number; m61: number; m91: number; m120: number
+  cartera: number
+  riesgoNV: number; riesgo130: number; riesgo31: number
+  riesgo61: number; riesgo91: number; riesgo120: number
+  totalRiesgo: number; avaluoPct: number
+}) {
+  const avaluoColor = avaluoPct >= 25 ? '#dc2626' : avaluoPct >= 15 ? '#f59e0b' : '#16a34a'
+  const avaluoBg    = avaluoPct >= 25 ? '#fef2f2' : avaluoPct >= 15 ? '#fffbeb' : '#f0fdf4'
+  const rows = [
+    { label: 'Al día',      color: '#16a34a', v: nv,   pRisk: 15,  riesgo: riesgoNV  },
+    { label: '1-30 días',   color: '#d97706', v: m130, pRisk: 20,  riesgo: riesgo130 },
+    { label: '31-60 días',  color: '#ea580c', v: m31,  pRisk: 25,  riesgo: riesgo31  },
+    { label: '61-90 días',  color: '#dc2626', v: m61,  pRisk: 25,  riesgo: riesgo61  },
+    { label: '91-120 días', color: '#b91c1c', v: m91,  pRisk: 25,  riesgo: riesgo91  },
+    { label: '+120 días',   color: '#7f1d1d', v: m120, pRisk: 100, riesgo: riesgo120 },
+  ]
+  return (
+    <div style={{
+      background: 'white', borderRadius: '16px',
+      border: '1px solid #E2E8F0', borderTop: '3px solid #003B5C',
+      boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div className="px-6 py-4 flex items-center justify-between"
+           style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+               style={{ background: 'rgba(0,59,92,0.08)' }}>
+            <Calculator size={15} style={{ color: '#003B5C' }} />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Avalúo de Riesgo</h2>
+            <p className="text-xs text-gray-400">Fórmula corporativa de riesgo crediticio</p>
+          </div>
+        </div>
+        {/* Resultado prominente */}
+        <div className="rounded-xl px-3 py-1.5 text-center flex-shrink-0"
+             style={{ background: avaluoBg }}>
+          <p className="text-xl font-black tabular-nums leading-none"
+             style={{ color: avaluoColor }}>{avaluoPct.toFixed(1)}%</p>
+          <p className="text-[9px] font-bold uppercase tracking-wider mt-0.5"
+             style={{ color: avaluoColor }}>Avalúo</p>
+        </div>
+      </div>
+
+      {/* Tabla */}
+      <div className="px-4 pt-3 pb-4">
+        {/* Encabezados */}
+        <div className="flex items-center px-3 pb-1.5 gap-2"
+             style={{ borderBottom: '1px solid #F1F5F9' }}>
+          <span className="w-28 flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
+          <span className="w-12 text-right flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Rsg.</span>
+          <span className="flex-1 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
+          <span className="w-32 text-right flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Riesgo ₡</span>
+        </div>
+        {/* Filas */}
+        {rows.map((r, i) => (
+          <div key={r.label}
+               className="flex items-center px-3 py-1.5 rounded-lg gap-2"
+               style={{ background: i % 2 === 1 ? '#f8fafc' : 'transparent' }}>
+            <div className="flex items-center gap-1.5 w-28 flex-shrink-0">
+              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: r.color }} />
+              <span className="text-[12px] font-semibold text-gray-700">{r.label}</span>
+            </div>
+            <span className="w-12 text-right flex-shrink-0 text-[12px] font-bold tabular-nums text-gray-500">
+              {r.pRisk}%
+            </span>
+            <span className="flex-1 text-right text-[12px] font-bold tabular-nums text-gray-800">
+              {fmtKPI(Math.max(0, r.v))}
+            </span>
+            <span className="w-32 text-right flex-shrink-0 text-[12px] font-bold tabular-nums"
+                  style={{ color: r.color }}>
+              {fmtKPI(r.riesgo)}
+            </span>
+          </div>
+        ))}
+        {/* Total */}
+        <div className="flex items-center px-3 py-2 mt-2 rounded-lg gap-2"
+             style={{ background: avaluoBg, border: `1px solid ${avaluoColor}33` }}>
+          <span className="flex-1 text-[12px] font-black text-gray-800 uppercase tracking-wide">Total Riesgo</span>
+          <span className="text-[13px] font-black tabular-nums flex-shrink-0"
+                style={{ color: avaluoColor }}>{fmtKPI(totalRiesgo)}</span>
+        </div>
+        {/* Referencia */}
+        <div className="px-3 pt-2.5 flex justify-between items-center">
+          <span className="text-[11px] text-gray-400">
+            Cartera total: <span className="font-bold text-gray-600">{fmtKPI(cartera)}</span>
+          </span>
+          <span className="text-[11px] font-bold" style={{ color: avaluoColor }}>
+            Avalúo = {avaluoPct.toFixed(2)}%
+          </span>
         </div>
       </div>
     </div>
