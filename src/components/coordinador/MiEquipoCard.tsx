@@ -48,7 +48,8 @@ export default function MiEquipoCard({ analistas }: { analistas: AnalistaEquipo[
       background: 'white', borderRadius: '16px',
       border: '1px solid #E2E8F0', borderTop: '3px solid #003B5C',
       boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
-      overflow: 'hidden',
+      overflow: 'hidden', flex: 1,
+      display: 'flex', flexDirection: 'column',
     }}>
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
@@ -83,7 +84,7 @@ export default function MiEquipoCard({ analistas }: { analistas: AnalistaEquipo[
       </div>
 
       {/* ── Barras por analista ─────────────────────────────────────── */}
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3" style={{ flex: 1 }}>
         {sorted.map(a => {
           const val      = getVal(a)
           const barW     = maxVal > 0 ? Math.round((val / maxVal) * 100) : 0

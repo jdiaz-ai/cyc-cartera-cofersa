@@ -514,14 +514,12 @@ function DiagnosticoEjecutivoCard({
   // Chip 1 — Avalúo vs Benchmark 15%
   const diff    = avaluoPct - 15
   const c1Color = avaluoPct >= 25 ? '#dc2626' : avaluoPct >= 15 ? '#f59e0b' : '#16a34a'
-  const c1Bg    = avaluoPct >= 25 ? '#fef2f2' : avaluoPct >= 15 ? '#fffbeb' : '#f0fdf4'
   const c1Badge = avaluoPct >= 25 ? 'CRÍTICO' : avaluoPct >= 15 ? 'SOBRE META' : 'DENTRO DE META'
 
   // Chip 2 — Concentración mora crítica (>60d) sobre riesgo total
   const riesgoCrit = riesgo61 + riesgo91 + riesgo120
   const pctCrit    = totalRiesgo > 0 ? (riesgoCrit / totalRiesgo) * 100 : 0
   const c2Color    = pctCrit >= 20 ? '#dc2626' : pctCrit >= 10 ? '#f59e0b' : '#16a34a'
-  const c2Bg       = pctCrit >= 20 ? '#fef2f2' : pctCrit >= 10 ? '#fffbeb' : '#f0fdf4'
   const c2Badge    = pctCrit >= 20 ? 'CONCENTRACIÓN ALTA' : pctCrit >= 10 ? 'ATENCIÓN' : 'CONTROLADO'
 
   // Chip 3 — Efecto multiplicador Más 120 días
@@ -535,6 +533,7 @@ function DiagnosticoEjecutivoCard({
       background: 'white', borderRadius: '16px',
       border: '1px solid #E2E8F0', borderTop: '3px solid #003B5C',
       boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden',
+      flex: 1,
     }}>
       {/* Header */}
       <div className="px-6 py-4 flex items-center gap-3"
@@ -553,8 +552,8 @@ function DiagnosticoEjecutivoCard({
       <div className="p-4 grid grid-cols-3 gap-3">
 
         {/* Chip 1: Avalúo vs Benchmark 15% */}
-        <div className="rounded-xl p-3.5 flex flex-col gap-1"
-             style={{ background: c1Bg, border: `1px solid ${c1Color}30` }}>
+        <div className="rounded-xl p-3.5 flex flex-col items-center text-center gap-1"
+             style={{ background: 'white', border: '1px solid #E2E8F0' }}>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
             Avalúo vs Bench. 15%
           </p>
@@ -563,15 +562,15 @@ function DiagnosticoEjecutivoCard({
           <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
             {diff >= 0 ? `+${diff.toFixed(2)} pts` : `${diff.toFixed(2)} pts`} vs meta
           </p>
-          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+          <span className="mt-auto pt-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
                 style={{ background: `${c1Color}18`, color: c1Color }}>
             {c1Badge}
           </span>
         </div>
 
         {/* Chip 2: Concentración mora crítica >60d */}
-        <div className="rounded-xl p-3.5 flex flex-col gap-1"
-             style={{ background: c2Bg, border: `1px solid ${c2Color}30` }}>
+        <div className="rounded-xl p-3.5 flex flex-col items-center text-center gap-1"
+             style={{ background: 'white', border: '1px solid #E2E8F0' }}>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
             Mora Crítica &gt;60 días
           </p>
@@ -580,15 +579,15 @@ function DiagnosticoEjecutivoCard({
           <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
             del riesgo total
           </p>
-          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+          <span className="mt-auto pt-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
                 style={{ background: `${c2Color}18`, color: c2Color }}>
             {c2Badge}
           </span>
         </div>
 
         {/* Chip 3: Efecto multiplicador +120d */}
-        <div className="rounded-xl p-3.5 flex flex-col gap-1"
-             style={{ background: 'rgba(127,29,29,0.05)', border: '1px solid rgba(127,29,29,0.15)' }}>
+        <div className="rounded-xl p-3.5 flex flex-col items-center text-center gap-1"
+             style={{ background: 'white', border: '1px solid #E2E8F0' }}>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
             Efecto Más 120 días
           </p>
@@ -597,7 +596,7 @@ function DiagnosticoEjecutivoCard({
           <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
             {pctCartM120.toFixed(2)}% cart. → {pctRsgM120.toFixed(1)}% rsg.
           </p>
-          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+          <span className="mt-auto pt-2 text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
                 style={{ background: 'rgba(127,29,29,0.12)', color: '#7f1d1d' }}>
             MULTIPLICADOR
           </span>
