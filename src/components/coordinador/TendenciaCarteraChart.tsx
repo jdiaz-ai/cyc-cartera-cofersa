@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { TrendingDown } from 'lucide-react'
@@ -163,7 +163,17 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
         /* ── Cuerpo: gráfico ─────────────────────────────────────── */
         <div className="px-2 pt-4 pb-2">
           <ResponsiveContainer width="100%" height={210}>
-            <LineChart data={filtered} margin={{ top: 8, right: 24, left: -4, bottom: 0 }}>
+            <AreaChart data={filtered} margin={{ top: 8, right: 24, left: -4, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradMoraTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.18} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}    />
+                </linearGradient>
+                <linearGradient id="gradMora31" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ea580c" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="#ea580c" stopOpacity={0}    />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
               <XAxis
                 dataKey="fecha"
@@ -190,28 +200,32 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
                 strokeWidth={1}
                 label={{ value: 'Bench 15%', position: 'insideTopRight', fontSize: 10, fill: '#94a3b8', dy: -5 }}
               />
-              {/* % Mora Total */}
-              <Line
+              {/* % Mora Total — área con gradiente */}
+              <Area
                 type="monotoneX"
                 dataKey="pct_mora"
                 stroke="#ef4444"
                 strokeWidth={2.5}
+                fill="url(#gradMoraTotal)"
+                fillOpacity={1}
                 dot={false}
-                activeDot={{ r: 5, strokeWidth: 0, fill: '#ef4444' }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: 'white', fill: '#ef4444' }}
                 name="% Mora Total"
               />
-              {/* % Mora >30d */}
-              <Line
+              {/* % Mora >30d — área con gradiente */}
+              <Area
                 type="monotoneX"
                 dataKey="pct_mora_31"
                 stroke="#ea580c"
                 strokeWidth={2}
                 strokeDasharray="5 3"
+                fill="url(#gradMora31)"
+                fillOpacity={1}
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 0, fill: '#ea580c' }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'white', fill: '#ea580c' }}
                 name="% Mora >30d"
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}

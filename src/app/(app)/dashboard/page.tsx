@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { fmtM, fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
+import { fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
-  TrendingDown, Users, ClipboardCheck,
-  Handshake, Activity, Shield, Timer, Bell, CheckCircle2,
-  AlertTriangle, Percent,
+  TrendingDown, ClipboardCheck,
+  Activity, Shield, Timer, AlertTriangle, Percent,
 } from 'lucide-react'
+import MiEquipoCard, { type AnalistaEquipo } from '@/components/coordinador/MiEquipoCard'
 import DashboardResumen from '@/components/analista/DashboardResumen'
 import SaludoDashboard from '@/components/dashboard/saludo-dashboard'
 import PorVendedor    from '@/components/analista/PorVendedor'
@@ -45,11 +45,7 @@ interface KpisCartera {
   n_en_mora:           number
   fecha_corte:         string
 }
-interface PromesaRow   { id: string; cliente_cod: string; monto: number; fecha_promesa: string; estado?: string }
-interface GestionRow   { id: string; cliente_cod: string; tipo: string; resultado: string; hora: string; analista_email: string; nota?: string }
 interface AnalistaRow  { id: string; nombre: string; email: string; iniciales: string; color: string }
-type NivelAlerta = 'ROJO' | 'AMARILLO' | 'CYAN'
-interface Alerta { nivel: NivelAlerta; texto: string }
 type Urgencia = 'ROJO' | 'AMARILLO' | 'VERDE'
 
 function pct(a: number, b: number)  { return b ? Math.round((a / b) * 100) : 0 }
@@ -123,60 +119,48 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
   const pVenc30  = pct(venc30, cartera)     // entero — para lógica de color
   const pVenc301 = pct1(venc30, cartera)    // "9.4"  — para mostrar en card
 
-  // ── Gestiones ────────────────────────────────────────────────────────
-  let gHoy = 0, gestiones: GestionRow[] = []
+  // ── Fechas de período (CR = UTC-6) ───────────────────────────────────
+  const nowCR      = new Date(Date.now() - 6 * 3600000)
+  const yyyyMM     = nowCR.toISOString().slice(0, 7)
+  const inicioMes  = `${yyyyMM}-01`
+  const dowCR      = nowCR.getUTCDay()
+  const lunesCR    = new Date(nowCR)
+  lunesCR.setUTCDate(lunesCR.getUTCDate() + (dowCR === 0 ? -6 : 1 - dowCR))
+  const inicioSemana = lunesCR.toISOString().slice(0, 10)
+
+  // ── Gestiones hoy ────────────────────────────────────────────────────
+  let gHoy = 0
   try {
     const { count } = await supabase.from('gestiones').select('*', { count: 'exact', head: true }).eq('fecha', hoyStr)
     gHoy = count ?? 0
-    const { data } = await supabase.from('gestiones')
-      .select('id,cliente_cod,tipo,resultado,hora,analista_email')
-      .order('fecha', { ascending: false }).order('hora', { ascending: false }).limit(8)
-    gestiones = (data ?? []) as GestionRow[]
   } catch {}
 
-  // ── Promesas ─────────────────────────────────────────────────────────
-  let nPromesas = 0, promVencidas: PromesaRow[] = []
-  try {
-    const { count } = await supabase.from('promesas').select('*', { count: 'exact', head: true }).eq('estado', 'PENDIENTE')
-    nPromesas = count ?? 0
-    const { data } = await supabase.from('promesas')
-      .select('id,cliente_cod,monto,fecha_promesa')
-      .eq('estado', 'PENDIENTE').lte('fecha_promesa', hoyStr)
-      .order('fecha_promesa', { ascending: true }).limit(5)
-    promVencidas = (data ?? []) as PromesaRow[]
-  } catch {}
-
-  let promSemana = 0
-  try {
-    const fin = new Date(Date.now() - 6 * 3600000); fin.setDate(fin.getDate() + 7)
-    const { count } = await supabase.from('promesas').select('*', { count: 'exact', head: true })
-      .eq('estado', 'PENDIENTE').gt('fecha_promesa', hoyStr).lte('fecha_promesa', fin.toISOString().split('T')[0])
-    promSemana = count ?? 0
-  } catch {}
-
-  // ── Solicitudes ───────────────────────────────────────────────────────
-  let solicPendientes = 0
-  try {
-    const { count } = await supabase.from('solicitudes').select('*', { count: 'exact', head: true }).eq('estado', 'PENDIENTE')
-    solicPendientes = count ?? 0
-  } catch {}
-
-  // ── Mi Equipo ─────────────────────────────────────────────────────────
+  // ── Mi Equipo (hoy + semana + mes) ───────────────────────────────────
   let analistas: AnalistaRow[] = []
-  let equipoStats: { id: string; nombre: string; iniciales: string; color: string; gHoy: number }[] = []
+  let equipoData: AnalistaEquipo[] = []
   try {
     const { data } = await supabase.from('usuarios').select('id,nombre,email,iniciales,color').eq('rol', 'ANALISTA').eq('activo', true)
     analistas = (data ?? []) as AnalistaRow[]
-    const { data: gData } = await supabase.from('gestiones').select('analista_email').eq('fecha', hoyStr)
-    const conteo: Record<string, number> = {}
-    for (const g of (gData ?? []) as { analista_email: string }[]) conteo[g.analista_email] = (conteo[g.analista_email] || 0) + 1
-    equipoStats = analistas.map(a => ({ id: a.id, nombre: a.nombre, iniciales: a.iniciales, color: a.color, gHoy: conteo[a.email] ?? 0 }))
+    const cnt = (rows: { analista_email: string }[]) => {
+      const c: Record<string, number> = {}
+      for (const g of rows) c[g.analista_email] = (c[g.analista_email] || 0) + 1
+      return c
+    }
+    const [gHoyRes, gSemRes, gMesRes] = await Promise.all([
+      supabase.from('gestiones').select('analista_email').eq('fecha', hoyStr),
+      supabase.from('gestiones').select('analista_email').gte('fecha', inicioSemana),
+      supabase.from('gestiones').select('analista_email').gte('fecha', inicioMes),
+    ])
+    const cHoy = cnt((gHoyRes.data ?? []) as { analista_email: string }[])
+    const cSem = cnt((gSemRes.data ?? []) as { analista_email: string }[])
+    const cMes = cnt((gMesRes.data ?? []) as { analista_email: string }[])
+    equipoData = analistas.map(a => ({
+      id: a.id, nombre: a.nombre, iniciales: a.iniciales, color: a.color,
+      gHoy:    cHoy[a.email] ?? 0,
+      gSemana: cSem[a.email] ?? 0,
+      gMes:    cMes[a.email] ?? 0,
+    }))
   } catch {}
-
-  const avgEquipo = equipoStats.length ? Math.round(equipoStats.reduce((s, a) => s + a.gHoy, 0) / equipoStats.length) : 0
-  const maxEquipo = Math.max(...equipoStats.map(a => a.gHoy), 1)
-  const emailNombre: Record<string, string> = {}
-  for (const a of analistas) emailNombre[a.email] = a.nombre.split(' ')[0]
 
   // ── Meta ──────────────────────────────────────────────────────────────
   let meta = 0
@@ -184,6 +168,22 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     const { data } = await supabase.from('config_sistema').select('valor').eq('clave', 'meta_mensual').single()
     meta = Number((data as { valor: string } | null)?.valor || 0)
   } catch {}
+
+  // ── Cobrado este mes (promesas cumplidas) ─────────────────────────────
+  let cobradoMes = 0
+  try {
+    const { data: promData } = await supabase.from('promesas')
+      .select('monto').eq('estado', 'CUMPLIDA').gte('updated_at', inicioMes)
+    cobradoMes = ((promData ?? []) as { monto: number }[]).reduce((s, p) => s + Number(p.monto), 0)
+  } catch {}
+
+  // ── Meta Mensual — stats ──────────────────────────────────────────────
+  const diasEnMes     = new Date(Date.UTC(nowCR.getUTCFullYear(), nowCR.getUTCMonth() + 1, 0)).getUTCDate()
+  const diaActual     = nowCR.getUTCDate()
+  const diasRestantes = diasEnMes - diaActual
+  const pctMeta       = meta > 0 ? Math.min(Math.round((cobradoMes / meta) * 100), 999) : 0
+  const proyeccion    = diaActual > 0 ? Math.round((cobradoMes / diaActual) * diasEnMes) : 0
+  const enCamino      = meta > 0 && proyeccion >= meta * 0.90
 
   // ── Histórico de mora (para gráfica de tendencia) ────────────────────
   let historico: HistoricoCarteraRow[] = []
@@ -196,14 +196,6 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     historico = (histData ?? []) as HistoricoCarteraRow[]
   } catch { /* tabla puede no existir aún */ }
 
-  // ── Alertas ───────────────────────────────────────────────────────────
-  const alertas: Alerta[] = []
-  if (solicPendientes > 0) alertas.push({ nivel: 'ROJO',     texto: `${solicPendientes} solicitud${solicPendientes > 1 ? 'es' : ''} pendiente${solicPendientes > 1 ? 's' : ''} de revisión` })
-  if (promVencidas.length > 0) alertas.push({ nivel: 'ROJO', texto: `${promVencidas.length} promesa${promVencidas.length > 1 ? 's' : ''} vencieron hoy sin confirmar` })
-  if (promSemana > 0) alertas.push({ nivel: 'AMARILLO',      texto: `${promSemana} promesa${promSemana > 1 ? 's' : ''} vencen esta semana` })
-  if (gHoy === 0) alertas.push({ nivel: 'AMARILLO',          texto: 'Sin gestiones registradas hoy' })
-  if (alertas.length === 0) alertas.push({ nivel: 'CYAN',    texto: 'Todo al día — sin alertas críticas' })
-
   // ── Aging ─────────────────────────────────────────────────────────────
   const aging = [
     { label: 'Al día',      v: nv,   color: '#16a34a', bg: 'rgba(22,163,74,0.08)',   border: 'rgba(22,163,74,0.2)'  },
@@ -213,13 +205,6 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     { label: '91-120 días', v: m91,  color: '#b91c1c', bg: 'rgba(185,28,28,0.08)',   border: 'rgba(185,28,28,0.2)'  },
     { label: '+120 días',   v: m120, color: '#7f1d1d', bg: 'rgba(127,29,29,0.10)',   border: 'rgba(127,29,29,0.25)' },
   ]
-
-  const tipoIcon: Record<string, string> = { LLAMADA: '📞', CORREO: '📧', VISITA: '🏢', WHATSAPP: '💬' }
-  const alertaCfg: Record<NivelAlerta, { dot: string; bg: string; text: string }> = {
-    ROJO:     { dot: '#dc2626', bg: '#FEF2F2', text: '#991b1b' },
-    AMARILLO: { dot: '#f59e0b', bg: '#FFFBEB', text: '#92400e' },
-    CYAN:     { dot: '#009ee3', bg: '#EFF6FF', text: '#1e40af' },
-  }
 
   return (
     <div className="min-h-full" style={{ background: '#EEF2F7' }}>
@@ -286,9 +271,9 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           />
         </div>
 
-        {/* Aging + Alertas */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <div className="xl:col-span-2" style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
+        {/* Aging + Mi Equipo + Meta */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <div style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid #F1F5F9' }}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
@@ -354,107 +339,25 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             </div>
           </div>
 
-          {/* Alertas */}
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-5 py-4 flex items-center gap-3" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(220,38,38,0.08)'}}><Bell size={15} style={{color:'#dc2626'}}/></div>
-              <div><h2 className="text-sm font-bold text-gray-900">Alertas</h2><p className="text-xs text-gray-400">{alertas.filter(a=>a.nivel==='ROJO').length} críticas · {alertas.filter(a=>a.nivel==='AMARILLO').length} de atención</p></div>
-            </div>
-            <div className="p-4 space-y-2.5">
-              {alertas.map((a,i) => { const cfg=alertaCfg[a.nivel]; return (
-                <div key={i} className="rounded-xl px-3.5 py-3 flex items-start gap-3" style={{background:cfg.bg}}>
-                  <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{background:cfg.dot}}/>
-                  <p className="text-xs font-semibold leading-relaxed" style={{color:cfg.text}}>{a.texto}</p>
-                </div>
-              )})}
-            </div>
-            {promVencidas.length > 0 && (
-              <div className="px-4 pb-4 space-y-1.5">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Detalle vencidas</p>
-                {promVencidas.map(p => (
-                  <div key={p.id} className="rounded-lg px-3 py-2 flex items-center justify-between" style={{background:'#FEF2F2'}}>
-                    <div><p className="text-xs font-bold text-gray-800">{p.cliente_cod}</p><p className="text-xs text-red-400">{p.fecha_promesa}</p></div>
-                    <p className="text-xs font-black text-red-700">{fmtM(p.monto)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Columna derecha: Mi Equipo + Meta Mensual */}
+          <div className="flex flex-col gap-5">
+            <MiEquipoCard analistas={equipoData} />
             {meta > 0 && (
-              <div className="mx-4 mb-4 rounded-xl p-4" style={{background:'linear-gradient(135deg,#003B5C,#005a8e)'}}>
-                <div className="flex items-center justify-between mb-1"><p className="text-xs font-bold uppercase tracking-widest text-blue-300">Meta Mensual</p><CheckCircle2 size={13} className="text-blue-400"/></div>
-                <p className="text-white text-lg font-black">{fmtM(meta)}</p>
-              </div>
+              <MetaMensualCard
+                cobrado={cobradoMes}
+                meta={meta}
+                diaActual={diaActual}
+                diasRestantes={diasRestantes}
+                pctMeta={pctMeta}
+                proyeccion={proyeccion}
+                enCamino={enCamino}
+              />
             )}
           </div>
         </div>
 
         {/* Tendencia de Mora */}
         <TendenciaCarteraChart data={historico} />
-
-        {/* Mi Equipo + Gestiones Recientes */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(0,59,92,0.08)'}}><Users size={15} style={{color:'#003B5C'}}/></div>
-                <div><h2 className="text-sm font-bold text-gray-900">Mi Equipo</h2><p className="text-xs text-gray-400">Actividad de hoy · promedio {avgEquipo} gestiones</p></div>
-              </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{background:'rgba(0,59,92,0.08)',color:'#003B5C'}}>{equipoStats.length} analistas</span>
-            </div>
-            <div className="p-4 space-y-3">
-              {equipoStats.sort((a,b)=>b.gHoy-a.gHoy).map(a => {
-                const barW=maxEquipo>0?Math.round((a.gHoy/maxEquipo)*100):0, sobreAvg=avgEquipo>0&&a.gHoy>=avgEquipo
-                return (
-                  <div key={a.id} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs" style={{backgroundColor:a.color}}>{a.iniciales}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-xs font-bold text-gray-800 truncate">{a.nombre.split(' ').slice(0,2).join(' ')}</p>
-                        <span className={`text-xs font-black ml-2 flex-shrink-0 ${sobreAvg?'text-green-600':a.gHoy===0?'text-gray-300':'text-amber-600'}`}>{a.gHoy}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{background:'#F1F5F9'}}>
-                        <div className="h-full rounded-full transition-all duration-700" style={{width:`${Math.max(barW,a.gHoy>0?4:0)}%`,background:sobreAvg?'#16a34a':a.gHoy===0?'#E2E8F0':'#f59e0b'}}/>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="px-6 py-3 flex items-center justify-between" style={{background:'#F8FAFC',borderTop:'1px solid #F1F5F9'}}>
-              <span className="text-xs text-gray-400">Total gestiones hoy</span>
-              <span className="text-sm font-black text-gray-900">{equipoStats.reduce((s,a)=>s+a.gHoy,0)}</span>
-            </div>
-          </div>
-
-          <div style={{background:'white',borderRadius:'16px',border:'1px solid #E2E8F0',boxShadow:'0 1px 8px rgba(0,0,0,0.06)',overflow:'hidden'}}>
-            <div className="px-6 py-4 flex items-center gap-3" style={{borderBottom:'1px solid #F1F5F9'}}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{background:'rgba(0,158,227,0.1)'}}><Activity size={15} style={{color:'#009ee3'}}/></div>
-              <div><h2 className="text-sm font-bold text-gray-900">Actividad Reciente</h2><p className="text-xs text-gray-400">Últimas gestiones del equipo</p></div>
-            </div>
-            {gestiones.length > 0 ? (
-              <div className="p-3 space-y-1.5">
-                {gestiones.map(g => (
-                  <div key={g.id} className="rounded-xl px-3 py-2.5 flex items-center gap-3" style={{background:'#F8FAFC'}}>
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{background:'rgba(0,59,92,0.07)'}}>{tipoIcon[g.tipo]??'📋'}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold text-gray-800 truncate">{g.cliente_cod}</p>
-                        {emailNombre[g.analista_email] && <span className="text-xs text-gray-400 flex-shrink-0">· {emailNombre[g.analista_email]}</span>}
-                      </div>
-                      <p className="text-xs text-gray-500 truncate">{g.resultado}</p>
-                    </div>
-                    <span className="text-xs font-medium text-gray-400 flex-shrink-0">{g.hora?.slice(0,5)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-14 text-center">
-                <div className="text-3xl mb-3">📋</div>
-                <p className="text-sm font-semibold text-gray-400">Sin actividad hoy</p>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   )
@@ -641,6 +544,74 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
             <NotasRapidas hoyStr={hoyStr} />
           </div>
 
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Meta Mensual Card ─────────────────────────────────────────────────
+function MetaMensualCard({ cobrado, meta, diaActual, diasRestantes, pctMeta, proyeccion, enCamino }: {
+  cobrado: number; meta: number; diaActual: number; diasRestantes: number
+  pctMeta: number; proyeccion: number; enCamino: boolean
+}) {
+  const barW = Math.min(pctMeta, 100)
+  return (
+    <div style={{
+      background: 'linear-gradient(140deg, #003B5C 0%, #005a8e 100%)',
+      borderRadius: '16px', overflow: 'hidden',
+      border: '1px solid rgba(255,255,255,0.08)',
+      boxShadow: '0 4px 20px rgba(0,59,92,0.30)',
+    }}>
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#93c5fd' }}>Meta Mensual</p>
+            <p className="text-xs" style={{ color: '#60a5fa' }}>Día {diaActual} · {diasRestantes} días restantes</p>
+          </div>
+          <span
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+            style={{
+              background: enCamino ? 'rgba(34,197,94,0.22)'  : 'rgba(245,158,11,0.22)',
+              color:      enCamino ? '#4ade80'               : '#fbbf24',
+            }}
+          >
+            {enCamino ? '↑ En camino' : '↓ Revisar ritmo'}
+          </span>
+        </div>
+
+        {/* Monto cobrado */}
+        <p className="text-white font-black tabular-nums leading-none mb-0.5" style={{ fontSize: '2rem' }}>
+          {fmtKPI(cobrado)}
+        </p>
+        <p className="text-xs mb-4" style={{ color: '#60a5fa' }}>
+          de <span className="font-bold" style={{ color: '#bfdbfe' }}>{fmtKPI(meta)}</span> meta
+        </p>
+
+        {/* Barra de progreso */}
+        <div className="h-2 rounded-full mb-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${Math.max(barW, cobrado > 0 ? 2 : 0)}%`,
+              background: 'linear-gradient(90deg, #38bdf8, #22d3ee)',
+              boxShadow: barW > 0 ? '0 0 8px rgba(56,189,248,0.45)' : 'none',
+            }}
+          />
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center justify-between">
+          <div className="text-center">
+            <p className="text-white font-black text-xl tabular-nums leading-tight">{pctMeta}%</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Avance</p>
+          </div>
+          <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.15)' }}/>
+          <div className="text-center">
+            <p className="text-white font-black tabular-nums leading-tight" style={{ fontSize: '1rem' }}>{fmtKPI(proyeccion)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Proyección</p>
+          </div>
         </div>
       </div>
     </div>
