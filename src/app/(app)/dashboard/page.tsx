@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
-  TrendingDown, ClipboardCheck,
+  TrendingDown, ClipboardCheck, Target,
   Activity, Shield, Timer, AlertTriangle, Percent,
 } from 'lucide-react'
 import MiEquipoCard, { type AnalistaEquipo } from '@/components/coordinador/MiEquipoCard'
@@ -273,7 +273,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
 
         {/* Aging + Mi Equipo + Meta */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <div style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
+          <div className="flex flex-col" style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid #F1F5F9' }}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
@@ -335,6 +335,31 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
                 </div>
                 <span className="w-36 text-right text-[13px] font-black tabular-nums text-red-700">{fmtKPI(mora)}</span>
                 <span className="w-16 text-right text-[13px] font-black tabular-nums text-red-700">{pMora1}%</span>
+              </div>
+            </div>
+
+            {/* ── Concentración de riesgo — anchored to bottom ─────────── */}
+            <div className="flex-1 flex flex-col justify-end px-4 pb-5">
+              <div className="pt-3" style={{ borderTop: '1px solid #F1F5F9' }}>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">Concentración de riesgo</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fef2f2' }}>
+                    <p className="text-sm font-black tabular-nums text-red-700">{fmtKPI(Math.max(0,m61)+Math.max(0,m91)+Math.max(0,m120))}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">Mora crítica &gt;60d</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fef2f2' }}>
+                    <p className="text-sm font-black tabular-nums text-red-700">{String(nMora).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} clientes</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">En mora actualmente</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-2.5" style={{ background: '#fff7ed' }}>
+                    <p className="text-sm font-black tabular-nums" style={{ color: '#ea580c' }}>{fmtKPI(venc30)}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">Vencido &gt;30 días</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-2.5" style={{ background: pMora > 15 ? '#fef2f2' : '#f0fdf4' }}>
+                    <p className="text-sm font-black tabular-nums" style={{ color: pMora > 15 ? '#dc2626' : '#16a34a' }}>{pMora1}%</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">% mora sobre cartera</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -558,59 +583,72 @@ function MetaMensualCard({ cobrado, meta, diaActual, diasRestantes, pctMeta, pro
   const barW = Math.min(pctMeta, 100)
   return (
     <div style={{
-      background: 'linear-gradient(140deg, #003B5C 0%, #005a8e 100%)',
-      borderRadius: '16px', overflow: 'hidden',
-      border: '1px solid rgba(255,255,255,0.08)',
-      boxShadow: '0 4px 20px rgba(0,59,92,0.30)',
+      background: 'white', borderRadius: '16px',
+      border: '1px solid #E2E8F0',
+      borderTop: '3px solid #009ee3',
+      boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+      overflow: 'hidden',
     }}>
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: '#93c5fd' }}>Meta Mensual</p>
-            <p className="text-xs" style={{ color: '#60a5fa' }}>Día {diaActual} · {diasRestantes} días restantes</p>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+               style={{ background: 'rgba(0,158,227,0.08)' }}>
+            <Target size={15} style={{ color: '#009ee3' }} />
           </div>
-          <span
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full"
-            style={{
-              background: enCamino ? 'rgba(34,197,94,0.22)'  : 'rgba(245,158,11,0.22)',
-              color:      enCamino ? '#4ade80'               : '#fbbf24',
-            }}
-          >
-            {enCamino ? '↑ En camino' : '↓ Revisar ritmo'}
-          </span>
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Meta Mensual</h2>
+            <p className="text-xs text-gray-400">Día {diaActual} · {diasRestantes} días restantes</p>
+          </div>
         </div>
+        <span
+          className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+          style={{
+            background: enCamino ? '#f0fdf4' : '#fffbeb',
+            color:      enCamino ? '#15803d' : '#92400e',
+          }}
+        >
+          {enCamino ? '↑ En camino' : '↓ Revisar ritmo'}
+        </span>
+      </div>
 
+      {/* ── Body ────────────────────────────────────────────────────── */}
+      <div className="px-6 py-4">
         {/* Monto cobrado */}
-        <p className="text-white font-black tabular-nums leading-none mb-0.5" style={{ fontSize: '2rem' }}>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cobrado este mes</p>
+        <p className="font-black tabular-nums leading-none mb-1" style={{ fontSize: '2rem', color: '#003B5C' }}>
           {fmtKPI(cobrado)}
         </p>
-        <p className="text-xs mb-4" style={{ color: '#60a5fa' }}>
-          de <span className="font-bold" style={{ color: '#bfdbfe' }}>{fmtKPI(meta)}</span> meta
+        <p className="text-xs text-gray-400 mb-4">
+          de <span className="font-bold text-gray-700">{fmtKPI(meta)}</span> meta
         </p>
 
         {/* Barra de progreso */}
-        <div className="h-2 rounded-full mb-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
+        <div className="h-2.5 rounded-full mb-1.5" style={{ background: '#F1F5F9' }}>
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{
               width: `${Math.max(barW, cobrado > 0 ? 2 : 0)}%`,
-              background: 'linear-gradient(90deg, #38bdf8, #22d3ee)',
-              boxShadow: barW > 0 ? '0 0 8px rgba(56,189,248,0.45)' : 'none',
+              background: 'linear-gradient(90deg, #009ee3, #38bdf8)',
             }}
           />
         </div>
+        <div className="flex justify-between mb-4">
+          <span className="text-[11px] text-gray-400">{pctMeta}% completado</span>
+          <span className="text-[11px] text-gray-400">{diasRestantes}d restantes</span>
+        </div>
 
-        {/* Stats */}
-        <div className="flex items-center justify-between">
-          <div className="text-center">
-            <p className="text-white font-black text-xl tabular-nums leading-tight">{pctMeta}%</p>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Avance</p>
+        {/* Stats — Avance y Proyección */}
+        <div className="flex gap-2">
+          <div className="flex-1 rounded-xl px-3 py-2.5 text-center"
+               style={{ background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
+            <p className="text-base font-black tabular-nums text-gray-900">{pctMeta}%</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Avance</p>
           </div>
-          <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.15)' }}/>
-          <div className="text-center">
-            <p className="text-white font-black tabular-nums leading-tight" style={{ fontSize: '1rem' }}>{fmtKPI(proyeccion)}</p>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#93c5fd' }}>Proyección</p>
+          <div className="flex-1 rounded-xl px-3 py-2.5 text-center"
+               style={{ background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
+            <p className="text-base font-black tabular-nums text-gray-900">{fmtKPI(proyeccion)}</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Proyección</p>
           </div>
         </div>
       </div>

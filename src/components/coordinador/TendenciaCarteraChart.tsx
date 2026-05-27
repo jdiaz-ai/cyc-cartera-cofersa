@@ -54,17 +54,17 @@ function CustomTooltip({ active, payload }: any) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#6b7280' }}>
-            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#ef4444', flexShrink: 0 }}/>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#009ee3', flexShrink: 0 }}/>
             % Mora Total
           </span>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: '#ef4444' }}>{Number(d.pct_mora).toFixed(1)}%</span>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: '#009ee3' }}>{Number(d.pct_mora).toFixed(1)}%</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#6b7280' }}>
-            <span style={{ display: 'inline-block', width: 8, height: 3, background: '#ea580c', flexShrink: 0 }}/>
+            <span style={{ display: 'inline-block', width: 8, height: 3, background: '#003B5C', flexShrink: 0 }}/>
             % Mora &gt;30d
           </span>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>{Number(d.pct_mora_31).toFixed(1)}%</span>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: '#003B5C' }}>{Number(d.pct_mora_31).toFixed(1)}%</span>
         </div>
         <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '3px', paddingTop: '5px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px' }}>
@@ -108,8 +108,8 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
       <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F1F5F9' }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-               style={{ background: 'rgba(239,68,68,0.08)' }}>
-            <TrendingDown size={15} style={{ color: '#ef4444' }} />
+               style={{ background: 'rgba(0,158,227,0.08)' }}>
+            <TrendingDown size={15} style={{ color: '#009ee3' }} />
           </div>
           <div>
             <h2 className="text-sm font-bold text-gray-900">Tendencia de Mora</h2>
@@ -142,8 +142,8 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
       {data.length < 2 ? (
         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-               style={{ background: 'rgba(239,68,68,0.06)' }}>
-            <TrendingDown size={22} style={{ color: '#ef4444', opacity: 0.35 }} />
+               style={{ background: 'rgba(0,158,227,0.06)' }}>
+            <TrendingDown size={22} style={{ color: '#009ee3', opacity: 0.35 }} />
           </div>
           <p className="text-sm font-semibold text-gray-400 mb-1">Acumulando datos históricos</p>
           <p className="text-xs text-gray-300 max-w-xs leading-relaxed">
@@ -166,12 +166,12 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
             <AreaChart data={filtered} margin={{ top: 8, right: 24, left: -4, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradMoraTotal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="#009ee3" stopOpacity={0.20} />
+                  <stop offset="95%" stopColor="#009ee3" stopOpacity={0}    />
                 </linearGradient>
                 <linearGradient id="gradMora31" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#ea580c" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="#ea580c" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="#003B5C" stopOpacity={0.14} />
+                  <stop offset="95%" stopColor="#003B5C" stopOpacity={0}    />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
@@ -200,29 +200,29 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
                 strokeWidth={1}
                 label={{ value: 'Bench 15%', position: 'insideTopRight', fontSize: 10, fill: '#94a3b8', dy: -5 }}
               />
-              {/* % Mora Total — área con gradiente */}
+              {/* % Mora Total — área con gradiente corporativo */}
               <Area
                 type="monotoneX"
                 dataKey="pct_mora"
-                stroke="#ef4444"
+                stroke="#009ee3"
                 strokeWidth={2.5}
                 fill="url(#gradMoraTotal)"
                 fillOpacity={1}
                 dot={false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'white', fill: '#ef4444' }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: 'white', fill: '#009ee3' }}
                 name="% Mora Total"
               />
-              {/* % Mora >30d — área con gradiente */}
+              {/* % Mora >30d — área con gradiente navy */}
               <Area
                 type="monotoneX"
                 dataKey="pct_mora_31"
-                stroke="#ea580c"
+                stroke="#003B5C"
                 strokeWidth={2}
                 strokeDasharray="5 3"
                 fill="url(#gradMora31)"
                 fillOpacity={1}
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 2, stroke: 'white', fill: '#ea580c' }}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: 'white', fill: '#003B5C' }}
                 name="% Mora >30d"
               />
             </AreaChart>
@@ -233,12 +233,12 @@ export default function TendenciaCarteraChart({ data }: { data: HistoricoCartera
       {/* ── Leyenda ─────────────────────────────────────────────────── */}
       <div className="px-6 pb-4 flex items-center gap-6 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="h-0.5 w-5 rounded-full" style={{ background: '#ef4444' }} />
+          <div className="h-0.5 w-5 rounded-full" style={{ background: '#009ee3' }} />
           <span className="text-[11px] text-gray-500">% Mora Total</span>
         </div>
         <div className="flex items-center gap-2">
           <svg width="20" height="4" style={{ flexShrink: 0 }}>
-            <line x1="0" y1="2" x2="20" y2="2" stroke="#ea580c" strokeWidth="2" strokeDasharray="5 3" />
+            <line x1="0" y1="2" x2="20" y2="2" stroke="#003B5C" strokeWidth="2" strokeDasharray="5 3" />
           </svg>
           <span className="text-[11px] text-gray-500">% Mora &gt;30d</span>
         </div>
