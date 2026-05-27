@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { fmtKPI, fmtFecha, hoyISO } from '@/lib/utils/formato'
+import { fmtKPI, fmtCRC, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
   TrendingDown, ClipboardCheck, Target,
   Shield, Timer, AlertTriangle, Percent, Calculator,
@@ -274,14 +274,21 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
         {/* Aging + Avalúo de Riesgo + Mi Equipo + Meta */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
-          {/* Columna izquierda: Avalúo de Riesgo */}
-          <AvaluoRiesgoCard
-            nv={nv} m130={m130} m31={m31} m61={m61} m91={m91} m120={m120}
-            cartera={cartera} fechaCorte={fechaCorte}
-            riesgoNV={riesgoNV} riesgo130={riesgo130} riesgo31={riesgo31}
-            riesgo61={riesgo61} riesgo91={riesgo91} riesgo120={riesgo120}
-            totalRiesgo={totalRiesgo} avaluoPct={avaluoPct}
-          />
+          {/* Columna izquierda: Avalúo de Riesgo + Diagnóstico Ejecutivo */}
+          <div className="flex flex-col gap-5">
+            <AvaluoRiesgoCard
+              nv={nv} m130={m130} m31={m31} m61={m61} m91={m91} m120={m120}
+              cartera={cartera} fechaCorte={fechaCorte}
+              riesgoNV={riesgoNV} riesgo130={riesgo130} riesgo31={riesgo31}
+              riesgo61={riesgo61} riesgo91={riesgo91} riesgo120={riesgo120}
+              totalRiesgo={totalRiesgo} avaluoPct={avaluoPct}
+            />
+            <DiagnosticoEjecutivoCard
+              avaluoPct={avaluoPct} totalRiesgo={totalRiesgo}
+              riesgo61={riesgo61} riesgo91={riesgo91} riesgo120={riesgo120}
+              m120={m120} cartera={cartera}
+            />
+          </div>
 
           {/* Columna derecha: Meta Mensual + Mi Equipo */}
           <div className="flex flex-col gap-5">
@@ -494,6 +501,113 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   )
 }
 
+// ── Diagnóstico Ejecutivo Card ────────────────────────────────────────
+function DiagnosticoEjecutivoCard({
+  avaluoPct, totalRiesgo,
+  riesgo61, riesgo91, riesgo120,
+  m120, cartera,
+}: {
+  avaluoPct: number; totalRiesgo: number
+  riesgo61: number; riesgo91: number; riesgo120: number
+  m120: number; cartera: number
+}) {
+  // Chip 1 — Avalúo vs Benchmark 15%
+  const diff    = avaluoPct - 15
+  const c1Color = avaluoPct >= 25 ? '#dc2626' : avaluoPct >= 15 ? '#f59e0b' : '#16a34a'
+  const c1Bg    = avaluoPct >= 25 ? '#fef2f2' : avaluoPct >= 15 ? '#fffbeb' : '#f0fdf4'
+  const c1Badge = avaluoPct >= 25 ? 'CRÍTICO' : avaluoPct >= 15 ? 'SOBRE META' : 'DENTRO DE META'
+
+  // Chip 2 — Concentración mora crítica (>60d) sobre riesgo total
+  const riesgoCrit = riesgo61 + riesgo91 + riesgo120
+  const pctCrit    = totalRiesgo > 0 ? (riesgoCrit / totalRiesgo) * 100 : 0
+  const c2Color    = pctCrit >= 20 ? '#dc2626' : pctCrit >= 10 ? '#f59e0b' : '#16a34a'
+  const c2Bg       = pctCrit >= 20 ? '#fef2f2' : pctCrit >= 10 ? '#fffbeb' : '#f0fdf4'
+  const c2Badge    = pctCrit >= 20 ? 'CONCENTRACIÓN ALTA' : pctCrit >= 10 ? 'ATENCIÓN' : 'CONTROLADO'
+
+  // Chip 3 — Efecto multiplicador Más 120 días
+  const safeM120    = Math.max(0, m120)
+  const pctCartM120 = cartera > 0      ? (safeM120 / cartera)      * 100 : 0
+  const pctRsgM120  = totalRiesgo > 0  ? (safeM120 / totalRiesgo)  * 100 : 0
+  const mult        = pctCartM120 > 0.01 ? pctRsgM120 / pctCartM120 : 0
+
+  return (
+    <div style={{
+      background: 'white', borderRadius: '16px',
+      border: '1px solid #E2E8F0', borderTop: '3px solid #003B5C',
+      boxShadow: '0 1px 8px rgba(0,0,0,0.06)', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div className="px-6 py-4 flex items-center gap-3"
+           style={{ borderBottom: '1px solid #F1F5F9' }}>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+             style={{ background: 'rgba(0,59,92,0.08)' }}>
+          <Target size={15} style={{ color: '#003B5C' }} />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-gray-900">Diagnóstico Ejecutivo</h2>
+          <p className="text-xs text-gray-400">Señales clave del Avalúo de Riesgo</p>
+        </div>
+      </div>
+
+      {/* 3 Chips */}
+      <div className="p-4 grid grid-cols-3 gap-3">
+
+        {/* Chip 1: Avalúo vs Benchmark 15% */}
+        <div className="rounded-xl p-3.5 flex flex-col gap-1"
+             style={{ background: c1Bg, border: `1px solid ${c1Color}30` }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
+            Avalúo vs Bench. 15%
+          </p>
+          <p className="text-xl font-black tabular-nums leading-none mt-1.5"
+             style={{ color: c1Color }}>{avaluoPct.toFixed(2)}%</p>
+          <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
+            {diff >= 0 ? `+${diff.toFixed(2)} pts` : `${diff.toFixed(2)} pts`} vs meta
+          </p>
+          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+                style={{ background: `${c1Color}18`, color: c1Color }}>
+            {c1Badge}
+          </span>
+        </div>
+
+        {/* Chip 2: Concentración mora crítica >60d */}
+        <div className="rounded-xl p-3.5 flex flex-col gap-1"
+             style={{ background: c2Bg, border: `1px solid ${c2Color}30` }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
+            Mora Crítica &gt;60 días
+          </p>
+          <p className="text-xl font-black tabular-nums leading-none mt-1.5"
+             style={{ color: c2Color }}>{pctCrit.toFixed(1)}%</p>
+          <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
+            del riesgo total
+          </p>
+          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+                style={{ background: `${c2Color}18`, color: c2Color }}>
+            {c2Badge}
+          </span>
+        </div>
+
+        {/* Chip 3: Efecto multiplicador +120d */}
+        <div className="rounded-xl p-3.5 flex flex-col gap-1"
+             style={{ background: 'rgba(127,29,29,0.05)', border: '1px solid rgba(127,29,29,0.15)' }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-tight">
+            Efecto Más 120 días
+          </p>
+          <p className="text-xl font-black tabular-nums leading-none mt-1.5"
+             style={{ color: '#7f1d1d' }}>×{mult.toFixed(1)}</p>
+          <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
+            {pctCartM120.toFixed(2)}% cart. → {pctRsgM120.toFixed(1)}% rsg.
+          </p>
+          <span className="mt-auto pt-2 self-start text-[9px] font-black uppercase px-1.5 py-0.5 rounded"
+                style={{ background: 'rgba(127,29,29,0.12)', color: '#7f1d1d' }}>
+            MULTIPLICADOR
+          </span>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
 // ── Meta Mensual Card ─────────────────────────────────────────────────
 function MetaMensualCard({ cobrado, meta, diaActual, diasRestantes, pctMeta, proyeccion, enCamino }: {
   cobrado: number; meta: number; diaActual: number; diasRestantes: number
@@ -590,11 +704,11 @@ function AvaluoRiesgoCard({
   const avaluoColor = avaluoPct >= 25 ? '#dc2626' : avaluoPct >= 15 ? '#f59e0b' : '#16a34a'
   const avaluoBg    = avaluoPct >= 25 ? '#fef2f2' : avaluoPct >= 15 ? '#fffbeb' : '#f0fdf4'
   const rows = [
-    { label: 'No Vencido',  color: '#16a34a', v: nv,   pRisk: 15,  riesgo: riesgoNV  },
-    { label: '1-30 días',   color: '#d97706', v: m130, pRisk: 20,  riesgo: riesgo130 },
-    { label: '31-60 días',  color: '#ea580c', v: m31,  pRisk: 25,  riesgo: riesgo31  },
-    { label: '61-90 días',  color: '#dc2626', v: m61,  pRisk: 25,  riesgo: riesgo61  },
-    { label: '91-120 días', color: '#b91c1c', v: m91,  pRisk: 25,  riesgo: riesgo91  },
+    { label: 'No Vencido',   color: '#16a34a', v: nv,   pRisk: 15,  riesgo: riesgoNV  },
+    { label: '1-30 días',    color: '#d97706', v: m130, pRisk: 20,  riesgo: riesgo130 },
+    { label: '31-60 días',   color: '#ea580c', v: m31,  pRisk: 25,  riesgo: riesgo31  },
+    { label: '61-90 días',   color: '#dc2626', v: m61,  pRisk: 25,  riesgo: riesgo61  },
+    { label: '91-120 días',  color: '#b91c1c', v: m91,  pRisk: 25,  riesgo: riesgo91  },
     { label: 'Más 120 días', color: '#7f1d1d', v: m120, pRisk: 100, riesgo: riesgo120 },
   ]
   return (
@@ -616,7 +730,6 @@ function AvaluoRiesgoCard({
             <p className="text-xs text-gray-400">Fórmula corporativa · {fechaCorte}</p>
           </div>
         </div>
-        {/* Resultado prominente */}
         <div className="rounded-xl px-4 py-2 text-center flex-shrink-0"
              style={{ background: avaluoBg }}>
           <p className="text-2xl font-black tabular-nums leading-none"
@@ -626,63 +739,66 @@ function AvaluoRiesgoCard({
         </div>
       </div>
 
-      {/* Tabla */}
-      <div className="px-4 pt-3 pb-5">
-        {/* Encabezados — 5 columnas: Tramo | % Cart. | Monto | % Rsg. | Riesgo ₡ */}
-        <div className="flex items-center px-3 pb-1.5 gap-2"
-             style={{ borderBottom: '1px solid #E2E8F0' }}>
-          <span className="w-28 flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tramo</span>
-          <span className="w-14 text-right flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Cart.</span>
-          <span className="flex-1 text-right text-[10px] font-bold text-gray-400 uppercase tracking-wider">Monto</span>
-          <span className="w-12 text-right flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">% Rsg.</span>
-          <span className="w-28 text-right flex-shrink-0 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Riesgo ₡</span>
-        </div>
-
-        {/* Filas de datos */}
-        {rows.map((r, i) => (
-          <div key={r.label}
-               className="flex items-center px-3 py-2 rounded-lg gap-2"
-               style={{ background: i % 2 === 1 ? '#f8fafc' : 'transparent' }}>
-            <div className="flex items-center gap-1.5 w-28 flex-shrink-0">
-              <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: r.color }} />
-              <span className="text-[12px] font-semibold text-gray-700">{r.label}</span>
-            </div>
-            <span className="w-14 text-right flex-shrink-0 text-[12px] font-bold tabular-nums text-gray-500">
-              {pct1(Math.max(0, r.v), cartera)}%
-            </span>
-            <span className="flex-1 text-right text-[12px] font-bold tabular-nums text-gray-800">
-              {fmtKPI(Math.max(0, r.v))}
-            </span>
-            <span className="w-12 text-right flex-shrink-0 text-[12px] font-bold tabular-nums"
-                  style={{ color: r.color }}>
-              {r.pRisk}%
-            </span>
-            <span className="w-28 text-right flex-shrink-0 text-[12px] font-bold tabular-nums"
-                  style={{ color: r.color }}>
-              {fmtKPI(r.riesgo)}
-            </span>
-          </div>
-        ))}
-
-        {/* Fila TOTALES */}
-        <div className="flex items-center px-3 py-2.5 mt-1 rounded-lg gap-2"
-             style={{ background: avaluoBg, borderTop: `2px solid ${avaluoColor}33` }}>
-          <span className="w-28 flex-shrink-0 text-[12px] font-black text-gray-700 uppercase tracking-wide">Totales</span>
-          <span className="w-14 text-right flex-shrink-0 text-[12px] font-black tabular-nums text-gray-700">
-            100%
-          </span>
-          <span className="flex-1 text-right text-[13px] font-black tabular-nums text-gray-900">
-            {fmtKPI(cartera)}
-          </span>
-          <span className="w-12 text-right flex-shrink-0 text-[13px] font-black tabular-nums"
-                style={{ color: avaluoColor }}>
-            {avaluoPct.toFixed(2)}%
-          </span>
-          <span className="w-28 text-right flex-shrink-0 text-[13px] font-black tabular-nums"
-                style={{ color: avaluoColor }}>
-            {fmtKPI(totalRiesgo)}
-          </span>
-        </div>
+      {/* Tabla HTML — alineación automática de columnas por contenido */}
+      <div className="px-5 py-4 overflow-x-auto">
+        <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+              <th className="text-left pb-2.5 pr-4 font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap" style={{ fontSize: '10px' }}>Tramo</th>
+              <th className="text-right pb-2.5 px-3 font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap" style={{ fontSize: '10px' }}>% del Total</th>
+              <th className="text-right pb-2.5 px-3 font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap" style={{ fontSize: '10px' }}>Monto en ₡</th>
+              <th className="text-right pb-2.5 px-3 font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap" style={{ fontSize: '10px' }}>% de Riesgo</th>
+              <th className="text-right pb-2.5 pl-3 font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap" style={{ fontSize: '10px' }}>Riesgo en ₡</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.label} style={{ background: i % 2 === 1 ? '#f8fafc' : 'transparent' }}>
+                <td className="py-2 pr-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: r.color }} />
+                    <span className="font-semibold text-gray-700 whitespace-nowrap">{r.label}</span>
+                  </div>
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums font-bold text-gray-500 whitespace-nowrap">
+                  {(cartera > 0 ? (Math.max(0, r.v) / cartera * 100) : 0).toFixed(2)}%
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums font-bold text-gray-800 whitespace-nowrap">
+                  {fmtCRC(Math.max(0, r.v))}
+                </td>
+                <td className="py-2 px-3 text-right tabular-nums font-bold whitespace-nowrap"
+                    style={{ color: r.color }}>
+                  {r.pRisk}%
+                </td>
+                <td className="py-2 pl-3 text-right tabular-nums font-bold whitespace-nowrap"
+                    style={{ color: r.color }}>
+                  {fmtCRC(r.riesgo)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid #E2E8F0', background: avaluoBg }}>
+              <td className="py-3 pr-4">
+                <span className="text-[11px] font-black text-gray-700 uppercase tracking-wide">Totales</span>
+              </td>
+              <td className="py-3 px-3 text-right tabular-nums font-black text-gray-700 whitespace-nowrap">
+                100.00%
+              </td>
+              <td className="py-3 px-3 text-right tabular-nums font-black text-gray-900 whitespace-nowrap">
+                {fmtCRC(cartera)}
+              </td>
+              <td className="py-3 px-3 text-right tabular-nums font-black whitespace-nowrap"
+                  style={{ color: avaluoColor }}>
+                {avaluoPct.toFixed(2)}%
+              </td>
+              <td className="py-3 pl-3 text-right tabular-nums font-black whitespace-nowrap"
+                  style={{ color: avaluoColor }}>
+                {fmtCRC(totalRiesgo)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   )
