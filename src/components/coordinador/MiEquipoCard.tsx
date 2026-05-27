@@ -46,7 +46,8 @@ export default function MiEquipoCard({ analistas }: { analistas: AnalistaEquipo[
   return (
     <div style={{
       background: 'white', borderRadius: '16px',
-      border: '1px solid #E2E8F0', boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+      border: '1px solid #E2E8F0', borderTop: '3px solid #003B5C',
+      boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
       overflow: 'hidden',
     }}>
       {/* ── Header ─────────────────────────────────────────────────── */}

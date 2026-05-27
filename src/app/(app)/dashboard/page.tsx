@@ -273,7 +273,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
 
         {/* Aging + Mi Equipo + Meta */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <div className="flex flex-col" style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
+          <div className="flex flex-col" style={{ background:'white', borderRadius:'16px', border:'1px solid #E2E8F0', borderTop:'3px solid #003B5C', boxShadow:'0 1px 8px rgba(0,0,0,0.06)', overflow:'hidden' }}>
             <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom:'1px solid #F1F5F9' }}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background:'rgba(0,59,92,0.08)' }}><Activity size={15} style={{ color:'#003B5C' }}/></div>
@@ -364,9 +364,8 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
             </div>
           </div>
 
-          {/* Columna derecha: Mi Equipo + Meta Mensual */}
+          {/* Columna derecha: Meta Mensual + Mi Equipo */}
           <div className="flex flex-col gap-5">
-            <MiEquipoCard analistas={equipoData} />
             {meta > 0 && (
               <MetaMensualCard
                 cobrado={cobradoMes}
@@ -378,6 +377,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
                 enCamino={enCamino}
               />
             )}
+            <MiEquipoCard analistas={equipoData} />
           </div>
         </div>
 
