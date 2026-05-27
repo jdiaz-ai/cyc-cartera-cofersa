@@ -135,7 +135,7 @@ export default function MiCarteraView({ rows, kpis }: Props) {
 
   const cuentaPriAgenda = useMemo(() => {
     const c: Record<Prioridad, number> = { critico: 0, urgente: 0, seguimiento: 0, rutina: 0 }
-    agendaBase.forEach(r => c[r.prioridad]++)
+    agendaBase.filter(r => !r.gestionado_hoy).forEach(r => c[r.prioridad]++)
     return c
   }, [agendaBase])
 
@@ -153,7 +153,8 @@ export default function MiCarteraView({ rows, kpis }: Props) {
     return agendaActivosTodos.slice(start, start + ITEMS_PER_PAGE)
   }, [agendaActivosTodos, paginaAgenda])
 
-  const totalAgenda = useMemo(() => rows.filter(r => r.en_agenda).length, [rows])
+  // Solo cuenta pendientes (no gestionados hoy) — así el número baja durante el día
+  const totalAgenda = useMemo(() => rows.filter(r => r.en_agenda && !r.gestionado_hoy).length, [rows])
 
   // ── Cartera completa: cómputos ─────────────────────────────────────────────
   const carteraBase = useMemo(() => {
@@ -286,7 +287,7 @@ export default function MiCarteraView({ rows, kpis }: Props) {
             prioridad        = {prioridadAgenda}
             onPrioridad      = {onPrioridadAgenda}
             cuentaPri        = {cuentaPriAgenda}
-            totalBase        = {agendaBase.length}
+            totalBase        = {agendaBase.filter(r => !r.gestionado_hoy).length}
             totalRows        = {rows.length}
           />
         )}

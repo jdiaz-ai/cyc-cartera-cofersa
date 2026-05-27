@@ -66,74 +66,66 @@ function calcularAgenda(p: {
   const OUT = (motivo = '') =>
     ({ en_agenda: false, is_hard_include: false, prioridad: 'rutina' as const, score: 0, motivo })
 
-  // ════════════════════════════════════════════════════════════════
-  // PASO 1 — EXCLUSIÓN ABSOLUTA: ya fue gestionado hoy
-  // Sale siempre, aunque haya promesa vencida o mora +120d.
-  // El analista ya actuó hoy; mañana aparece si sigue pendiente.
-  // ════════════════════════════════════════════════════════════════
-  if (p.gestionado_hoy) return OUT()
+  if (p.gestionado_hoy) {
+    // ════════════════════════════════════════════════════════════════
+    // RAMA A — YA GESTIONADO HOY
+    // Aparece en la sección "gestionados hoy" para que el analista
+    // vea su progreso y la barra del día avance correctamente.
+    // Saltamos exclusiones; solo aplicamos umbral mínimo de mora.
+    // ════════════════════════════════════════════════════════════════
+    if (p.mora_total < MORA_MINIMA) return OUT()
+    // Cae al scoring compartido de abajo
+  } else {
+    // ════════════════════════════════════════════════════════════════
+    // RAMA B — AÚN PENDIENTE: lógica completa de exclusión
+    // ════════════════════════════════════════════════════════════════
 
-  // ════════════════════════════════════════════════════════════════
-  // PASO 2 — HARD INCLUDES: promesas vencidas o que vencen hoy
-  // Son situaciones urgentes que superan cualquier fecha programada.
-  // ════════════════════════════════════════════════════════════════
-  if (p.promesa_activa && p.promesa_fecha) {
-    const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
-    // Promesa incumplida (venció y no pagó)
-    if (diasVenc > 0) {
-      const montoStr = p.promesa_monto ? `${fmtCRC(p.promesa_monto)} ` : ''
-      return {
-        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 97,
-        motivo: `Promesa de ${montoStr}venció hace ${diasVenc}d — sin pago`,
+    // PASO 2 — HARD INCLUDES: promesas vencidas o que vencen hoy
+    if (p.promesa_activa && p.promesa_fecha) {
+      const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
+      if (diasVenc > 0) {
+        const montoStr = p.promesa_monto ? `${fmtCRC(p.promesa_monto)} ` : ''
+        return {
+          en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 97,
+          motivo: `Promesa de ${montoStr}venció hace ${diasVenc}d — sin pago`,
+        }
+      }
+      if (diasVenc === 0) {
+        return {
+          en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 95,
+          motivo: 'Promesa vence hoy — confirmar si pagó',
+        }
       }
     }
-    // Promesa vence hoy
-    if (diasVenc === 0) {
+
+    // PASO 3 — EXCLUSIÓN POR PRÓXIMA ACCIÓN FUTURA
+    if (p.proxima_accion_fecha) {
+      if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
+    }
+
+    // PASO 4 — HARD INCLUDE: mora en tramo +120 días
+    if ((p.mora_120_plus ?? 0) > 0 || p.dias_mora > 120) {
       return {
-        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 95,
-        motivo: 'Promesa vence hoy — confirmar si pagó',
+        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 92,
+        motivo: `Mora supera 120 días (${fmtCRC(p.mora_total)}) — crítico`,
       }
     }
-  }
 
-  // ════════════════════════════════════════════════════════════════
-  // PASO 3 — EXCLUSIÓN POR PRÓXIMA ACCIÓN FUTURA
-  // Si el analista programó una fecha de seguimiento, se respeta.
-  // Aplica incluso para cuentas con mora +120d: el analista tomó
-  // una decisión explícita al gestionar y programar esa fecha.
-  // ════════════════════════════════════════════════════════════════
-  if (p.proxima_accion_fecha) {
-    if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
-  }
-
-  // ════════════════════════════════════════════════════════════════
-  // PASO 4 — HARD INCLUDE: mora en tramo +120 días
-  // Solo llega aquí si no hay fecha futura programada (paso 3).
-  // ════════════════════════════════════════════════════════════════
-  if ((p.mora_120_plus ?? 0) > 0 || p.dias_mora > 120) {
-    return {
-      en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 92,
-      motivo: `Mora supera 120 días (${fmtCRC(p.mora_total)}) — crítico`,
+    // PASO 5 — EXCLUSIONES ADICIONALES
+    // Promesa vigente (futura) + gestión reciente — no molestar
+    if (p.promesa_activa && p.promesa_fecha) {
+      const diasParaPromesa = Math.floor(
+        (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
+      )
+      if (diasParaPromesa > 0 && dsg <= 3) return OUT()
     }
+
+    // Mora por debajo del mínimo operativo
+    if (p.mora_total < MORA_MINIMA) return OUT()
   }
 
   // ════════════════════════════════════════════════════════════════
-  // PASO 5 — EXCLUSIONES ADICIONALES
-  // ════════════════════════════════════════════════════════════════
-
-  // Promesa vigente (futura) + gestión reciente — no molestar
-  if (p.promesa_activa && p.promesa_fecha) {
-    const diasParaPromesa = Math.floor(
-      (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
-    )
-    if (diasParaPromesa > 0 && dsg <= 3) return OUT()
-  }
-
-  // Mora por debajo del mínimo operativo
-  if (p.mora_total < MORA_MINIMA) return OUT()
-
-  // ════════════════════════════════════════════════════════════════
-  // SCORING PONDERADO 0–100
+  // SCORING PONDERADO 0–100 (compartido: rama A y B)
   // 40% monto en mora | 35% días mora | 15% días sin gestión | 10% promesa próxima
   // ════════════════════════════════════════════════════════════════
 
@@ -366,17 +358,20 @@ export default async function MiCarteraPage() {
     b.score !== a.score ? b.score - a.score : b.mora_total - a.mora_total
   )
 
-  // ── Tope dinámico de la cola: ~30 por día ────────────────────────
-  // Hard includes (promesas vencidas/hoy, mora +120d) siempre aparecen.
-  // Del resto, solo entran los mejor puntuados hasta completar el cupo.
+  // ── Tope dinámico de la cola: ~30 pendientes por día ────────────
+  // El tope aplica SOLO a clientes pendientes (no gestionados hoy).
+  // Los gestionados hoy siempre se incluyen fuera del tope para que
+  // la barra de progreso del día muestre los avances correctamente.
   const TOPE_DIARIO = 30
-  const hardCods    = new Set(rows.filter(r => r.is_hard_include).map(r => r.cliente_cod))
-  const candidatos  = rows.filter(r => r.en_agenda && !r.is_hard_include)
+  const hardCods    = new Set(rows.filter(r => r.is_hard_include && !r.gestionado_hoy).map(r => r.cliente_cod))
+  const candidatos  = rows.filter(r => r.en_agenda && !r.is_hard_include && !r.gestionado_hoy)
   const cupo        = Math.max(0, TOPE_DIARIO - hardCods.size)
-  const enCola      = new Set([
+  const enCola      = new Set<string>([
     ...hardCods,
     ...candidatos.slice(0, cupo).map(r => r.cliente_cod),
   ])
+  // Gestionados hoy elegibles: siempre visibles (fuera del tope)
+  rows.filter(r => r.gestionado_hoy && r.en_agenda).forEach(r => enCola.add(r.cliente_cod))
   rows.forEach(r => { if (!enCola.has(r.cliente_cod)) r.en_agenda = false })
 
   const kpis: KPIs = {
