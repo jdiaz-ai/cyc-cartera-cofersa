@@ -45,31 +45,15 @@ export default function TabSLA({ slaOverrides: init }: Props) {
     }
 
     try {
-      // Guardar cada SLA como parámetro de sistema usando la ruta de semáforo
-      // (o podríamos usar /api/configuracion/parametros, pero esa ruta solo acepta claves fijas).
-      // Guardamos directamente en batch vía la misma ruta de semáforo generalizada.
-      // Para este caso, llamamos al endpoint de parámetros con cada clave
-      const entries = Object.entries(payload)
-      const results = await Promise.all(
-        entries.map(([clave, valor]) =>
-          fetch('/api/configuracion/parametros', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clave, valor }),
-          })
-        )
-      )
-      // Chequear errores — si alguno falla por clave no permitida, intentamos con semáforo
-      // Silenciar errores de clave no en CLAVES_PARAMETROS (los SLAs se guardan en semáforo)
-      const errors = await Promise.all(
-        results.map(async (r, i) => {
-          if (r.ok) return null
-          // Intentar con endpoint genérico upsert (semáforo acepta cualquier clave de semáforo)
-          // Si falla, guardar via endpoint genérico
-          return null // No bloquear
-        })
-      )
-      void errors // suppress lint
+      const res = await fetch('/api/configuracion/sla', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error ?? `Error ${res.status}`)
+      }
 
       setSaved(true)
       setOverrides(payload)
