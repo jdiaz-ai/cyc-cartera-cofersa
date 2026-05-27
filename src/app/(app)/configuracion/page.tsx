@@ -1,7 +1,6 @@
 import { redirect }             from 'next/navigation'
 import { createClient }           from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { Settings }               from 'lucide-react'
 import ConfigTabs, { type ConfigTabsData } from '@/components/configuracion/ConfigTabs'
 import type { SemaforoData }      from '@/components/configuracion/TabSemaforo'
 import type { VendedorRow }       from '@/components/configuracion/TabVendedores'
@@ -142,30 +141,7 @@ export default async function ConfiguracionPage() {
 
   // ── 10. Render ────────────────────────────────────────────────────
   return (
-    <div className="p-5 space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center rounded-xl"
-          style={{ width: 40, height: 40, backgroundColor: '#003B5C' }}>
-          <Settings size={18} color="white" />
-        </div>
-        <div>
-          <h1 className="text-[19px] font-bold text-gray-900">Configuración del Sistema</h1>
-          <p className="text-[12px] text-gray-400 mt-0.5">
-            Distribución de vendedores · Usuarios · Parámetros · Semáforo · SLA · Directorio
-          </p>
-        </div>
-        <div className="ml-auto">
-          <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold"
-            style={{ backgroundColor: '#003B5C', color: 'white' }}
-          >
-            Solo COORDINADOR
-          </span>
-        </div>
-      </div>
-
-      {/* Tabs */}
+    <div className="p-5">
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <ConfigTabs data={data} />
       </div>

@@ -46,18 +46,15 @@ export default function ConfigTabs({ data }: Props) {
   return (
     <div>
       {/* ── Tab nav ── */}
-      <div
-        className="flex overflow-x-auto mb-6"
-        style={{ borderBottom: '1px solid #e2e8f0', gap: 0 }}
-      >
+      <div className="flex flex-wrap gap-2 mb-6">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActive(tab.id)}
-            className="flex-shrink-0 px-4 py-3 text-[13px] font-semibold transition-colors whitespace-nowrap"
+            className="flex-shrink-0 px-4 py-2 text-[13px] font-semibold transition-all whitespace-nowrap rounded-full"
             style={active === tab.id
-              ? { color: '#009ee3', borderBottom: '2px solid #009ee3' }
-              : { color: '#64748b', borderBottom: '2px solid transparent' }}
+              ? { backgroundColor: '#009ee3', color: 'white' }
+              : { backgroundColor: '#f1f5f9', color: '#64748b' }}
           >
             {tab.label}
           </button>

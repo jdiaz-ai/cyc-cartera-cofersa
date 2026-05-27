@@ -181,7 +181,7 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
   // ── Meta ──────────────────────────────────────────────────────────────
   let meta = 0
   try {
-    const { data } = await supabase.from('config_sistema').select('valor').eq('clave', 'META_MENSUAL').single()
+    const { data } = await supabase.from('config_sistema').select('valor').eq('clave', 'meta_mensual').single()
     meta = Number((data as { valor: string } | null)?.valor || 0)
   } catch {}
 
