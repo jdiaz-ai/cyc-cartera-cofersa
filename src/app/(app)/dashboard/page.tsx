@@ -13,6 +13,8 @@ import MiProgreso     from '@/components/analista/MiProgreso'
 import NotasRapidas   from '@/components/analista/NotasRapidas'
 import TendenciaCarteraChart from '@/components/coordinador/TendenciaCarteraChart'
 import type { HistoricoCarteraRow } from '@/components/coordinador/TendenciaCarteraChart'
+import DSOTendenciaCard from '@/components/coordinador/DSOTendenciaCard'
+import type { DSOPunto } from '@/components/coordinador/DSOTendenciaCard'
 import type {
   KpisAnalistaDashboard,
   VendedorResumen,
@@ -111,18 +113,39 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     }
   } catch {}
 
-  // ── DSO Real (ventas últimos 3 meses de ventas_mensuales) ─────────────
-  // Fórmula: (Cartera Total / Ventas 90d con IVA) × 90
+  // ── Ventas mensuales (DSO actual + tendencia histórica) ───────────────
+  // Fórmula DSO: (Cartera Total / Ventas rolling 3m con IVA) × 90
   let ventas90d = 0
+  let dsoTendencia: DSOPunto[] = []
   try {
-    const { data: ventasData } = await supabase
+    const { data: todosMeses } = await supabase
       .from('ventas_mensuales')
-      .select('total_ventas_sin_iva')
-      .order('anio', { ascending: false })
-      .order('mes',  { ascending: false })
-      .limit(3)
-    ventas90d = ((ventasData ?? []) as { total_ventas_sin_iva: number }[])
-      .reduce((s, v) => s + Number(v.total_ventas_sin_iva), 0)
+      .select('anio, mes, total_ventas_sin_iva')
+      .order('anio', { ascending: true })
+      .order('mes',  { ascending: true })
+    const meses = (todosMeses ?? []) as { anio: number; mes: number; total_ventas_sin_iva: number }[]
+
+    // DSO actual = últimos 3 meses
+    const ultimos3 = meses.slice(-3)
+    ventas90d = ultimos3.reduce((s, v) => s + Number(v.total_ventas_sin_iva), 0)
+
+    // Tendencia: rolling 3-month DSO por período (necesita ≥3 meses)
+    for (let i = 2; i < meses.length; i++) {
+      const v3 = Number(meses[i-2].total_ventas_sin_iva)
+               + Number(meses[i-1].total_ventas_sin_iva)
+               + Number(meses[i].total_ventas_sin_iva)
+      const ventas90dConIva = v3 * 1.13
+      if (ventas90dConIva > 0 && cartera > 0) {
+        dsoTendencia.push({
+          anio:       meses[i].anio,
+          mes:        meses[i].mes,
+          dso:        Math.round((cartera / ventas90dConIva) * 90 * 10) / 10,
+          ventas90d:  ventas90dConIva,
+          esEstimado: i < meses.length - 1, // último usa cartera real actual
+        })
+      }
+    }
+    dsoTendencia = dsoTendencia.slice(-6) // últimos 6 períodos
   } catch {}
   const dso = ventas90d > 0
     ? Math.round((cartera / (ventas90d * 1.13)) * 90 * 10) / 10
@@ -325,6 +348,11 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
 
         {/* Tendencia de Mora */}
         <TendenciaCarteraChart data={historico} />
+
+        {/* Evolución DSO mes a mes */}
+        {dsoTendencia.length > 0 && (
+          <DSOTendenciaCard puntos={dsoTendencia} />
+        )}
       </div>
     </div>
   )
