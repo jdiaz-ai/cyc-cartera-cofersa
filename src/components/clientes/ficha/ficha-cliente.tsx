@@ -835,7 +835,9 @@ function TabInformacion({ cartera, maestro, analistaNombre, esCoordinador, mora_
           {/* ── Filas de datos ── */}
           <div className="divide-y divide-gray-50 flex-1">
             {AGING_TRAMOS.map(({ key, label, color }) => {
-              const monto = (cartera[key as keyof Cartera] as number) || 0
+              // Math.max(0, ...) evita valores negativos de ajuste Softland
+              // que causarían width:"-N%" → CSS inválido → barra al 100% por browser fallback
+              const monto = Math.max(0, (cartera[key as keyof Cartera] as number) || 0)
               const pct   = cartera.total > 0 ? Math.round((monto / cartera.total) * 100) : 0
               return (
                 <div
