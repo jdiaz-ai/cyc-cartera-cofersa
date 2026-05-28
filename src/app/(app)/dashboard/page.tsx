@@ -111,9 +111,25 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
     }
   } catch {}
 
+  // ── DSO Real (ventas últimos 3 meses de ventas_mensuales) ─────────────
+  // Fórmula: (Cartera Total / Ventas 90d con IVA) × 90
+  let ventas90d = 0
+  try {
+    const { data: ventasData } = await supabase
+      .from('ventas_mensuales')
+      .select('total_ventas_sin_iva')
+      .order('anio', { ascending: false })
+      .order('mes',  { ascending: false })
+      .limit(3)
+    ventas90d = ((ventasData ?? []) as { total_ventas_sin_iva: number }[])
+      .reduce((s, v) => s + Number(v.total_ventas_sin_iva), 0)
+  } catch {}
+  const dso = ventas90d > 0
+    ? Math.round((cartera / (ventas90d * 1.13)) * 90 * 10) / 10
+    : 0
+
   const pMora    = pct(mora, cartera)       // entero — para lógica de color
   const pMora1   = pct1(mora, cartera)      // "27.3" — para mostrar en card
-  const dso      = cartera ? Math.round((mora / cartera) * 30) : 0
   // Monto vencido >30 días (31-60 + 61-90 + 91-120 + 120+) y su % sobre cartera total
   const venc30   = Math.max(0, m31) + Math.max(0, m61) + Math.max(0, m91) + Math.max(0, m120)
   const pVenc30  = pct(venc30, cartera)     // entero — para lógica de color
@@ -254,9 +270,9 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
           {/* 5. DSO */}
           <KPICard
             label="DSO Actual"
-            valor={`${dso}d`}
-            sub="días promedio de cobro"
-            accentColor={dso > 40 ? '#ef4444' : '#16a34a'}
+            valor={`${dso.toFixed(1)}d`}
+            sub="ventas reales últimos 3 meses"
+            accentColor={dso > 45 ? '#ef4444' : dso > 35 ? '#f59e0b' : '#16a34a'}
             badge={null}
             icon={<Timer size={16} />}
           />
