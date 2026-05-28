@@ -120,10 +120,14 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
   try {
     const { data: todosMeses } = await supabase
       .from('ventas_mensuales')
-      .select('anio, mes, total_ventas_sin_iva')
+      .select('anio, mes, total_ventas_sin_iva, cartera_total_mes')
       .order('anio', { ascending: true })
       .order('mes',  { ascending: true })
-    const meses = (todosMeses ?? []) as { anio: number; mes: number; total_ventas_sin_iva: number }[]
+    const meses = (todosMeses ?? []) as {
+      anio: number; mes: number
+      total_ventas_sin_iva: number
+      cartera_total_mes: number | null
+    }[]
 
     // DSO actual = últimos 3 meses
     const ultimos3 = meses.slice(-3)
@@ -135,13 +139,18 @@ async function DashboardCoordinador({ supabase, hoyStr, nombre }: {
                + Number(meses[i-1].total_ventas_sin_iva)
                + Number(meses[i].total_ventas_sin_iva)
       const ventas90dConIva = v3 * 1.13
-      if (ventas90dConIva > 0 && cartera > 0) {
+      // Usar cartera real del mes si existe; si no, usar cartera actual (estimado)
+      const carteraMes  = meses[i].cartera_total_mes !== null
+        ? Number(meses[i].cartera_total_mes)
+        : cartera
+      const esEstimado  = meses[i].cartera_total_mes === null
+      if (ventas90dConIva > 0 && carteraMes > 0) {
         dsoTendencia.push({
           anio:       meses[i].anio,
           mes:        meses[i].mes,
-          dso:        Math.round((cartera / ventas90dConIva) * 90 * 10) / 10,
+          dso:        Math.round((carteraMes / ventas90dConIva) * 90 * 10) / 10,
           ventas90d:  ventas90dConIva,
-          esEstimado: i < meses.length - 1, // último usa cartera real actual
+          esEstimado,
         })
       }
     }
