@@ -1,3 +1,6 @@
+// force-dynamic: garantiza datos frescos en cada visita (sin caché del router)
+export const dynamic = 'force-dynamic'
+
 import { createClient } from '@/lib/supabase/server'
 import { fmtKPI, fmtCRC, fmtFecha, hoyISO } from '@/lib/utils/formato'
 import {
@@ -15,10 +18,10 @@ import TendenciaCarteraChart from '@/components/coordinador/TendenciaCarteraChar
 import type { HistoricoCarteraRow } from '@/components/coordinador/TendenciaCarteraChart'
 import DSOTendenciaCard from '@/components/coordinador/DSOTendenciaCard'
 import type { DSOPunto } from '@/components/coordinador/DSOTendenciaCard'
+import { computarColaDia } from '@/lib/utils/cola-analista'
 import type {
   KpisAnalistaDashboard,
   VendedorResumen,
-  ColaItem as ColaItemRPC,
   AgendaGestion,
   AgendaPromesa,
   PromesaPendiente,
@@ -379,15 +382,17 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0]
 
   // ── Llamadas en paralelo ──────────────────────────────────────────────
+  // La cola usa computarColaDia (misma lógica que Mi Cartera) en paralelo
+  // con los demás RPC para no agregar latencia.
   const [
     kpisRes,
     vendedoresRes,
-    colaRes,
+    colaResult,
     agendaGestionesRes,
     agendaPromesasRes,
     promesasRes,
   ] = await Promise.allSettled([
-    // 1. KPIs
+    // 1. KPIs del analista
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).rpc('fn_dashboard_analista_kpis', { p_email: userEmail }),
 
@@ -395,9 +400,8 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).rpc('fn_dashboard_vendedores_analista', { p_email: userEmail }),
 
-    // 3. Cola del día (traer 20, mostrar 5 en dashboard)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).rpc('fn_cola_del_dia', { p_email: userEmail, p_limit: 20 }),
+    // 3. Cola del día — misma lógica que Mi Cartera (algoritmo unificado)
+    computarColaDia(supabase, userEmail, hoyStr),
 
     // 4. Agenda: gestiones con próxima acción hoy o mañana
     supabase.from('gestiones')
@@ -428,7 +432,6 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
   ])
 
   // ── Extraer datos con fallback seguro ─────────────────────────────────
-  // El RPC puede devolver un objeto único o un array — manejamos ambos casos
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const kpisData = kpisRes.status === 'fulfilled' && !(kpisRes.value as any).error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -451,24 +454,11 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
     ? ((vendedoresRes.value as any).data as VendedorResumen[] | null) ?? []
     : []
 
-  // Deduplicar cola por cliente_cod — puede haber duplicados por contribuyente
-  const colaRaw: ColaItemRPC[] = colaRes.status === 'fulfilled' && !(colaRes.value as any).error
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? ((colaRes.value as any).data as ColaItemRPC[] | null) ?? []
-    : []
-
-  const colaDeduplicada: ColaItemRPC[] = colaRaw.reduce((acc: ColaItemRPC[], item) => {
-    const existing = acc.find(x => x.cliente_cod === item.cliente_cod)
-    if (!existing || item.mora_total > existing.mora_total) {
-      return [...acc.filter(x => x.cliente_cod !== item.cliente_cod), item]
-    }
-    return acc
-  }, []).sort((a, b) => {
-    const prioOrder: Record<string, number> = { 'ROJO': 0, 'AMBAR': 1, 'VERDE': 2 }
-    const pa = prioOrder[a.prioridad] ?? 2
-    const pb = prioOrder[b.prioridad] ?? 2
-    return pa !== pb ? pa - pb : b.mora_total - a.mora_total
-  })
+  // Cola: solo clientes PENDIENTES hoy (excluye gestionados y próxima acción futura)
+  const { rows: colaRows } = colaResult.status === 'fulfilled'
+    ? colaResult.value
+    : { rows: [] }
+  const colaParaDashboard = colaRows.filter(r => r.en_agenda && !r.gestionado_hoy)
 
   const agendaGestiones: AgendaGestion[] = agendaGestionesRes.status === 'fulfilled' && !(agendaGestionesRes.value as any).error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -530,7 +520,7 @@ async function DashboardAnalista({ supabase, hoyStr, userEmail, nombre }: {
           <div className="flex-1 min-w-0 flex flex-col gap-4">
             <DashboardResumen
               kpis={kpis}
-              cola={colaDeduplicada}
+              cola={colaParaDashboard}
               promesas={promesas}
               hoyStr={hoyStr}
             />

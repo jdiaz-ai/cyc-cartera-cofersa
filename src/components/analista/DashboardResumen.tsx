@@ -1,35 +1,42 @@
 // src/components/analista/DashboardResumen.tsx
 // Columna izquierda del Dashboard Analista: KPIs + Cola del Día + Mis Promesas.
-// Panel Por Vendedor vive en PorVendedor.tsx (full-width debajo).
+// La Cola del Día usa el mismo CarteraRow que Mi Cartera — misma lógica de prioridad.
 
 import Link from 'next/link'
 import { fmtCRC } from '@/lib/utils/formato'
-import type {
-  KpisAnalistaDashboard,
-  ColaItem,
-  PrioridadCola,
-  PromesaPendiente,
-} from '@/types/dashboard-analista'
+import type { KpisAnalistaDashboard, PromesaPendiente } from '@/types/dashboard-analista'
+import type { CarteraRow } from '@/lib/utils/cola-analista'
 
 export interface DashboardResumenProps {
   kpis:     KpisAnalistaDashboard
-  cola:     ColaItem[]
+  cola:     CarteraRow[]          // solo pendientes (gestionado_hoy = false)
   promesas: PromesaPendiente[]
   hoyStr:   string
 }
 
-// ── Helpers de color ──────────────────────────────────────────────────
-const prioCfg: Record<PrioridadCola, { dot: string }> = {
-  ROJO:  { dot: '#dc2626' },
-  AMBAR: { dot: '#f59e0b' },
-  VERDE: { dot: '#16a34a' },
+// ── Colores por prioridad (mismo diseño que Mi Cartera) ───────────────
+const PRIO_DOT: Record<CarteraRow['prioridad'], string> = {
+  critico:     '#dc2626',
+  urgente:     '#f59e0b',
+  seguimiento: '#3b82f6',
+  rutina:      '#16a34a',
 }
 
-function accionSugerida(item: ColaItem): string {
-  if (item.prioridad === 'ROJO' && item.promesa_vencida) return 'Seguimiento urgente'
-  if (item.prioridad === 'ROJO')                         return 'Llamar hoy'
-  if (item.prioridad === 'AMBAR' && item.tiene_promesa_hoy) return 'Confirmar pago'
-  if (item.prioridad === 'AMBAR')                        return 'Contactar'
+// Mapa a las 3 categorías del badge de cabecera
+function prioToTier(p: CarteraRow['prioridad']): 'rojo' | 'ambar' | 'verde' {
+  if (p === 'critico')   return 'rojo'
+  if (p === 'urgente')   return 'ambar'
+  return 'verde'
+}
+
+// Acción sugerida corta para la cola del dashboard
+function accionLabel(row: CarteraRow): string {
+  if (row.prioridad === 'critico') {
+    if (row.promesa_activa && row.promesa_fecha) return 'Verificar promesa'
+    return 'Llamar hoy'
+  }
+  if (row.prioridad === 'urgente') return 'Contactar pronto'
+  if (row.prioridad === 'seguimiento') return 'Seguimiento'
   return 'Recordatorio'
 }
 
@@ -42,10 +49,15 @@ export default function DashboardResumen({
   const promVisible   = promesas.slice(0, 4)
   const promRestantes = Math.max(0, promesas.length - 4)
 
+  // Conteos por tier para los badges del encabezado
+  const nRojo  = cola.filter(r => prioToTier(r.prioridad) === 'rojo').length
+  const nAmbar = cola.filter(r => prioToTier(r.prioridad) === 'ambar').length
+  const nVerde = cola.filter(r => prioToTier(r.prioridad) === 'verde').length
+
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ── KPI Cards (4 tarjetas, fondo blanco) ──────────────────── */}
+      {/* ── KPI Cards (4 tarjetas) ──────────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
 
         {/* Card 1: Mi Cartera */}
@@ -113,87 +125,84 @@ export default function DashboardResumen({
           <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-[3px] h-4 bg-[#009EE3] rounded-full flex-shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Cola del Día
-                </p>
-              </div>
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                Cola del Día
+              </p>
             </div>
+            {/* Badges ROJO / AMBAR / VERDE */}
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700">
-                {cola.filter(c => c.prioridad === 'ROJO').length}
+                {nRojo}
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
-                {cola.filter(c => c.prioridad === 'AMBAR').length}
+                {nAmbar}
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
-                {cola.filter(c => c.prioridad === 'VERDE').length}
+                {nVerde}
               </span>
             </div>
           </div>
 
           {colaVisible.length === 0 ? (
             <div className="px-4 py-10 text-center">
-              <p className="text-xs text-slate-500">
-                Sin clientes con mora pendiente en tu cartera.
+              <p className="text-xs font-semibold text-emerald-600">
+                ✓ Sin clientes pendientes en la cola
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Todos gestionados o sin mora activa
               </p>
             </div>
           ) : (
             <>
               <div className="divide-y divide-slate-50">
-                {colaVisible.map(item => {
-                  const cfg = prioCfg[item.prioridad]
-                  const moraCrit = Math.max(0, item.mora_61_90 || 0)
-                    + Math.max(0, item.mora_91_120 || 0)
-                    + (item.mora_120_plus || 0)
+                {colaVisible.map(row => {
+                  const dotColor  = PRIO_DOT[row.prioridad]
                   const diasLabel =
-                    item.dias_sin_gestion === 999
+                    row.dias_sin_gestion === 999
                       ? 'Sin gestiones registradas'
-                      : item.dias_sin_gestion >= 7
-                      ? `Sin contacto ${item.dias_sin_gestion} días`
+                      : row.dias_sin_gestion >= 7
+                      ? `Sin contacto ${row.dias_sin_gestion} días`
                       : null
 
                   return (
-                    <div
-                      key={item.cliente_cod}
-                      className="px-4 py-2.5 flex items-start gap-3"
+                    <Link
+                      key={row.cliente_cod}
+                      href={`/clientes/${encodeURIComponent(row.cliente_cod)}?from=mi-cartera`}
+                      className="px-4 py-2.5 flex items-start gap-3 hover:bg-slate-50 transition-colors"
                     >
                       <div
                         className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                        style={{ background: cfg.dot }}
+                        style={{ background: dotColor }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-2">
                           <p className="text-xs font-semibold text-slate-800 truncate">
-                            {item.cliente_nombre || item.cliente_cod}
+                            {row.cliente_nombre || row.cliente_cod}
                           </p>
-                          {moraCrit > 0 && (
-                            <p className="text-xs font-bold text-red-700 flex-shrink-0 tabular-nums">
-                              {fmtCRC(moraCrit)}
+                          {row.mora_total > 0 && (
+                            <p className="text-xs font-bold flex-shrink-0 tabular-nums"
+                               style={{ color: dotColor }}>
+                              {fmtCRC(row.mora_total)}
                             </p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-[10px] text-slate-400">{item.cliente_cod}</span>
+                          <span className="text-[10px] text-slate-400">{row.cliente_cod}</span>
                           <span className="text-[10px] text-slate-300">·</span>
                           <span className="text-[10px] text-slate-500">
-                            {accionSugerida(item)}
+                            {accionLabel(row)}
                           </span>
                           {diasLabel && (
                             <>
                               <span className="text-[10px] text-slate-300">·</span>
-                              <span className={`text-[10px] font-semibold ${
-                                item.dias_sin_gestion >= 7 && item.dias_sin_gestion !== 999
-                                  ? 'text-red-500'
-                                  : 'text-slate-400'
-                              }`}>
+                              <span className="text-[10px] font-semibold text-red-500">
                                 {diasLabel}
                               </span>
                             </>
                           )}
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
@@ -284,7 +293,7 @@ export default function DashboardResumen({
   )
 }
 
-// ── KPI Card (fondo blanco) ───────────────────────────────────────────
+// ── KPI Card ─────────────────────────────────────────────────────────
 function KpiCard({
   label, valor, valorClass = 'text-slate-900', badge, badgeClass, borderColor = '#009EE3',
 }: {

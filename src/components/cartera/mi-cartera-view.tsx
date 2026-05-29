@@ -7,7 +7,7 @@ import {
   CheckCircle2, ChevronRight, ChevronLeft, Target, Zap,
 } from 'lucide-react'
 import { fmtCRC } from '@/lib/utils/formato'
-import type { CarteraRow, KPIs } from '@/app/(app)/mi-cartera/page'
+import type { CarteraRow, KPIs } from '@/lib/utils/cola-analista'
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 20
