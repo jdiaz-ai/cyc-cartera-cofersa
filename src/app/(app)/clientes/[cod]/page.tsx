@@ -1,6 +1,7 @@
 import { createClient }   from '@/lib/supabase/server'
 import { notFound }        from 'next/navigation'
 import FichaCliente        from '@/components/clientes/ficha/ficha-cliente'
+import type { ICPData }    from '@/components/clientes/ficha/ficha-cliente'
 import type { Cartera, MaestroCliente, Factura, Gestion, Promesa } from '@/types/database'
 
 // Next.js 15+ requiere que params sea awaited
@@ -70,6 +71,17 @@ export default async function FichaClientePage({ params, searchParams }: PagePro
     .eq('cliente_cod', cod)
     .order('fecha_promesa', { ascending: false })
   const promesas = (promesasRaw ?? []) as Promesa[]
+
+  // ── ICP (Índice de Comportamiento de Pago) ──────────────────────────
+  let icp: ICPData | null = null
+  try {
+    const { data: icpRaw } = await supabase
+      .from('icp_por_cliente')
+      .select('icp_score, dias_prom_ponderado, clasificacion, n_pagos, n_facturas, pct_pagos_tarde, primer_pago, ultimo_pago')
+      .eq('cliente_cod', cod)
+      .maybeSingle()
+    icp = icpRaw as ICPData | null
+  } catch { /* vista puede no existir */ }
 
   // ── Solicitudes (tabla puede no existir aún) ─────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,6 +153,7 @@ export default async function FichaClientePage({ params, searchParams }: PagePro
       userEmail        = {userEmail}
       esCoordinador    = {esCoordinador}
       backHref         = {backHref}
+      icp              = {icp}
     />
   )
 }

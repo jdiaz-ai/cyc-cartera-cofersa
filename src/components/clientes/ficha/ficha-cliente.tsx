@@ -62,6 +62,18 @@ const PROMESA_COLORS: Record<string, { bg: string; text: string; icon: React.Rea
   ABONO_PARCIAL: { bg: '#e0f2fe', text: '#0369a1', icon: <Circle      size={12} /> },
 }
 
+// ── Tipo ICP ───────────────────────────────────────────────────────────
+export interface ICPData {
+  icp_score:           number
+  dias_prom_ponderado: number
+  clasificacion:       string
+  n_pagos:             number
+  n_facturas:          number
+  pct_pagos_tarde:     number
+  primer_pago:         string | null
+  ultimo_pago:         string | null
+}
+
 // ── Props ──────────────────────────────────────────────────────────────
 interface Props {
   cartera:        Cartera
@@ -79,6 +91,7 @@ interface Props {
   userEmail:        string
   esCoordinador:    boolean
   backHref?:        string   // destino del botón Volver (default: /clientes)
+  icp?:             ICPData | null
 }
 
 // ── Colores de estado del cliente (rgba 15% bg + sólido text) ──────────
@@ -134,7 +147,7 @@ function facturaEnTramo(f: Factura, tramo: string, hoy: string): boolean {
 export default function FichaCliente({
   cartera, maestro, facturas, gestiones, promesas, solicitudes, solicitanteMap,
   analistaNombre, analistaEmail, analistaTelefono, analistaWhatsapp,
-  userEmail, esCoordinador, backHref,
+  userEmail, esCoordinador, backHref, icp,
 }: Props) {
   const router   = useRouter()
   const supabase = createClient()
@@ -397,23 +410,46 @@ export default function FichaCliente({
 
           {/* Card 4: Score ICP */}
           {(() => {
-            // Score ICP: 0-100. Verde ≥70, Amarillo 40-69, Rojo <40
-            const icp = maestro && 'score_icp' in maestro ? (maestro as { score_icp?: number | null }).score_icp : null
-            const icpColor = icp === null || icp === undefined ? '#94a3b8'
-              : icp >= 70 ? '#16a34a'
-              : icp >= 40 ? '#ca8a04'
+            // Sin datos
+            if (!icp) return (
+              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
+                <p className="text-[18px] font-semibold tabular-nums leading-tight text-gray-300">—</p>
+                <p className="text-[11px] text-gray-300 mt-0.5">Sin historial</p>
+              </div>
+            )
+            const score = Number(icp.icp_score)
+            const dias  = Number(icp.dias_prom_ponderado)
+            const color = score >= 80 ? '#16a34a'
+              : score >= 60 ? '#22c55e'
+              : score >= 40 ? '#f59e0b'
+              : score >= 20 ? '#f97316'
               : '#dc2626'
-            const icpLabel = icp === null || icp === undefined ? 'Sin datos'
-              : icp >= 70 ? 'Bueno'
-              : icp >= 40 ? 'Regular'
-              : 'Riesgo'
+            const diasLabel = dias < -1
+              ? `Paga ${Math.abs(Math.round(dias))}d anticipado`
+              : dias <= 1
+              ? 'Paga puntual'
+              : `Paga ${Math.round(dias)}d tarde`
+            const clasifColor = icp.clasificacion === 'EXCELENTE' ? '#16a34a'
+              : icp.clasificacion === 'BUENO'     ? '#22c55e'
+              : icp.clasificacion === 'REGULAR'   ? '#f59e0b'
+              : icp.clasificacion === 'MALO'      ? '#f97316'
+              : '#dc2626'
             return (
               <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-                <p className="text-[10px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
-                <p className="text-[18px] font-semibold tabular-nums leading-tight" style={{ color: icpColor }}>
-                  {icp !== null && icp !== undefined ? icp : '—'}
-                </p>
-                <p className="text-[12px] font-medium mt-0.5" style={{ color: icpColor }}>{icpLabel}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-[20px] font-black tabular-nums leading-tight" style={{ color }}>
+                    {score}
+                  </p>
+                  <span className="text-[10px] font-semibold text-gray-300">/100</span>
+                </div>
+                <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded mt-1"
+                  style={{ background: `${clasifColor}18`, color: clasifColor }}>
+                  {icp.clasificacion}
+                </span>
+                <p className="text-[10px] text-gray-500 mt-1.5 leading-tight">{diasLabel}</p>
+                <p className="text-[9px] text-gray-300 mt-0.5">{icp.n_pagos} pagos · {icp.n_facturas} facturas</p>
               </div>
             )
           })()}
