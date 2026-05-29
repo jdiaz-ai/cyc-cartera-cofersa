@@ -8,17 +8,30 @@ import KPICardAnalisis from './KPICardAnalisis'
 import ICPBadge, { icpColorPrimary } from './ICPBadge'
 import type { ConcentracionResult, ConcentracionRow } from '@/types/analisis-pagos'
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function acumColor(pct: number): { color: string; fontWeight: number } {
+  if (pct > 40) return { color: '#dc2626', fontWeight: 700 }
+  return { color: '#f59e0b', fontWeight: 600 }
+}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
 function Skeleton() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[...Array(4)].map((_,i) => <div key={i} className="bg-white rounded-xl border h-24 animate-pulse" />)}
+        {[...Array(4)].map((_,i) => (
+          <div key={i} className="bg-white rounded-xl border h-24 animate-pulse" />
+        ))}
       </div>
       <div className="bg-white rounded-xl border h-16 animate-pulse" />
       <div className="bg-white rounded-xl border h-64 animate-pulse" />
     </div>
   )
 }
+
+// ── Componente principal ──────────────────────────────────────────────────────
 
 interface Props {
   esAnalista: boolean
@@ -29,7 +42,6 @@ export default function TabConcentracion({ esAnalista }: Props) {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
 
-  // El tab verifica el rol — analistas ven un mensaje, no datos
   const fetchData = useCallback(async () => {
     if (esAnalista) return setLoading(false)
     setLoading(true); setError(null)
@@ -39,8 +51,11 @@ export default function TabConcentracion({ esAnalista }: Props) {
       const { data: result, error: err } = await (supabase as any).rpc('fn_analisis_concentracion')
       if (err) throw err
       setData(result as ConcentracionResult)
-    } catch { setError('Error al cargar datos de concentración.') }
-    finally   { setLoading(false) }
+    } catch {
+      setError('Error al cargar datos de concentración.')
+    } finally {
+      setLoading(false)
+    }
   }, [esAnalista])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -54,13 +69,14 @@ export default function TabConcentracion({ esAnalista }: Props) {
       </div>
       <p className="text-sm font-semibold text-gray-600 mb-1">Vista disponible para el coordinador</p>
       <p className="text-[12px] text-gray-400 max-w-sm leading-relaxed">
-        El análisis de concentración de riesgo es una herramienta gerencial. Contactá al coordinador para revisar esta información.
+        El análisis de concentración de riesgo es una herramienta gerencial.
+        Contactá al coordinador para revisar esta información.
       </p>
     </div>
   )
 
   if (loading) return <Skeleton />
-  if (error)   return (
+  if (error) return (
     <div className="bg-white rounded-xl border border-red-100 p-8 text-center">
       <p className="text-red-600 text-sm font-semibold">{error}</p>
     </div>
@@ -70,13 +86,13 @@ export default function TabConcentracion({ esAnalista }: Props) {
   const { kpis, top10, total_mora } = data
 
   const hhhColor =
-    kpis.hhi_nivel === 'ALTO' ? '#dc2626' :
+    kpis.hhi_nivel === 'ALTO'  ? '#dc2626' :
     kpis.hhi_nivel === 'MEDIO' ? '#f59e0b' : '#16a34a'
 
   return (
     <div className="space-y-4">
 
-      {/* KPI Cards */}
+      {/* KPI Cards ─────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KPICardAnalisis
           label="Top 10 / mora total"
@@ -99,6 +115,7 @@ export default function TabConcentracion({ esAnalista }: Props) {
           color="#f59e0b"
           icon={<Shield size={14} />}
         />
+        {/* Card HHI — centrada con descripción contextual */}
         <div
           className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center"
           style={{ borderTop: `3px solid ${hhhColor}` }}
@@ -114,8 +131,8 @@ export default function TabConcentracion({ esAnalista }: Props) {
             {kpis.hhi_nivel}
           </p>
           <p className="text-[10px] text-gray-400 mt-1 leading-snug">
-            {kpis.hhi_nivel === 'BAJO'  ? 'Deuda bien distribuida' :
-             kpis.hhi_nivel === 'MEDIO' ? 'Concentración moderada' :
+            {kpis.hhi_nivel === 'BAJO'  ? 'Deuda bien distribuida'   :
+             kpis.hhi_nivel === 'MEDIO' ? 'Concentración moderada'   :
                                           'Riesgo muy concentrado'}
           </p>
           <p className="text-[9px] text-gray-300 mt-0.5 tabular-nums">
@@ -124,7 +141,7 @@ export default function TabConcentracion({ esAnalista }: Props) {
         </div>
       </div>
 
-      {/* Nota HHI */}
+      {/* Nota HHI ───────────────────────────────────────────────────────────── */}
       <p className="text-[10px] text-gray-400 leading-relaxed px-0.5">
         <span className="font-semibold text-gray-500">Índice HHI (Herfindahl-Hirschman):</span>{' '}
         mide cuán concentrada está la mora entre clientes.{' '}
@@ -133,122 +150,223 @@ export default function TabConcentracion({ esAnalista }: Props) {
         <span className="text-red-600 font-semibold">ALTO</span> (&gt;2,500 pts) = pocos clientes concentran la mayor parte de la mora — riesgo crítico si uno de ellos no paga.
       </p>
 
-      {/* Barra visual de distribución */}
+      {/* Barra de distribución ──────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-100 p-4">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">
           Distribución de mora — Top 10 vs resto
         </p>
-        <div className="flex h-8 rounded-lg overflow-hidden gap-px">
+
+        {/* Barra */}
+        <div style={{ display: 'flex', height: '40px', borderRadius: '8px', overflow: 'hidden', gap: '1px' }}>
           {top10.map((row: ConcentracionRow) => {
-            const color = row.icp_score !== null ? icpColorPrimary(row.icp_score) : '#94a3b8'
+            const color    = row.icp_score !== null ? icpColorPrimary(row.icp_score) : '#94a3b8'
+            const showText = row.pct_mora >= 3
             return (
               <div
                 key={row.cliente_cod}
                 title={`${row.cliente_nombre}: ${row.pct_mora}%`}
-                className="h-full transition-opacity hover:opacity-75 cursor-pointer"
-                style={{ width: `${row.pct_mora}%`, background: color, minWidth: '2px' }}
-              />
-            )
-          })}
-          <div
-            className="flex-1 h-full bg-slate-200"
-            title="Resto de la cartera"
-          />
-        </div>
-        <div className="flex items-center gap-4 mt-2 flex-wrap">
-          {top10.map((row: ConcentracionRow) => {
-            const color = row.icp_score !== null ? icpColorPrimary(row.icp_score) : '#94a3b8'
-            return (
-              <div key={row.cliente_cod} className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
-                <span className="text-[9px] text-gray-500 truncate" style={{ maxWidth: '90px' }}>
-                  {row.cliente_nombre.split(' ')[0]}
-                </span>
+                style={{
+                  width: `${row.pct_mora}%`,
+                  minWidth: '2px',
+                  height: '100%',
+                  background: color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                {showText && (
+                  <span style={{
+                    fontSize: '11px', fontWeight: 700, color: 'white',
+                    userSelect: 'none', pointerEvents: 'none',
+                  }}>
+                    {row.pct_mora}%
+                  </span>
+                )}
               </div>
             )
           })}
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm bg-slate-200 flex-shrink-0" />
-            <span className="text-[9px] text-gray-500">Resto</span>
+          {/* Resto */}
+          <div
+            style={{
+              flex: 1, height: '100%', background: '#e2e8f0',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            title="Resto de la cartera"
+          >
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', userSelect: 'none' }}>
+              Resto
+            </span>
+          </div>
+        </div>
+
+        {/* Leyenda */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '10px' }}>
+          {top10.map((row: ConcentracionRow) => {
+            const color = row.icp_score !== null ? icpColorPrimary(row.icp_score) : '#94a3b8'
+            const label = row.cliente_nombre.length > 20
+              ? row.cliente_nombre.slice(0, 20) + '…'
+              : row.cliente_nombre
+            return (
+              <div key={row.cliente_cod} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: '9px', color: '#64748b' }}>{label}</span>
+              </div>
+            )
+          })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#e2e8f0', flexShrink: 0 }} />
+            <span style={{ fontSize: '9px', color: '#64748b' }}>Resto</span>
           </div>
         </div>
       </div>
 
-      {/* Tabla Top 10 */}
-      <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+      {/* Tabla Top 10 ────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-100 overflow-x-auto">
+
+        {/* Sub-header con total */}
         <div className="px-4 py-2.5 border-b border-gray-100 bg-slate-50">
           <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-            Top 10 clientes por mora · Total: {fmtCRC(total_mora)}
+            Top 10 clientes por mora{' '}
+            <span className="text-gray-600 normal-case font-semibold">
+              — Total: {fmtCRC(total_mora)}
+            </span>
           </p>
         </div>
 
-        {/* Encabezados */}
-        <div
-          className="hidden md:grid px-4 py-2 border-b border-gray-100 bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-          style={{ gridTemplateColumns: '28px minmax(150px,2fr) minmax(120px,1fr) 130px 80px 80px 120px' }}
-        >
-          <span>#</span>
-          <span>Cliente</span>
-          <span>Vendedor</span>
-          <span className="text-right">Mora total</span>
-          <span className="text-right">% mora</span>
-          <span className="text-center">ICP</span>
-          <span className="text-right">% acumulado</span>
-        </div>
+        <table style={{ tableLayout: 'fixed', width: '100%', borderCollapse: 'collapse' }}>
+          <colgroup>
+            <col style={{ width: '4%'  }} />  {/* # */}
+            <col style={{ width: '28%' }} />  {/* Cliente */}
+            <col style={{ width: '22%' }} />  {/* Vendedor */}
+            <col style={{ width: '16%' }} />  {/* Mora total */}
+            <col style={{ width: '8%'  }} />  {/* % Mora */}
+            <col style={{ width: '10%' }} />  {/* ICP */}
+            <col style={{ width: '12%' }} />  {/* % Acumulado */}
+          </colgroup>
 
-        <div className="divide-y divide-gray-50">
-          {top10.map((row: ConcentracionRow) => {
-            const acumColor = row.pct_acumulado > 40 ? '#dc2626' : row.pct_acumulado > 25 ? '#f59e0b' : '#374151'
-            return (
-              <div
-                key={row.cliente_cod}
-                className="hidden md:grid px-4 py-3 items-center hover:bg-slate-50/60 transition-colors"
-                style={{ gridTemplateColumns: '28px 1fr 130px 130px 80px 80px 120px', gap: '8px' }}
-              >
-                <span
-                  className="text-[12px] font-black tabular-nums"
-                  style={{ color: '#003B5C' }}
+          {/* Encabezado */}
+          <thead>
+            <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
+              {([
+                ['#',           'center'],
+                ['Cliente',     'left'  ],
+                ['Vendedor',    'left'  ],
+                ['Mora total',  'right' ],
+                ['% Mora',      'center'],
+                ['ICP',         'center'],
+                ['% Acumulado', 'center'],
+              ] as [string, React.CSSProperties['textAlign']][]).map(([label, align]) => (
+                <th
+                  key={label}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#475569',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    textAlign: align,
+                  }}
                 >
-                  {row.rank}
-                </span>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
 
-                <div className="min-w-0">
-                  <p className="text-[12px] font-semibold text-gray-800 truncate">{row.cliente_nombre}</p>
-                  <p className="text-[10px] font-mono text-gray-400">{row.cliente_cod}</p>
-                </div>
-
-                <p className="text-[11px] text-gray-500 truncate">{row.vendedor_nombre}</p>
-
-                <p className="text-[12px] font-bold tabular-nums text-gray-800 text-right">
-                  {fmtCRC(row.mora_total)}
-                </p>
-
-                <p className="text-[12px] font-bold tabular-nums text-right text-gray-600">
-                  {row.pct_mora}%
-                </p>
-
-                <div className="flex justify-center">
-                  {row.clasificacion ? (
-                    <ICPBadge clasificacion={row.clasificacion} size="sm" />
-                  ) : (
-                    <span className="text-[10px] text-gray-300">—</span>
-                  )}
-                </div>
-
-                <p
-                  className="text-[12px] font-black tabular-nums text-right"
-                  style={{ color: acumColor }}
+          {/* Filas */}
+          <tbody>
+            {top10.map((row: ConcentracionRow) => {
+              const { color: colorAcum, fontWeight: fwAcum } = acumColor(row.pct_acumulado)
+              return (
+                <tr
+                  key={row.cliente_cod}
+                  style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
-                  {row.pct_acumulado}%
-                  {row.pct_acumulado > 40 && (
-                    <span className="text-[9px] ml-1">⚠</span>
-                  )}
-                </p>
-              </div>
-            )
-          })}
-        </div>
+                  {/* # */}
+                  <td style={{
+                    padding: '10px 12px', textAlign: 'center',
+                    fontSize: '12px', fontWeight: 700, color: '#003B5C',
+                  }}>
+                    {row.rank}
+                  </td>
+
+                  {/* Cliente */}
+                  <td style={{ padding: '10px 12px' }}>
+                    <p style={{
+                      fontSize: '13px', fontWeight: 600, color: '#1e293b',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {row.cliente_nombre}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px', fontFamily: 'monospace' }}>
+                      {row.cliente_cod}
+                    </p>
+                  </td>
+
+                  {/* Vendedor — nombre completo, permite wrap */}
+                  <td style={{
+                    padding: '10px 12px',
+                    fontSize: '12px', color: '#475569',
+                    wordBreak: 'break-word',
+                  }}>
+                    {row.vendedor_nombre}
+                  </td>
+
+                  {/* Mora total */}
+                  <td style={{
+                    padding: '10px 12px', textAlign: 'right',
+                    fontSize: '12px', fontWeight: 700, color: '#dc2626',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {fmtCRC(row.mora_total)}
+                  </td>
+
+                  {/* % Mora */}
+                  <td style={{
+                    padding: '10px 12px', textAlign: 'center',
+                    fontSize: '12px', fontWeight: 600, color: '#64748b',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {row.pct_mora}%
+                  </td>
+
+                  {/* ICP badge */}
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    {row.clasificacion ? (
+                      <ICPBadge clasificacion={row.clasificacion} size="sm" />
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#cbd5e1' }}>—</span>
+                    )}
+                  </td>
+
+                  {/* % Acumulado */}
+                  <td style={{
+                    padding: '10px 12px', textAlign: 'center',
+                    fontSize: '12px', fontWeight: fwAcum, color: colorAcum,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {row.pct_acumulado}%
+                    {row.pct_acumulado > 40 && (
+                      <span style={{ fontSize: '9px', marginLeft: '3px' }}>⚠</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
+
     </div>
   )
 }
