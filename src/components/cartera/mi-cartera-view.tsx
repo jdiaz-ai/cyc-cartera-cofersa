@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { fmtCRC } from '@/lib/utils/formato'
 import type { CarteraRow, KPIs } from '@/lib/utils/cola-analista'
+import { icpColor, icpLabel } from '@/lib/utils/cola-analista'
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 20
@@ -574,8 +575,26 @@ function AgendaCard({ row, gestionadoHoy }: { row: CarteraRow; gestionadoHoy?: b
           )}
         </div>
 
-        {/* Fila 2: código */}
-        <p className="text-[10px] text-gray-400 font-mono mb-2 leading-none">{row.cliente_cod}</p>
+        {/* Fila 2: código + ICP badge */}
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-[10px] text-gray-400 font-mono leading-none">{row.cliente_cod}</p>
+          {row.icp_score !== null ? (
+            <span
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+              style={{
+                color:      icpColor(row.icp_score),
+                background: `${icpColor(row.icp_score)}18`,
+              }}
+              title={`ICP ${row.icp_score}/100 — ${icpLabel(row.icp_score)}`}
+            >
+              ICP {row.icp_score}
+            </span>
+          ) : (
+            <span className="text-[9px] text-gray-300 leading-none" title="Sin historial de pagos">
+              Sin ICP
+            </span>
+          )}
+        </div>
 
         {/* Fila 3: motivo (solo si pendiente) */}
         {!gestionadoHoy && row.motivo && (
@@ -871,7 +890,17 @@ function CarteraTab({
                       </span>
                     </div>
                     <div className="text-center">
-                      <span className="text-[12px] font-semibold" style={{ color: '#d1d5db' }} title="Sin datos históricos aún">—</span>
+                      {row.icp_score !== null ? (
+                        <span
+                          className="text-[12px] font-bold tabular-nums"
+                          style={{ color: icpColor(row.icp_score) }}
+                          title={`ICP ${row.icp_score}/100 — ${icpLabel(row.icp_score)}`}
+                        >
+                          {row.icp_score}
+                        </span>
+                      ) : (
+                        <span className="text-[12px] font-semibold" style={{ color: '#d1d5db' }} title="Sin historial de pagos">—</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-[12px] font-semibold leading-tight" style={{ color: uc.color }}>

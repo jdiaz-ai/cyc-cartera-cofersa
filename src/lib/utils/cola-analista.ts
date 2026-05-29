@@ -1,20 +1,23 @@
 /**
- * cola-analista.ts
+ * cola-analista.ts — Algoritmo V4 con ICP
  *
- * Fuente única de verdad para el algoritmo de priorización de cartera.
- * Usado por:
- *   - src/app/(app)/mi-cartera/page.tsx
- *   - src/app/(app)/dashboard/page.tsx (DashboardAnalista)
+ * Fuente única de verdad para la priorización de la cola de trabajo diaria.
+ * Usado por Dashboard Analista y Mi Cartera — misma lógica, mismos resultados.
  *
- * La lógica es IDÉNTICA en ambos contextos para que el analista vea
- * los mismos clientes en el Dashboard y en Mi Cartera.
+ * V4 incorpora el ICP (Índice de Comportamiento de Pago, 0-100):
+ *   · Nuevo Hard Include: ICP < 35 + mora ≥ ₡500K + tramo ≥ 31d (riesgo crónico)
+ *   · Nuevo Smart Exclude: ICP ≥ 80 + solo 1-30d + gestionado ≤ 5d (buen pagador puntual)
+ *   · Pesos de scoring: 35% monto | 25% días mora | 15% sin gestión | 10% promesa | 15% ICP riesgo
+ *   · Ajuste de tier: ICP < 40 sube un nivel · ICP ≥ 80 baja un nivel (mora ≤ 60d)
+ *
+ * IMPORTANTE: la regla de proxima_accion_fecha se verifica ANTES del ICP Hard Include,
+ * por lo que una acción futura programada siempre se respeta.
  */
 
 import { fmtCRC } from '@/lib/utils/formato'
 import type { Cartera, MaestroCliente } from '@/types/database'
 import { createClient } from '@/lib/supabase/server'
 
-// ── Tipo del cliente Supabase server-side ────────────────────────────
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>
 
 // ══════════════════════════════════════════════════════════════════════
@@ -26,21 +29,22 @@ export interface CarteraRow {
   cliente_nombre:       string
   vendedor_nombre:      string
   mora_total:           number
-  dias_mora:            number    // días del tramo más antiguo
+  dias_mora:            number
   tramo_peor:           string
   ultima_gestion_fecha: string | null
   dias_sin_gestion:     number
   promesa_activa:       boolean
   promesa_fecha:        string | null
   promesa_monto:        number | null
-  score:                number     // 0-100 para ordenar
+  score:                number
   prioridad:            'critico' | 'urgente' | 'seguimiento' | 'rutina'
   gestionado_hoy:       boolean
-  en_agenda:            boolean    // true = aparece en la cola del día
-  is_hard_include:      boolean    // inclusión fija — no desplazable por el tope
-  motivo:               string     // texto explicativo para el analista
+  en_agenda:            boolean
+  is_hard_include:      boolean
+  motivo:               string
   proxima_accion:       string | null
   proxima_accion_fecha: string | null
+  icp_score:            number | null   // 0-100 · null = sin historial de pagos
 }
 
 export interface KPIs {
@@ -54,17 +58,38 @@ export interface KPIs {
 // CONSTANTES
 // ══════════════════════════════════════════════════════════════════════
 
-export const MORA_MINIMA = 100_000        // ₡100K — por debajo no entra a la cola
-const LOG_MIN            = Math.log(MORA_MINIMA)
-const LOG_MAX            = Math.log(10_000_000)   // ₡10M = score monto máximo
-const TOPE_DIARIO        = 30
+export const MORA_MINIMA      = 100_000        // ₡100K — por debajo no entra a la cola
+export const ICP_HARD_INCLUDE = 35             // ICP por debajo → cliente de riesgo crónico
+export const ICP_SMART_EXCLUDE = 80            // ICP por encima → buen pagador, se excluye si puntual
+export const ICP_MORA_MINIMA_HARD = 500_000    // mora mínima para el hard include de ICP (₡500K)
+export const ICP_NEUTRO       = 50             // valor asignado cuando no hay historial
+
+const LOG_MIN    = Math.log(MORA_MINIMA)
+const LOG_MAX    = Math.log(10_000_000)
+const TOPE_DIARIO = 30
 
 // ══════════════════════════════════════════════════════════════════════
-// ALGORITMO DE SCORING V3
-// Pesos: 40% monto | 35% días mora | 15% días sin gestión | 10% promesa
-// Hard includes: promesa vencida/hoy, mora +120d
-// Hard excludes: gestionado hoy, promesa vigente + gestión ≤3d,
-//                próxima acción futura, mora < ₡100K
+// HELPER: color y etiqueta según score ICP
+// ══════════════════════════════════════════════════════════════════════
+
+export function icpColor(score: number): string {
+  if (score >= 80) return '#16a34a'   // verde — Excelente/Bueno
+  if (score >= 60) return '#0891b2'   // cyan  — Regular-alto
+  if (score >= 40) return '#d97706'   // amber — Regular-bajo
+  if (score >= 20) return '#ea580c'   // naranja — Malo
+  return '#dc2626'                    // rojo — Muy malo
+}
+
+export function icpLabel(score: number): string {
+  if (score >= 80) return 'Bueno'
+  if (score >= 60) return 'Regular'
+  if (score >= 40) return 'Irregular'
+  if (score >= 20) return 'Malo'
+  return 'Muy malo'
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ALGORITMO V4 — calcularAgenda
 // ══════════════════════════════════════════════════════════════════════
 
 export function calcularAgenda(p: {
@@ -77,6 +102,7 @@ export function calcularAgenda(p: {
   promesa_monto:        number | null
   proxima_accion_fecha: string | null
   gestionado_hoy:       boolean
+  icp:                  number | null   // null = sin historial → tratar como neutro
 }, hoy: string): {
   en_agenda:       boolean
   is_hard_include: boolean
@@ -85,21 +111,23 @@ export function calcularAgenda(p: {
   score:           number
 } {
   const hoyMs = new Date(hoy).getTime()
-  const dsg   = p.dias_sin_gestion === 999 ? 30 : p.dias_sin_gestion  // 999 → trata como 30d
+  const dsg   = p.dias_sin_gestion === 999 ? 30 : p.dias_sin_gestion
+  const icp   = p.icp ?? ICP_NEUTRO   // sin historial = neutro (50)
 
   const OUT = (motivo = '') =>
     ({ en_agenda: false, is_hard_include: false, prioridad: 'rutina' as const, score: 0, motivo })
 
   if (p.gestionado_hoy) {
-    // ── RAMA A — YA GESTIONADO HOY ──────────────────────────────────
-    // Aparece en la sección "gestionados hoy" de Mi Cartera.
-    // NO entra a la cola del Dashboard.
+    // ── RAMA A: ya gestionado hoy ────────────────────────────────────
+    // Visible en la sección "✓ Gestionados hoy" de Mi Cartera.
+    // NO entra en la Cola del Dashboard.
     if (p.mora_total < MORA_MINIMA) return OUT()
-    // Cae al scoring compartido de abajo
-  } else {
-    // ── RAMA B — PENDIENTE: lógica completa ─────────────────────────
+    // → cae al scoring compartido
 
-    // HARD INCLUDE: promesas vencidas o que vencen hoy
+  } else {
+    // ── RAMA B: pendiente — lógica completa ─────────────────────────
+
+    // ① HARD INCLUDE: promesa vencida o vence hoy (máxima urgencia)
     if (p.promesa_activa && p.promesa_fecha) {
       const diasVenc = Math.floor((hoyMs - new Date(p.promesa_fecha).getTime()) / 86_400_000)
       if (diasVenc > 0) {
@@ -117,12 +145,15 @@ export function calcularAgenda(p: {
       }
     }
 
-    // EXCLUSIÓN: próxima acción programada para una fecha futura
+    // ② EXCLUSIÓN: próxima acción futura programada
+    //    Se respeta incluso para clientes de riesgo crónico (ICP bajo).
+    //    Si el analista registró una gestión y programó seguimiento para X fecha,
+    //    el cliente NO aparece hasta esa fecha.
     if (p.proxima_accion_fecha) {
       if (new Date(p.proxima_accion_fecha).getTime() > hoyMs) return OUT()
     }
 
-    // HARD INCLUDE: mora en tramo +120 días
+    // ③ HARD INCLUDE: mora en tramo +120 días
     if ((p.mora_120_plus ?? 0) > 0 || p.dias_mora > 120) {
       return {
         en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 92,
@@ -130,7 +161,25 @@ export function calcularAgenda(p: {
       }
     }
 
-    // EXCLUSIÓN: promesa vigente (futura) + gestión reciente — no molestar
+    // ④ HARD INCLUDE: ICP bajo + mora significativa (riesgo crónico)
+    //    Activa SOLO si no hay próxima acción futura (ya verificado en ②).
+    //    Este cliente necesita gestión constante — su historial indica que no pagará solo.
+    if (p.icp !== null && icp < ICP_HARD_INCLUDE
+        && p.mora_total >= ICP_MORA_MINIMA_HARD
+        && p.dias_mora  >= 31) {
+      return {
+        en_agenda: true, is_hard_include: true, prioridad: 'critico', score: 88,
+        motivo: `ICP ${icp} (${icpLabel(icp)}) — historial crítico. ${fmtCRC(p.mora_total)} en mora`,
+      }
+    }
+
+    // ⑤ SMART EXCLUDE: buen pagador, atraso puntual, gestionado recientemente
+    //    Reduce ruido en la cola — este cliente muy probablemente paga solo.
+    if (icp >= ICP_SMART_EXCLUDE && p.dias_mora <= 30 && dsg <= 5) {
+      return OUT('Buen pagador, atraso puntual, contactado recientemente')
+    }
+
+    // ⑥ EXCLUSIÓN: promesa vigente futura + gestión reciente — no molestar
     if (p.promesa_activa && p.promesa_fecha) {
       const diasParaPromesa = Math.floor(
         (new Date(p.promesa_fecha).getTime() - hoyMs) / 86_400_000,
@@ -138,16 +187,18 @@ export function calcularAgenda(p: {
       if (diasParaPromesa > 0 && dsg <= 3) return OUT()
     }
 
-    // EXCLUSIÓN: mora por debajo del mínimo operativo
+    // ⑦ EXCLUSIÓN: mora por debajo del mínimo operativo
     if (p.mora_total < MORA_MINIMA) return OUT()
   }
 
-  // ── SCORING PONDERADO 0–100 (compartido: rama A y B) ────────────────
+  // ── SCORING V4 — 5 factores, suma 100% ──────────────────────────────
+  // 35% monto | 25% días mora | 15% sin gestión | 10% promesa | 15% ICP riesgo
   const montoScore   = Math.min(1, Math.max(0,
     (Math.log(Math.max(p.mora_total, MORA_MINIMA)) - LOG_MIN) / (LOG_MAX - LOG_MIN),
   ))
   const moraScore    = Math.min(1, p.dias_mora / 120)
   const gestionScore = Math.min(1, dsg / 30)
+  const icpRiskScore = (100 - icp) / 100   // ICP 0=riesgo máx 1.0 | ICP 100=riesgo mín 0.0
 
   let promesaBoost = 0
   if (p.promesa_activa && p.promesa_fecha) {
@@ -158,41 +209,60 @@ export function calcularAgenda(p: {
   }
 
   const score = Math.min(89, Math.max(1, Math.round(
-    (0.40 * montoScore + 0.35 * moraScore + 0.15 * gestionScore + 0.10 * promesaBoost) * 100,
+    (0.35 * montoScore   +
+     0.25 * moraScore    +
+     0.15 * gestionScore +
+     0.10 * promesaBoost +
+     0.15 * icpRiskScore) * 100,
   )))
 
-  // Prioridad y motivo derivados del score
+  // ── TIER BASE según score ─────────────────────────────────────────────
   let prioridad: CarteraRow['prioridad']
-  let motivo: string
+  let motivoBase: string
 
   if (score >= 65) {
-    prioridad = 'critico'
-    motivo = p.dias_mora > 90
+    prioridad  = 'critico'
+    motivoBase = p.dias_mora > 90
       ? `Mora +${p.dias_mora}d (${fmtCRC(p.mora_total)}) — acción urgente`
       : `Alta exposición: ${fmtCRC(p.mora_total)} en mora`
   } else if (score >= 40) {
-    prioridad = 'urgente'
-    motivo = p.dias_mora >= 31
+    prioridad  = 'urgente'
+    motivoBase = p.dias_mora >= 31
       ? `Mora ${p.dias_mora}d — ${fmtCRC(p.mora_total)} pendiente`
       : `${fmtCRC(p.mora_total)} en mora — sin gestión reciente`
   } else if (score >= 15) {
-    prioridad = 'seguimiento'
+    prioridad  = 'seguimiento'
     const dsgLabel = p.dias_sin_gestion === 999 ? 'sin gestiones previas' : `${dsg}d sin contacto`
-    motivo = `${fmtCRC(p.mora_total)} — ${dsgLabel}`
+    motivoBase = `${fmtCRC(p.mora_total)} — ${dsgLabel}`
   } else {
-    prioridad = 'rutina'
-    motivo = `${fmtCRC(p.mora_total)} — seguimiento preventivo`
+    prioridad  = 'rutina'
+    motivoBase = `${fmtCRC(p.mora_total)} — seguimiento preventivo`
   }
+
+  // ── AJUSTE DE TIER POR ICP ────────────────────────────────────────────
+  // ICP bajo (< 40): sube un nivel — el historial indica mayor riesgo real
+  // ICP alto (≥ 80): baja un nivel solo si mora ≤ 60d — buen pagador, posible atraso puntual
+  let icpSuffix = ''
+
+  if (p.icp !== null && icp < 40) {
+    if (prioridad === 'urgente')     prioridad = 'critico'
+    if (prioridad === 'seguimiento') prioridad = 'urgente'
+    icpSuffix = ` · ICP ${icp} (${icpLabel(icp)})`
+  } else if (p.icp !== null && icp >= ICP_SMART_EXCLUDE && p.dias_mora <= 60) {
+    if (prioridad === 'critico'     && p.dias_mora <= 60) prioridad = 'urgente'
+    if (prioridad === 'urgente'     && p.dias_mora <= 30) prioridad = 'seguimiento'
+    icpSuffix = ` · ICP ${icp} — buen historial`
+  } else if (p.icp === null) {
+    icpSuffix = ' · sin historial ICP'
+  }
+
+  const motivo = motivoBase + icpSuffix
 
   return { en_agenda: true, is_hard_include: false, prioridad, score, motivo }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// FUNCIÓN PRINCIPAL: computarColaDia
-// Ejecuta todas las queries necesarias y devuelve:
-//   - rows: lista completa de CarteraRow, ordenada y con en_agenda calculado
-//   - recuperadoMes: promesas CUMPLIDA en el mes actual
-//   - totalPromesasActivas: clientes con promesa PENDIENTE
+// computarColaDia — ejecuta todas las queries y aplica el algoritmo V4
 // ══════════════════════════════════════════════════════════════════════
 
 export async function computarColaDia(
@@ -203,7 +273,7 @@ export async function computarColaDia(
 
   const hoyMs = new Date(hoy).getTime()
 
-  // ── 1. Clientes asignados al analista ──────────────────────────────
+  // 1. Clientes asignados al analista
   const { data: maestroData } = await supabase
     .from('maestro_clientes')
     .select('cliente_cod')
@@ -216,7 +286,7 @@ export async function computarColaDia(
     return { rows: [], recuperadoMes: 0, totalPromesasActivas: 0 }
   }
 
-  // ── 2. Sync más reciente ───────────────────────────────────────────
+  // 2. Sync más reciente
   const { data: syncRefData } = await supabase
     .from('cartera')
     .select('sync_id')
@@ -224,7 +294,7 @@ export async function computarColaDia(
     .limit(1)
   const latestSyncId = ((syncRefData ?? [])[0] as { sync_id: string } | undefined)?.sync_id ?? ''
 
-  // ── 3. Cartera — solo del sync más reciente ────────────────────────
+  // 3. Cartera — solo del sync más reciente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let carteraQuery = (supabase as any).from('cartera').select('*').in('cliente_cod', codigos)
   if (latestSyncId) carteraQuery = carteraQuery.eq('sync_id', latestSyncId)
@@ -240,7 +310,7 @@ export async function computarColaDia(
   })
   const carteraList = Object.values(carteraMap)
 
-  // ── 4. Última gestión + próxima acción por cliente ─────────────────
+  // 4. Última gestión + próxima acción por cliente
   const ultimaGestionMap: Record<string, string>  = {}
   const proximaAccionMap: Record<string, { accion: string | null; fecha: string | null }> = {}
   {
@@ -258,15 +328,12 @@ export async function computarColaDia(
     }[]).forEach(g => {
       if (!ultimaGestionMap[g.cliente_cod]) {
         ultimaGestionMap[g.cliente_cod] = g.fecha
-        proximaAccionMap[g.cliente_cod] = {
-          accion: g.proxima_accion,
-          fecha:  g.proxima_accion_fecha,
-        }
+        proximaAccionMap[g.cliente_cod] = { accion: g.proxima_accion, fecha: g.proxima_accion_fecha }
       }
     })
   }
 
-  // ── 5. Promesas PENDIENTE — más próxima + monto por cliente ────────
+  // 5. Promesas PENDIENTE — más próxima + monto por cliente
   const promesaMap: Record<string, { fecha: string; monto: number | null }> = {}
   let totalPromesasActivas = 0
   {
@@ -287,7 +354,7 @@ export async function computarColaDia(
     totalPromesasActivas = seenCods.size
   }
 
-  // ── 6. Recuperado este mes (promesas CUMPLIDA) ─────────────────────
+  // 6. Recuperado este mes
   let recuperadoMes = 0
   {
     const inicioMes = hoy.slice(0, 7) + '-01'
@@ -298,7 +365,18 @@ export async function computarColaDia(
       .reduce((s, p) => s + (p.monto || 0), 0)
   }
 
-  // ── 7. Construir CarteraRow[] con scoring ──────────────────────────
+  // 7. ICP por cliente — desde la vista icp_por_cliente
+  const icpMap: Record<string, number> = {}
+  try {
+    const { data: icpData } = await supabase
+      .from('icp_por_cliente')
+      .select('cliente_cod, icp_score')
+      .in('cliente_cod', codigos)
+    ;((icpData ?? []) as { cliente_cod: string; icp_score: number }[])
+      .forEach(r => { icpMap[r.cliente_cod] = Number(r.icp_score) })
+  } catch { /* vista puede no existir aún */ }
+
+  // 8. Construir CarteraRow[] con scoring V4
   const rows: CarteraRow[] = carteraList.map(c => {
     const mora_total =
       (c.mora_1_30     || 0) + (c.mora_31_60  || 0) +
@@ -325,8 +403,8 @@ export async function computarColaDia(
     const proxInfo             = proximaAccionMap[c.cliente_cod]
     const proxima_accion       = proxInfo?.accion ?? null
     const proxima_accion_fecha = proxInfo?.fecha  ?? null
-
-    const gestionado_hoy = ultima === hoy
+    const gestionado_hoy       = ultima === hoy
+    const icp_score            = icpMap[c.cliente_cod] ?? null
 
     const { en_agenda, is_hard_include, prioridad, motivo, score } = calcularAgenda({
       dias_mora:            c.dias_mora    || 0,
@@ -338,6 +416,7 @@ export async function computarColaDia(
       promesa_monto,
       proxima_accion_fecha,
       gestionado_hoy,
+      icp:                  icp_score,
     }, hoy)
 
     return {
@@ -360,18 +439,16 @@ export async function computarColaDia(
       motivo,
       proxima_accion,
       proxima_accion_fecha,
+      icp_score,
     }
   })
 
-  // ── 8. Orden global: score desc → mora_total desc ──────────────────
+  // 9. Orden global: score desc → mora_total desc
   rows.sort((a, b) =>
     b.score !== a.score ? b.score - a.score : b.mora_total - a.mora_total
   )
 
-  // ── 9. Tope dinámico de la cola: ~30 pendientes por día ───────────
-  // Solo aplica a pendientes (no gestionados hoy).
-  // Los gestionados hoy siempre se incluyen para que Mi Cartera
-  // muestre el progreso real del día.
+  // 10. Tope dinámico: hasta 30 pendientes por día
   const hardCods   = new Set(rows.filter(r => r.is_hard_include && !r.gestionado_hoy).map(r => r.cliente_cod))
   const candidatos = rows.filter(r => r.en_agenda && !r.is_hard_include && !r.gestionado_hoy)
   const cupo       = Math.max(0, TOPE_DIARIO - hardCods.size)
@@ -379,7 +456,6 @@ export async function computarColaDia(
     ...hardCods,
     ...candidatos.slice(0, cupo).map(r => r.cliente_cod),
   ])
-  // Gestionados hoy elegibles: siempre visibles en Mi Cartera (fuera del tope)
   rows.filter(r => r.gestionado_hoy && r.en_agenda).forEach(r => enCola.add(r.cliente_cod))
   rows.forEach(r => { if (!enCola.has(r.cliente_cod)) r.en_agenda = false })
 
