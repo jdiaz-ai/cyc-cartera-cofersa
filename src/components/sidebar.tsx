@@ -142,9 +142,9 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Inteligencia de Negocio',
     roles: ['ANALISTA'],
     items: [
+      { label: 'Análisis de Pagos',    href: '/gestion-pagos/analisis',      icon: <PieChart size={16} />,      roles: ['ANALISTA'] },
       { label: 'Cartera Vencida',      href: '/reportes/cartera-vencida',    icon: <AlertTriangle size={16} />, roles: ['ANALISTA'] },
       { label: 'Gestiones del Período',href: '/reportes/gestiones-periodo',  icon: <CalendarRange size={16} />, roles: ['ANALISTA'] },
-      { label: 'Análisis de Pagos',    href: '/gestion-pagos/analisis',      icon: <PieChart size={16} />,      roles: ['ANALISTA'] },
     ],
   },
 ]
