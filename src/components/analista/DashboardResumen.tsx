@@ -79,42 +79,48 @@ export default function DashboardResumen({
           borderColor="#ef4444"
         />
 
-        {/* Card 3: Gestiones Hoy — con barra de progreso */}
-        <div
-          className="bg-white border border-slate-200 rounded-lg p-3 sm:p-4 text-center"
-          style={{ borderTop: '3px solid #009EE3' }}
-        >
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-1">
-            Gestiones Hoy
-          </p>
-          <p className="text-3xl font-bold tabular-nums text-slate-900 mb-1 leading-tight">
-            {kpis.gestiones_hoy}
-            <span className="text-xl font-normal text-slate-400">/15</span>
-          </p>
-          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#009EE3] rounded-full transition-all"
-              style={{ width: `${Math.min((kpis.gestiones_hoy / 15) * 100, 100)}%` }}
+        {/* Card 3: Venc >30D / Cartera — % de mora vencida sobre la cartera del analista */}
+        {(() => {
+          const venc30 = Math.max(0, kpis.mora_31_60)  + Math.max(0, kpis.mora_61_90)
+                       + Math.max(0, kpis.mora_91_120) + Math.max(0, kpis.mora_120_plus)
+          const pct    = kpis.cartera_total > 0
+            ? (venc30 / kpis.cartera_total) * 100 : 0
+          const accentColor = pct > 10 ? '#ea580c' : pct > 5 ? '#f59e0b' : '#16a34a'
+          const valorClass  = pct > 10 ? 'text-orange-600' : pct > 5 ? 'text-amber-600' : 'text-emerald-600'
+          return (
+            <KpiCard
+              label="Venc >30D / Cartera"
+              valor={`${pct.toFixed(1)}%`}
+              valorClass={valorClass}
+              badge={`${fmtCRC(venc30)} vencido`}
+              badgeClass="bg-slate-100 text-slate-600"
+              borderColor={accentColor}
             />
-          </div>
-        </div>
+          )
+        })()}
 
-        {/* Card 4: Promesas Activas */}
-        <KpiCard
-          label="Promesas Activas"
-          valor={String(kpis.promesas_activas)}
-          badge={
-            kpis.promesas_vencen_hoy > 0
-              ? `${kpis.promesas_vencen_hoy} vence${kpis.promesas_vencen_hoy > 1 ? 'n' : ''} hoy`
-              : 'Al día'
-          }
-          badgeClass={
-            kpis.promesas_vencen_hoy > 0
-              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-              : 'bg-emerald-50 text-emerald-700'
-          }
-          borderColor="#f59e0b"
-        />
+        {/* Card 4: Cobrado este mes — promesas cumplidas del mes en curso */}
+        {(() => {
+          const cobrado = kpis.cobrado_mes_estimado || 0
+          const meta    = kpis.meta_individual      || 0
+          const pct     = meta > 0 ? Math.min(Math.round((cobrado / meta) * 100), 999) : 0
+          const accentColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#009EE3'
+          const badge = meta > 0 ? `${pct}% de meta` : 'sin meta definida'
+          const badgeClass  = pct >= 80
+            ? 'bg-emerald-50 text-emerald-700'
+            : pct >= 50 ? 'bg-amber-50 text-amber-700'
+            : 'bg-slate-100 text-slate-600'
+          return (
+            <KpiCard
+              label="Cobrado este mes"
+              valor={fmtCRC(cobrado)}
+              valorClass={cobrado > 0 ? 'text-slate-900' : 'text-slate-400'}
+              badge={badge}
+              badgeClass={badgeClass}
+              borderColor={accentColor}
+            />
+          )
+        })()}
       </div>
 
       {/* ── Cola del Día + Mis Promesas en grid ───────────────────── */}
