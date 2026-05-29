@@ -97,31 +97,42 @@ export default function TabRankingClientes({ periodo, userEmail }: Props) {
   return (
     <div className="space-y-4">
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI Cards — 5 columnas en desktop, 2 en móvil, 3 en tablet */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <KPICardAnalisis
+          compact
           label="ICP promedio cartera"
           valor={`${kpis.icp_promedio}`}
           sub="sobre 100 puntos"
           color="#009ee3"
         />
         <KPICardAnalisis
+          compact
           label="Pagadores puntuales"
           valor={`${kpis.pct_puntual}%`}
-          sub={`${kpis.cnt_puntual} clientes — pagan en fecha o con tolerancia`}
+          sub={`${kpis.cnt_puntual} clientes — ≤5d`}
           color="#16a34a"
         />
         <KPICardAnalisis
+          compact
           label="Atraso moderado"
           valor={`${kpis.pct_moderado}%`}
-          sub={`${kpis.cnt_moderado} clientes — atraso manejable`}
+          sub={`${kpis.cnt_moderado} clientes — 6-30d`}
           color="#f59e0b"
         />
         <KPICardAnalisis
+          compact
           label="Atraso grave"
           valor={`${kpis.pct_grave}%`}
-          sub={`${kpis.cnt_grave} clientes — requieren gestión activa`}
+          sub={`${kpis.cnt_grave} clientes — >30d`}
           color="#dc2626"
+        />
+        <KPICardAnalisis
+          compact
+          label="Días atraso prom."
+          valor={`${kpis.dias_atraso_promedio}d`}
+          sub="ponderado por período"
+          color="#009ee3"
         />
       </div>
 

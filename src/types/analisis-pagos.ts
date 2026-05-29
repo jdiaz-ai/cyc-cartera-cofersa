@@ -4,17 +4,19 @@
 export type IcpClasificacion = 'EXCELENTE' | 'BUENO' | 'REGULAR' | 'MALO' | 'MUY MALO'
 
 export interface RankingKPIs {
-  icp_promedio:  number
+  icp_promedio:        number
   // Tramo 1: pagan en fecha o con tolerancia (≤5d)
-  cnt_puntual:   number
-  pct_puntual:   number
+  cnt_puntual:         number
+  pct_puntual:         number
   // Tramo 2: atraso manejable (6-30d)
-  cnt_moderado:  number
-  pct_moderado:  number
+  cnt_moderado:        number
+  pct_moderado:        number
   // Tramo 3: atraso grave (>30d)
-  cnt_grave:     number
-  pct_grave:     number
-  total_clientes:number
+  cnt_grave:           number
+  pct_grave:           number
+  // 5ª KPI: días promedio general
+  dias_atraso_promedio:number
+  total_clientes:      number
 }
 
 export interface RankingRow {
