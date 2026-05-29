@@ -1,22 +1,32 @@
-import { PieChart } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { redirect }     from 'next/navigation'
+import AnalisisPagosTabs from '@/components/analisis-pagos/AnalisisPagosTabs'
 
-export default function AnalisisPagosPage() {
+export const dynamic = 'force-dynamic'
+
+export default async function AnalisisPagosPage() {
+  const supabase = await createClient()
+
+  // Verificar autenticación
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Determinar rol del usuario
+  const { data: perfilRow } = await supabase
+    .from('usuarios')
+    .select('rol, email')
+    .eq('email', user.email!)
+    .limit(1)
+    .maybeSingle()
+
+  const rol       = (perfilRow as { rol: string; email: string } | null)?.rol ?? 'ANALISTA'
+  const userEmail = user.email!
+  const esAnalista = rol === 'ANALISTA'
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Análisis de Pagos</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Tendencias y comportamiento de pago por cliente y período
-        </p>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-200 p-12 flex flex-col items-center justify-center text-center">
-        <PieChart size={48} className="text-gray-300 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-700 mb-2">Módulo en construcción</h2>
-        <p className="text-sm text-gray-500 max-w-md">
-          Análisis de Pagos ofrecerá gráficos de tendencia de recaudo, comparativo mes a mes
-          y patrones de comportamiento por cliente. Disponible en Sprint 4.
-        </p>
-      </div>
-    </div>
+    <AnalisisPagosTabs
+      userEmail={userEmail}
+      esAnalista={esAnalista}
+    />
   )
 }
