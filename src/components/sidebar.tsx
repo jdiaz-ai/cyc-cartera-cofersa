@@ -13,7 +13,6 @@ import {
   Package,
   FileText,
   PieChart,
-  Target,
   AlertTriangle,
   CalendarRange,
 } from 'lucide-react'
@@ -49,163 +48,103 @@ interface NavSection {
 // ── Navegación ────────────────────────────────────────────────────
 
 const NAV_SECTIONS: NavSection[] = [
-  // ── Raíz COORDINADOR ─────────────────────────────────────────
+
+  // ════════════════════════════════════════════════════════════════
+  // COORDINADOR
+  // ════════════════════════════════════════════════════════════════
+
+  // ── Dashboard ────────────────────────────────────────────────
   {
     label: null,
     roles: ['COORDINADOR'],
     items: [
-      {
-        label: 'Dashboard',
-        href: '/dashboard',
-        icon: <LayoutDashboard size={16} />,
-        roles: ['COORDINADOR'],
-        exactMatch: true,
-      },
+      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={16} />, roles: ['COORDINADOR'], exactMatch: true },
     ],
   },
 
-  // ── Raíz ANALISTA — Dashboard + Mi Cartera ───────────────────
-  {
-    label: null,
-    roles: ['ANALISTA'],
-    items: [
-      {
-        label: 'Dashboard',
-        href: '/dashboard',
-        icon: <LayoutDashboard size={16} />,
-        roles: ['ANALISTA'],
-        exactMatch: true,
-      },
-      {
-        label: 'Mi Cartera',
-        href: '/mi-cartera',
-        icon: <Package size={16} />,
-        roles: ['ANALISTA'],
-        exactMatch: true,
-      },
-    ],
-  },
-
-  // ── GESTIÓN (coordinador) ─────────────────────────────────────
-  {
-    label: 'Gestión',
-    roles: ['COORDINADOR'],
-    items: [
-      {
-        label: 'Clientes',
-        href: '/clientes',
-        icon: <Users size={16} />,
-        roles: ['COORDINADOR'],
-      },
-      {
-        label: 'Gestiones',
-        href: '/gestiones',
-        icon: <ClipboardList size={16} />,
-        roles: ['COORDINADOR'],
-      },
-      {
-        label: 'Promesas',
-        href: '/promesas',
-        icon: <Handshake size={16} />,
-        roles: ['COORDINADOR'],
-      },
-      {
-        label: 'Solicitudes',
-        href: '/solicitudes',
-        icon: <FileText size={16} />,
-        roles: ['COORDINADOR'],
-      },
-    ],
-  },
-
-  // ── GESTIÓN DE CARTERA (analista) ────────────────────────────
+  // ── GESTIÓN DE CARTERA ────────────────────────────────────────
   {
     label: 'Gestión de Cartera',
-    roles: ['ANALISTA'],
+    roles: ['COORDINADOR'],
     items: [
-      {
-        label: 'Clientes',
-        href: '/clientes',
-        icon: <Users size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Gestiones',
-        href: '/gestiones',
-        icon: <ClipboardList size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Promesas',
-        href: '/promesas',
-        icon: <Handshake size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Solicitudes',
-        href: '/solicitudes',
-        icon: <FileText size={16} />,
-        roles: ['ANALISTA'],
-      },
+      { label: 'Clientes',    href: '/clientes',    icon: <Users size={16} />,       roles: ['COORDINADOR'] },
+      { label: 'Gestiones',   href: '/gestiones',   icon: <ClipboardList size={16} />, roles: ['COORDINADOR'] },
+      { label: 'Promesas',    href: '/promesas',    icon: <Handshake size={16} />,   roles: ['COORDINADOR'] },
+      { label: 'Solicitudes', href: '/solicitudes', icon: <FileText size={16} />,    roles: ['COORDINADOR'] },
     ],
   },
 
-  // ── INTELIGENCIA (analista) — renombrado desde Reportes, + Análisis de Pagos ──
-  {
-    label: 'Inteligencia',
-    roles: ['ANALISTA'],
-    items: [
-      {
-        label: 'Presupuesto de Cobro',
-        href: '/reportes/presupuesto',
-        icon: <Target size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Cartera Vencida',
-        href: '/reportes/cartera-vencida',
-        icon: <AlertTriangle size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Gestiones del Período',
-        href: '/reportes/gestiones-periodo',
-        icon: <CalendarRange size={16} />,
-        roles: ['ANALISTA'],
-      },
-      {
-        label: 'Análisis de Pagos',
-        href: '/gestion-pagos/analisis',
-        icon: <PieChart size={16} />,
-        roles: ['ANALISTA'],
-      },
-    ],
-  },
-
-  // ── ADMINISTRACIÓN (coordinador) ─────────────────────────────
+  // ── ADMINISTRACIÓN ────────────────────────────────────────────
   {
     label: 'Administración',
     roles: ['COORDINADOR'],
     items: [
-      {
-        label: 'Mi Equipo',
-        href: '/equipo',
-        icon: <UserCheck size={16} />,
-        roles: ['COORDINADOR'],
-      },
-      {
-        label: 'Reportes',
-        href: '/reportes',
-        icon: <BarChart3 size={16} />,
-        roles: ['COORDINADOR'],
-        exactMatch: true,
-      },
-      {
-        label: 'Configuración',
-        href: '/configuracion',
-        icon: <Settings size={16} />,
-        roles: ['COORDINADOR'],
-      },
+      { label: 'Mi Equipo', href: '/equipo', icon: <UserCheck size={16} />, roles: ['COORDINADOR'] },
+    ],
+  },
+
+  // ── INTELIGENCIA DE NEGOCIO ───────────────────────────────────
+  {
+    label: 'Inteligencia de Negocio',
+    roles: ['COORDINADOR'],
+    items: [
+      { label: 'Análisis de Pagos', href: '/gestion-pagos/analisis', icon: <PieChart size={16} />, roles: ['COORDINADOR'] },
+    ],
+  },
+
+  // ── REPORTES ──────────────────────────────────────────────────
+  {
+    label: 'Reportes',
+    roles: ['COORDINADOR'],
+    items: [
+      { label: 'Hub de Reportes', href: '/reportes', icon: <BarChart3 size={16} />, roles: ['COORDINADOR'], exactMatch: true },
+    ],
+  },
+
+  // ── CONFIGURACIÓN (ítem suelto) ───────────────────────────────
+  {
+    label: null,
+    roles: ['COORDINADOR'],
+    items: [
+      { label: 'Configuración', href: '/configuracion', icon: <Settings size={16} />, roles: ['COORDINADOR'] },
+    ],
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ANALISTA
+  // ════════════════════════════════════════════════════════════════
+
+  // ── Dashboard + Mi Cartera ────────────────────────────────────
+  {
+    label: null,
+    roles: ['ANALISTA'],
+    items: [
+      { label: 'Dashboard',  href: '/dashboard',  icon: <LayoutDashboard size={16} />, roles: ['ANALISTA'], exactMatch: true },
+      { label: 'Mi Cartera', href: '/mi-cartera', icon: <Package size={16} />,         roles: ['ANALISTA'], exactMatch: true },
+    ],
+  },
+
+  // ── GESTIÓN DE CARTERA ────────────────────────────────────────
+  {
+    label: 'Gestión de Cartera',
+    roles: ['ANALISTA'],
+    items: [
+      { label: 'Clientes',    href: '/clientes',    icon: <Users size={16} />,         roles: ['ANALISTA'] },
+      { label: 'Gestiones',   href: '/gestiones',   icon: <ClipboardList size={16} />, roles: ['ANALISTA'] },
+      { label: 'Promesas',    href: '/promesas',    icon: <Handshake size={16} />,     roles: ['ANALISTA'] },
+      { label: 'Solicitudes', href: '/solicitudes', icon: <FileText size={16} />,      roles: ['ANALISTA'] },
+    ],
+  },
+
+  // ── INTELIGENCIA DE NEGOCIO ───────────────────────────────────
+  // Renombrado desde "Inteligencia". Se elimina "Presupuesto de Cobro".
+  {
+    label: 'Inteligencia de Negocio',
+    roles: ['ANALISTA'],
+    items: [
+      { label: 'Cartera Vencida',      href: '/reportes/cartera-vencida',    icon: <AlertTriangle size={16} />, roles: ['ANALISTA'] },
+      { label: 'Gestiones del Período',href: '/reportes/gestiones-periodo',  icon: <CalendarRange size={16} />, roles: ['ANALISTA'] },
+      { label: 'Análisis de Pagos',    href: '/gestion-pagos/analisis',      icon: <PieChart size={16} />,      roles: ['ANALISTA'] },
     ],
   },
 ]
