@@ -120,7 +120,7 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
         {/* Encabezados */}
         <div
           className="hidden md:grid px-4 py-2 border-b border-gray-100 bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-          style={{ gridTemplateColumns: '28px 1fr 100px 160px 110px 100px 110px' }}
+          style={{ gridTemplateColumns: '36px minmax(160px,2fr) 90px 190px 130px 110px 130px' }}
         >
           <span>#</span>
           <span>Vendedor</span>
@@ -128,7 +128,7 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
           <span className="text-center">ICP promedio</span>
           <span className="text-right">% Pago puntual</span>
           <span className="text-right">Días atraso</span>
-          <span className="text-right">Clientes críticos</span>
+          <span className="text-right">Críticos (ICP &lt;50)</span>
         </div>
 
         {rowsFiltradas.length === 0 ? (
@@ -141,7 +141,7 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
               <div
                 key={row.vendedor_cod || idx}
                 className="hidden md:grid px-4 py-3 items-center hover:bg-slate-50/60 transition-colors"
-                style={{ gridTemplateColumns: '28px 1fr 100px 160px 110px 100px 110px', gap: '8px' }}
+                style={{ gridTemplateColumns: '36px minmax(160px,2fr) 90px 190px 130px 110px 130px', gap: '8px' }}
               >
                 <span className="text-[11px] text-gray-300 font-bold tabular-nums">{idx+1}</span>
 

@@ -13,7 +13,7 @@ export default function KPICardAnalisis({ label, valor, sub, color, icon, muted 
   const displayColor = muted ? '#94a3b8' : color
   return (
     <div
-      className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col"
+      className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center"
       style={{ borderTop: `3px solid ${displayColor}` }}
     >
       {icon && (

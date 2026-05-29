@@ -192,15 +192,14 @@ export default function TabRankingClientes({ periodo, userEmail }: Props) {
 
         {/* Encabezados */}
         <div className="hidden md:grid px-4 py-2 border-b border-gray-100 bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-             style={{ gridTemplateColumns: '28px 1fr 130px 150px 100px 90px 80px 110px' }}>
+             style={{ gridTemplateColumns: '36px minmax(160px,2fr) minmax(120px,1fr) 180px 130px 110px 130px' }}>
           <span>#</span>
           <span>Cliente</span>
           <span>Vendedor</span>
           <span className="text-center">Score ICP</span>
           <span className="text-center">Clasificación</span>
           <span className="text-right">Días atraso</span>
-          <span className="text-right">Pagos</span>
-          <span className="text-right">Cartera actual</span>
+          <span className="text-right">Mora activa</span>
         </div>
 
         {/* Filas */}
@@ -272,7 +271,7 @@ function RankingFila({ row, num }: { row: RankingRow; num: number }) {
   return (
     <div
       className="grid px-4 py-3 items-center hover:bg-slate-50/60 transition-colors"
-      style={{ gridTemplateColumns: '28px 1fr 130px 150px 100px 90px 80px 110px', gap: '8px' }}
+      style={{ gridTemplateColumns: '36px minmax(160px,2fr) minmax(120px,1fr) 180px 130px 110px 130px', gap: '8px' }}
     >
       {/* # */}
       <span className="text-[11px] text-gray-300 font-bold tabular-nums">{num}</span>
@@ -284,7 +283,7 @@ function RankingFila({ row, num }: { row: RankingRow; num: number }) {
       </div>
 
       {/* Vendedor */}
-      <p className="text-[11px] text-gray-500 truncate hidden md:block">{row.vendedor_nombre}</p>
+      <p className="text-[11px] text-gray-500 truncate">{row.vendedor_nombre}</p>
 
       {/* Score ICP con barra */}
       <div className="hidden md:block">
@@ -296,7 +295,7 @@ function RankingFila({ row, num }: { row: RankingRow; num: number }) {
         <ICPBadge clasificacion={row.clasificacion} size="sm" />
       </div>
 
-      {/* Días atraso */}
+      {/* Días atraso + tendencia */}
       <div className="hidden md:block text-right">
         <span className="text-[12px] font-bold tabular-nums text-gray-700">{row.dias_atraso_prom}d</span>
         <div className="flex items-center justify-end gap-0.5 mt-0.5">
@@ -307,19 +306,14 @@ function RankingFila({ row, num }: { row: RankingRow; num: number }) {
         </div>
       </div>
 
-      {/* N pagos */}
-      <div className="hidden md:block text-right">
-        <span className="text-[11px] text-gray-500 tabular-nums">{row.n_pagos}</span>
-      </div>
-
-      {/* Cartera actual */}
+      {/* Mora activa (sync más reciente) */}
       <div className="hidden md:block text-right">
         {row.cartera_actual > 0 ? (
           <span className="text-[11px] font-semibold tabular-nums text-gray-700">
             {fmtCRC(row.cartera_actual)}
           </span>
         ) : (
-          <span className="text-[11px] text-gray-300">—</span>
+          <span className="text-[11px] text-gray-300">Al día</span>
         )}
       </div>
     </div>

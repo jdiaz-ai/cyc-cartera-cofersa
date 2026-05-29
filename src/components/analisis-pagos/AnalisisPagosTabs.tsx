@@ -34,33 +34,26 @@ export default function AnalisisPagosTabs({ userEmail, esAnalista }: Props) {
     <div style={{ background: '#EEF2F7', minHeight: '100%' }}>
       <div className="px-5 py-5 space-y-4">
 
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
-            <h1 className="text-[20px] font-semibold text-gray-900">Análisis de Pagos</h1>
-            <p className="text-[12px] text-gray-400 mt-0.5">
-              Comportamiento histórico · Rankings · Alertas · Concentración de riesgo
-            </p>
-          </div>
-          {/* Selector de período */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">Período</span>
-            <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: '#E2E8F0' }}>
-              {PERIODOS.map(p => (
-                <button
-                  key={p.valor}
-                  onClick={() => setPeriodo(p.valor)}
-                  className="px-3 py-1.5 rounded-md text-[11px] font-bold transition-all whitespace-nowrap"
-                  style={{
-                    background:   periodo === p.valor ? 'white' : 'transparent',
-                    color:        periodo === p.valor ? '#003B5C' : '#94a3b8',
-                    boxShadow:    periodo === p.valor ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+        {/* ── Selector de período (sin título — el Topbar ya lo muestra) ── */}
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide whitespace-nowrap">
+            Período
+          </span>
+          <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: '#E2E8F0' }}>
+            {PERIODOS.map(p => (
+              <button
+                key={p.valor}
+                onClick={() => setPeriodo(p.valor)}
+                className="px-3 py-1.5 rounded-md text-[11px] font-bold transition-all whitespace-nowrap"
+                style={{
+                  background: periodo === p.valor ? 'white'   : 'transparent',
+                  color:      periodo === p.valor ? '#003B5C' : '#94a3b8',
+                  boxShadow:  periodo === p.valor ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         </div>
 
