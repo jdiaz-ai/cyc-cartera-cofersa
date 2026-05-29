@@ -100,20 +100,38 @@ export default function TabConcentracion({ esAnalista }: Props) {
           icon={<Shield size={14} />}
         />
         <div
-          className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col"
+          className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center"
           style={{ borderTop: `3px solid ${hhhColor}` }}
         >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3"
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center mb-2 flex-shrink-0"
                style={{ background: `${hhhColor}18` }}>
             <span style={{ color: hhhColor }}><BarChart3 size={14} /></span>
           </div>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Índice HHI</p>
-          <p className="text-2xl font-black tabular-nums" style={{ color: hhhColor }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 leading-tight">
+            Dispersión de mora
+          </p>
+          <p className="text-2xl font-black leading-tight" style={{ color: hhhColor }}>
             {kpis.hhi_nivel}
           </p>
-          <p className="text-[11px] text-gray-400 mt-1">{(kpis.hhi_valor ?? 0).toLocaleString()} puntos</p>
+          <p className="text-[10px] text-gray-400 mt-1 leading-snug">
+            {kpis.hhi_nivel === 'BAJO'  ? 'Deuda bien distribuida' :
+             kpis.hhi_nivel === 'MEDIO' ? 'Concentración moderada' :
+                                          'Riesgo muy concentrado'}
+          </p>
+          <p className="text-[9px] text-gray-300 mt-0.5 tabular-nums">
+            {(kpis.hhi_valor ?? 0).toLocaleString()} pts HHI
+          </p>
         </div>
       </div>
+
+      {/* Nota HHI */}
+      <p className="text-[10px] text-gray-400 leading-relaxed px-0.5">
+        <span className="font-semibold text-gray-500">Índice HHI (Herfindahl-Hirschman):</span>{' '}
+        mide cuán concentrada está la mora entre clientes.{' '}
+        <span className="text-green-600 font-semibold">BAJO</span> (&lt;1,000 pts) = deuda repartida en muchos clientes — menor riesgo sistémico.{' '}
+        <span className="text-amber-500 font-semibold">MEDIO</span> (1,000–2,500 pts) = concentración moderada.{' '}
+        <span className="text-red-600 font-semibold">ALTO</span> (&gt;2,500 pts) = pocos clientes concentran la mayor parte de la mora — riesgo crítico si uno de ellos no paga.
+      </p>
 
       {/* Barra visual de distribución */}
       <div className="bg-white rounded-xl border border-slate-100 p-4">
@@ -167,7 +185,7 @@ export default function TabConcentracion({ esAnalista }: Props) {
         {/* Encabezados */}
         <div
           className="hidden md:grid px-4 py-2 border-b border-gray-100 bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-          style={{ gridTemplateColumns: '28px 1fr 130px 130px 80px 80px 120px' }}
+          style={{ gridTemplateColumns: '28px minmax(150px,2fr) minmax(120px,1fr) 130px 80px 80px 120px' }}
         >
           <span>#</span>
           <span>Cliente</span>

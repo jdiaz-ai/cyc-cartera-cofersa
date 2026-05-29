@@ -65,25 +65,25 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-slate-100 p-4" style={{ borderTop: '3px solid #16a34a' }}>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mejor ICP promedio</p>
-          <p className="text-base font-black text-gray-800 truncate">{kpis.mejor_icp_vendedor || '—'}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">{kpis.mejor_icp_valor} pts promedio</p>
+        <div className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center" style={{ borderTop: '3px solid #16a34a' }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 leading-tight">Mejor ICP promedio</p>
+          <p className="text-base font-black text-gray-800 w-full text-center truncate leading-snug">{kpis.mejor_icp_vendedor || '—'}</p>
+          <p className="text-[11px] text-gray-400 mt-1">{kpis.mejor_icp_valor} pts promedio</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 p-4" style={{ borderTop: '3px solid #dc2626' }}>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mayor concentración riesgo</p>
-          <p className="text-base font-black text-gray-800 truncate">{kpis.mayor_riesgo_vendedor || '—'}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">{kpis.mayor_riesgo_pct}% clientes con ICP {'<'} 50</p>
+        <div className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center" style={{ borderTop: '3px solid #dc2626' }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 leading-tight">Mayor concentración riesgo</p>
+          <p className="text-base font-black text-gray-800 w-full text-center truncate leading-snug">{kpis.mayor_riesgo_vendedor || '—'}</p>
+          <p className="text-[11px] text-gray-400 mt-1">{kpis.mayor_riesgo_pct}% clientes con ICP {'<'} 50</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 p-4" style={{ borderTop: '3px solid #009ee3' }}>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mayor % pago puntual</p>
-          <p className="text-base font-black text-gray-800 truncate">{kpis.mejor_puntual_vendedor || '—'}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">{kpis.mejor_puntual_pct}% pagan a tiempo</p>
+        <div className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center" style={{ borderTop: '3px solid #009ee3' }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 leading-tight">Mayor % pago puntual</p>
+          <p className="text-base font-black text-gray-800 w-full text-center truncate leading-snug">{kpis.mejor_puntual_vendedor || '—'}</p>
+          <p className="text-[11px] text-gray-400 mt-1">{kpis.mejor_puntual_pct}% pagan a tiempo</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 p-4" style={{ borderTop: '3px solid #f59e0b' }}>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Peor días atraso prom.</p>
-          <p className="text-base font-black text-gray-800 truncate">{kpis.peor_dias_vendedor || '—'}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">{kpis.peor_dias_valor}d promedio de atraso</p>
+        <div className="bg-white rounded-xl border border-slate-100 p-4 flex flex-col items-center text-center" style={{ borderTop: '3px solid #f59e0b' }}>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 leading-tight">Peor días atraso prom.</p>
+          <p className="text-base font-black text-gray-800 w-full text-center truncate leading-snug">{kpis.peor_dias_vendedor || '—'}</p>
+          <p className="text-[11px] text-gray-400 mt-1">{kpis.peor_dias_valor}d promedio de atraso</p>
         </div>
       </div>
 
@@ -120,7 +120,7 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
         {/* Encabezados */}
         <div
           className="hidden md:grid px-4 py-2 border-b border-gray-100 bg-slate-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-          style={{ gridTemplateColumns: '36px minmax(160px,2fr) 90px 190px 130px 110px 130px' }}
+          style={{ gridTemplateColumns: '36px minmax(160px,2fr) minmax(60px,0.5fr) 190px minmax(100px,0.8fr) minmax(90px,0.7fr) minmax(100px,0.8fr)' }}
         >
           <span>#</span>
           <span>Vendedor</span>
@@ -141,7 +141,7 @@ export default function TabPerfilVendedor({ periodo, userEmail }: Props) {
               <div
                 key={row.vendedor_cod || idx}
                 className="hidden md:grid px-4 py-3 items-center hover:bg-slate-50/60 transition-colors"
-                style={{ gridTemplateColumns: '36px minmax(160px,2fr) 90px 190px 130px 110px 130px', gap: '8px' }}
+                style={{ gridTemplateColumns: '36px minmax(160px,2fr) minmax(60px,0.5fr) 190px minmax(100px,0.8fr) minmax(90px,0.7fr) minmax(100px,0.8fr)', gap: '8px' }}
               >
                 <span className="text-[11px] text-gray-300 font-bold tabular-nums">{idx+1}</span>
 
