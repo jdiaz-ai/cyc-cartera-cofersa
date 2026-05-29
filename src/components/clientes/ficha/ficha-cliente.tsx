@@ -366,23 +366,24 @@ export default function FichaCliente({
           </div>
         </div>
 
-        {/* ── SECCIÓN B: KPI cards ───────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+        {/* ── SECCIÓN B: KPI cards (6 col, centradas) ────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-3">
+
           {/* Card 1: Total cartera */}
-          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Total cartera</p>
-            <p className="text-[18px] font-semibold tabular-nums text-gray-800 leading-tight">{fmtCRC(cartera.total)}</p>
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Total cartera</p>
+            <p className="text-[15px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(cartera.total)}</p>
           </div>
 
           {/* Card 2: En mora */}
-          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">En mora</p>
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <p className="text-[18px] font-semibold tabular-nums leading-tight" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">En mora</p>
+            <div className="flex items-baseline gap-1.5 flex-wrap justify-center">
+              <p className="text-[15px] font-bold tabular-nums leading-tight" style={{ color: mora_total > 0 ? '#dc2626' : '#22c55e' }}>
                 {mora_total > 0 ? fmtCRC(mora_total) : '—'}
               </p>
               {mora_total > 0 && (
-                <span className="text-[12px] font-semibold rounded-full px-1.5 py-0.5 flex-shrink-0"
+                <span className="text-[11px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0"
                   style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
                   {pct_mora}%
                 </span>
@@ -391,75 +392,89 @@ export default function FichaCliente({
           </div>
 
           {/* Card 3: Límite de crédito */}
-          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Límite crédito</p>
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Límite crédito</p>
             {maestro?.limite_credito && maestro.limite_credito > 0 ? (
               <>
-                <p className="text-[18px] font-semibold tabular-nums text-gray-800 leading-tight">{fmtCRC(maestro.limite_credito)}</p>
+                <p className="text-[15px] font-bold tabular-nums text-gray-800 leading-tight">{fmtCRC(maestro.limite_credito)}</p>
                 {(() => {
                   const disp = maestro.limite_credito - cartera.total
                   return disp >= 0
-                    ? <p className="text-[12px] font-medium mt-0.5" style={{ color: '#16a34a' }}>{fmtCRC(disp)} disponible</p>
-                    : <p className="text-[12px] font-medium mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
+                    ? <p className="text-[11px] font-medium mt-0.5" style={{ color: '#16a34a' }}>{fmtCRC(disp)} disponible</p>
+                    : <p className="text-[11px] font-medium mt-0.5" style={{ color: '#dc2626' }}>Límite excedido</p>
                 })()}
               </>
             ) : (
-              <p className="text-[18px] font-semibold text-gray-300 italic">Sin límite</p>
+              <p className="text-[15px] font-semibold text-gray-300 italic">Sin límite</p>
             )}
           </div>
 
-          {/* Card 4: Score ICP */}
+          {/* Card 4: Condición / Comportamiento de pago */}
           {(() => {
-            // Sin datos
-            if (!icp) return (
-              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
-                <p className="text-[18px] font-semibold tabular-nums leading-tight text-gray-300">—</p>
-                <p className="text-[11px] text-gray-300 mt-0.5">Sin historial</p>
-              </div>
-            )
-            const score = Number(icp.icp_score)
-            const dias  = Number(icp.dias_prom_ponderado)
-            const color = score >= 80 ? '#16a34a'
-              : score >= 60 ? '#22c55e'
-              : score >= 40 ? '#f59e0b'
-              : score >= 20 ? '#f97316'
+            const condicion = maestro?.condicion_pago ?? null
+            const dias      = icp ? Number(icp.dias_prom_ponderado) : null
+            const diasColor = dias === null ? '#94a3b8'
+              : dias <= 0  ? '#16a34a'
+              : dias <= 15 ? '#f59e0b'
               : '#dc2626'
-            const diasLabel = dias < -1
-              ? `Paga ${Math.abs(Math.round(dias))}d anticipado`
-              : dias <= 1
-              ? 'Paga puntual'
-              : `Paga ${Math.round(dias)}d tarde`
-            const clasifColor = icp.clasificacion === 'EXCELENTE' ? '#16a34a'
-              : icp.clasificacion === 'BUENO'     ? '#22c55e'
-              : icp.clasificacion === 'REGULAR'   ? '#f59e0b'
-              : icp.clasificacion === 'MALO'      ? '#f97316'
-              : '#dc2626'
+            const diasTxt = dias === null ? null
+              : dias < -1  ? `${Math.abs(Math.round(dias))}d antes vencimiento`
+              : dias <= 1  ? 'Paga al vencimiento'
+              : `+${Math.round(dias)}d del vencimiento`
             return (
-              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className="text-[20px] font-black tabular-nums leading-tight" style={{ color }}>
-                    {score}
-                  </p>
-                  <span className="text-[10px] font-semibold text-gray-300">/100</span>
-                </div>
-                <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded mt-1"
-                  style={{ background: `${clasifColor}18`, color: clasifColor }}>
-                  {icp.clasificacion}
-                </span>
-                <p className="text-[10px] text-gray-500 mt-1.5 leading-tight">{diasLabel}</p>
-                <p className="text-[9px] text-gray-300 mt-0.5">{icp.n_pagos} pagos · {icp.n_facturas} facturas</p>
+              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Condición / Plazo</p>
+                <p className="text-[20px] font-black tabular-nums text-gray-800 leading-tight">
+                  {condicion ? `${condicion}d` : '—'}
+                </p>
+                {diasTxt ? (
+                  <p className="text-[10px] font-semibold mt-1 leading-tight" style={{ color: diasColor }}>{diasTxt}</p>
+                ) : (
+                  <p className="text-[10px] text-gray-300 mt-1">Sin historial</p>
+                )}
+                {icp && <p className="text-[9px] text-gray-300 mt-0.5">{icp.n_pagos} pagos</p>}
               </div>
             )
           })()}
 
-          {/* Card 5: Vendedor / Analista */}
-          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50">
-            <p className="text-[10px] font-500 uppercase tracking-wider text-gray-400 mb-1.5">Vendedor / Analista</p>
-            <p className="text-[13px] font-semibold text-gray-700 truncate leading-tight">{cartera.vendedor_nombre || '—'}</p>
-            <p className="text-[12px] text-gray-400 truncate mt-0.5">{analistaNombre || '—'}</p>
+          {/* Card 5: Score ICP (lean) */}
+          {(() => {
+            if (!icp) return (
+              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
+                <p className="text-[22px] font-black text-gray-300 leading-tight">—</p>
+                <p className="text-[10px] text-gray-300 mt-1">Sin historial</p>
+              </div>
+            )
+            const score = Number(icp.icp_score)
+            const color = score >= 80 ? '#16a34a' : score >= 60 ? '#22c55e'
+              : score >= 40 ? '#f59e0b' : score >= 20 ? '#f97316' : '#dc2626'
+            const clasifColor = icp.clasificacion === 'EXCELENTE' ? '#16a34a'
+              : icp.clasificacion === 'BUENO'   ? '#22c55e'
+              : icp.clasificacion === 'REGULAR' ? '#f59e0b'
+              : icp.clasificacion === 'MALO'    ? '#f97316' : '#dc2626'
+            return (
+              <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Score ICP</p>
+                <div className="flex items-baseline gap-1 justify-center">
+                  <p className="text-[22px] font-black tabular-nums leading-tight" style={{ color }}>{score}</p>
+                  <span className="text-[10px] font-semibold text-gray-300">/100</span>
+                </div>
+                <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded mt-1.5"
+                  style={{ background: `${clasifColor}18`, color: clasifColor }}>
+                  {icp.clasificacion}
+                </span>
+              </div>
+            )
+          })()}
+
+          {/* Card 6: Vendedor / Analista */}
+          <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Vendedor / Analista</p>
+            <p className="text-[12px] font-semibold text-gray-700 leading-tight w-full truncate">{cartera.vendedor_nombre || '—'}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5 w-full truncate">{analistaNombre || '—'}</p>
           </div>
+
         </div>
 
         {/* ── SECCIÓN C: Botones de acción ─────────────────────── */}
