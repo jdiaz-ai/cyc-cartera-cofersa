@@ -21,11 +21,11 @@ export function icpColorPrimary(score: number): string {
 }
 
 const ICP_CFG: Record<IcpClasificacion, { bg: string; text: string }> = {
-  EXCELENTE:  { bg: 'rgba(22,163,74,0.12)',  text: '#15803d' },
-  BUENO:      { bg: 'rgba(34,197,94,0.12)',  text: '#166534' },
-  REGULAR:    { bg: 'rgba(245,158,11,0.12)', text: '#92400e' },
-  MALO:       { bg: 'rgba(234,88,12,0.12)',  text: '#9a3412' },
-  'MUY MALO': { bg: 'rgba(220,38,38,0.12)',  text: '#991b1b' },
+  EXCELENTE:  { bg: '#E1F5EE', text: '#0F6E56' },
+  BUENO:      { bg: '#EAF3DE', text: '#3B6D11' },
+  REGULAR:    { bg: '#FAEEDA', text: '#633806' },
+  MALO:       { bg: '#FAECE7', text: '#712B13' },
+  'MUY MALO': { bg: '#FCEBEB', text: '#A32D2D' },
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
