@@ -106,22 +106,22 @@ export default function TabRankingClientes({ periodo, userEmail }: Props) {
           color="#009ee3"
         />
         <KPICardAnalisis
-          label="Pagan a tiempo"
-          valor={`${kpis.pct_pagan_tiempo}%`}
-          sub="pagan antes o en fecha"
+          label="Pagadores puntuales"
+          valor={`${kpis.pct_puntual}%`}
+          sub={`${kpis.cnt_puntual} clientes — pagan en fecha o con tolerancia`}
           color="#16a34a"
         />
         <KPICardAnalisis
-          label="Pagadores críticos"
-          valor={String(kpis.criticos_count)}
-          sub="ICP < 25 — MUY MALO"
-          color="#dc2626"
+          label="Atraso moderado"
+          valor={`${kpis.pct_moderado}%`}
+          sub={`${kpis.cnt_moderado} clientes — atraso manejable`}
+          color="#f59e0b"
         />
         <KPICardAnalisis
-          label="Días atraso prom."
-          valor={`${kpis.dias_atraso_promedio}d`}
-          sub="ponderado por período"
-          color="#f59e0b"
+          label="Atraso grave"
+          valor={`${kpis.pct_grave}%`}
+          sub={`${kpis.cnt_grave} clientes — requieren gestión activa`}
+          color="#dc2626"
         />
       </div>
 
