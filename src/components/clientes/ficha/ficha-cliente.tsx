@@ -285,20 +285,7 @@ export default function FichaCliente({
               <h1 style={{ fontSize: '18px', fontWeight: 500, color: '#111827' }}>
                 {cartera.cliente_nombre}
               </h1>
-              {/* Badge urgencia por tramo de mora */}
-              {mora_total > 0 && tramo_peor !== 'Al día' && (() => {
-                const urg = URGENCIA_CFG[tramo_peor] ?? { bg: 'rgba(245,158,11,0.15)', text: '#f59e0b' }
-                return (
-                  <span className="flex-shrink-0 whitespace-nowrap"
-                    style={{
-                      backgroundColor: urg.bg, color: urg.text,
-                      fontSize: '11px', fontWeight: 500,
-                      padding: '4px 8px', borderRadius: '4px',
-                    }}>
-                    {tramo_peor}
-                  </span>
-                )
-              })()}
+              {/* Badge urgencia eliminado — la info de tramo está en el aging */}
 
               {/* Badge estado — coordinador: clickeable con dropdown; analista: read-only */}
               {(() => {
@@ -359,9 +346,6 @@ export default function FichaCliente({
             </div>
             <p className="text-[12px] mt-0.5" style={{ color: '#94a3b8' }}>
               <span className="font-mono font-semibold" style={{ color: '#64748b' }}>{cartera.cliente_cod}</span>
-              {maestro?.condicion_pago && (
-                <> · Condición: <span className="font-semibold" style={{ color: '#64748b' }}>{maestro.condicion_pago}</span></>
-              )}
             </p>
           </div>
         </div>
@@ -425,7 +409,7 @@ export default function FichaCliente({
               <div className="rounded-xl border border-gray-100 px-3 py-2.5 bg-gray-50 flex flex-col items-center text-center">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Condición / Plazo</p>
                 <p className="text-[20px] font-black tabular-nums text-gray-800 leading-tight">
-                  {condicion ? `${condicion}d` : '—'}
+                  {condicion ?? '—'}
                 </p>
                 {diasTxt ? (
                   <p className="text-[10px] font-semibold mt-1 leading-tight" style={{ color: diasColor }}>{diasTxt}</p>

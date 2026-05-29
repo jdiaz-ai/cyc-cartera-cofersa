@@ -9,7 +9,6 @@
  *   2. Mostrar el SessionTimeoutModal cuando corresponde
  *   3. Escuchar eventos de auth de Supabase y redirigir al login si la sesión
  *      expira por razones externas (token revocado, otro dispositivo, etc.)
- *   4. Montar el ChatPanel flotante del equipo
  */
 
 import { useEffect }         from 'react'
@@ -17,7 +16,6 @@ import { useRouter }         from 'next/navigation'
 import { createClient }      from '@/lib/supabase/client'
 import { useSessionTimeout } from '@/hooks/useSessionTimeout'
 import SessionTimeoutModal   from '@/components/session-timeout-modal'
-import ChatPanel             from '@/components/layout/ChatPanel'
 
 interface Props {
   children:    React.ReactNode
@@ -55,16 +53,7 @@ export default function ClientWrapper({
           onClose={closeSession}
         />
       )}
-      {/* Chat flotante — solo cuando el usuario está identificado */}
-      {usuarioId && (
-        <ChatPanel
-          usuarioId={usuarioId}
-          nombre={nombre}
-          iniciales={iniciales}
-          color={color}
-          totalEquipo={totalEquipo}
-        />
-      )}
+      {/* ChatPanel desactivado — espacio reservado para futura implementación */}
     </>
   )
 }
