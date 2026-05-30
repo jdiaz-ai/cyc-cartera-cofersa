@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtCRC, fmtFecha } from '@/lib/utils/formato'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
 import VendedorEnvioPanel from '@/components/reportes/VendedorEnvioPanel'
-import { htmlPlazoEspecialVendedor, asuntoPlazoEspecial } from '@/lib/reportes/email-vendedor'
+import { htmlPlazoEspecialVendedor, asuntoPlazoEspecial, type RemitenteCorreo } from '@/lib/reportes/email-vendedor'
 import type { PlazoEspecialResult, PlazoEspecialVendedor, PlazoEspecialFactura } from '@/types/reportes'
 
 function Skeleton() {
@@ -22,7 +22,7 @@ const fechaHoy = () => {
   return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`
 }
 
-export default function PlazoEspecialCliente() {
+export default function PlazoEspecialCliente({ remitente }: { remitente: RemitenteCorreo }) {
   const [data,    setData]    = useState<PlazoEspecialResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
@@ -69,7 +69,7 @@ export default function PlazoEspecialCliente() {
           vendedores={vendedores}
           kpis={kpisStrip}
           buildSubject={v => asuntoPlazoEspecial(v, fecha)}
-          buildHtml={v => htmlPlazoEspecialVendedor(v, fecha)}
+          buildHtml={v => htmlPlazoEspecialVendedor(v, fecha, remitente)}
           renderResumen={v => (
             <span>
               {v.n_facturas} factura{v.n_facturas !== 1 ? 's' : ''} · {fmtCRC(v.saldo_total)}

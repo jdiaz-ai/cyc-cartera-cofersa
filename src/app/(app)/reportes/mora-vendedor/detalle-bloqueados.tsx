@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtCRC, fmtFecha } from '@/lib/utils/formato'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
 import VendedorEnvioPanel from '@/components/reportes/VendedorEnvioPanel'
-import { htmlBloqueadosVendedor, asuntoBloqueados } from '@/lib/reportes/email-vendedor'
+import { htmlBloqueadosVendedor, asuntoBloqueados, type RemitenteCorreo } from '@/lib/reportes/email-vendedor'
 import type { BloqueadosResult, BloqueadosVendedor, BloqueadoCliente } from '@/types/reportes'
 
 function Skeleton() {
@@ -23,7 +23,7 @@ const fechaHoy = () => {
   return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`
 }
 
-export default function DetalleBloqueados({ toggle }: { toggle: React.ReactNode }) {
+export default function DetalleBloqueados({ toggle, remitente }: { toggle: React.ReactNode; remitente: RemitenteCorreo }) {
   const [data,    setData]    = useState<BloqueadosResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
@@ -33,6 +33,10 @@ export default function DetalleBloqueados({ toggle }: { toggle: React.ReactNode 
     setLoading(true); setError(null)
     try {
       const supabase = createClient()
+      // Snapshot semanal (lunes): se registra una vez por semana, sin duplicar.
+      // Así el histórico de "semanas consecutivas" se construye solo.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc('fn_snapshot_bloqueados_semana')
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: result, error: err } = await (supabase as any).rpc('fn_reporte_bloqueados')
       if (err) throw err
@@ -67,7 +71,7 @@ export default function DetalleBloqueados({ toggle }: { toggle: React.ReactNode 
               </div>
             }
             buildSubject={v => asuntoBloqueados(v, fecha)}
-            buildHtml={v => htmlBloqueadosVendedor(v, fecha)}
+            buildHtml={v => htmlBloqueadosVendedor(v, fecha, remitente)}
             renderResumen={v => (
               <span>
                 {v.n_clientes} cliente{v.n_clientes !== 1 ? 's' : ''} · <span style={{ color: '#dc2626', fontWeight: 700 }}>{fmtCRC(v.saldo_vencido)}</span>

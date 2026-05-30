@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { fmtCRC, fmtFecha } from '@/lib/utils/formato'
 import ReporteShell from '@/components/reportes/ReporteShell'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
 import ICPBadge from '@/components/analisis-pagos/ICPBadge'
 import DSOTendenciaCard from '@/components/coordinador/DSOTendenciaCard'
-import { exportTablaPDF, exportTablaExcel, type ColumnaReporte } from '@/lib/reportes/export-tabla'
+import { exportTablaPDF, exportTablaExcel, generarTablaPDFBase64, type ColumnaReporte } from '@/lib/reportes/export-tabla'
 import type { ResumenEjecutivoData } from './page'
 import type { ConcentracionRow } from '@/types/analisis-pagos'
 
@@ -32,9 +34,75 @@ interface Props { data: ResumenEjecutivoData; generadoPor: string }
 
 export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
   const [exportando, setExportando] = useState(false)
+  const [showEnviar, setShowEnviar] = useState(false)
+  const [para,      setPara]      = useState('')
+  const [cc,        setCc]        = useState('')
+  const [enviando,  setEnviando]  = useState(false)
+  const [enviado,   setEnviado]   = useState(false)
+  const [errEnvio,  setErrEnvio]  = useState<string | null>(null)
   const c = data.concentracion
 
   const dsoColor = data.dso > 45 ? '#ef4444' : data.dso > 35 ? '#f59e0b' : '#16a34a'
+
+  function htmlBodyEjecutivo(): string {
+    const NAVY = '#003B5C'
+    return `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:680px;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        <tr><td style="background:${NAVY};padding:14px 18px;border-radius:6px 6px 0 0;">
+          <div style="font-size:10px;color:#A8C4E0;letter-spacing:1px;text-transform:uppercase;">SIC · Sistema Inteligente de Cobranza — Cofersa</div>
+          <div style="font-size:18px;color:#fff;font-weight:bold;margin-top:1px;">Resumen Ejecutivo de Cartera</div>
+          <div style="font-size:12px;color:#A8C4E0;margin-top:2px;">Corte: <b style="color:#fff;">${fmtFecha(data.fechaCorte)}</b></div>
+        </td><td style="background:#F4A61C;width:8px;border-radius:0 6px 0 0;"></td></tr>
+      </table>
+      <p style="font-size:12.5px;margin:14px 0 10px;">Adjunto el Resumen Ejecutivo de Cartera al corte indicado. Resumen de indicadores:</p>
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12.5px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#555;">Cartera total</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${fmtCRC(data.cartera)}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#555;">% Mora</td><td style="padding:4px 0;font-weight:700;color:#C00000;">${data.pctMora}% (${fmtCRC(data.mora)})</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#555;">DSO</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${data.dso} días</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#555;">Vencido &gt;30d</td><td style="padding:4px 0;font-weight:700;color:#E36C00;">${data.pctVenc30}% (${fmtCRC(data.venc30)})</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#555;">Clientes en mora</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${data.nMora} de ${data.nClientes}</td></tr>
+      </table>
+      <p style="font-size:12px;color:#444;margin:12px 0;">El detalle completo (top 10 deudores, concentración) está en el <b>PDF adjunto</b>.</p>
+      <div style="margin-top:12px;font-size:10px;color:#94a3b8;border-top:1px solid #eee;padding-top:8px;">
+        Reporte generado desde <b style="color:#009ee3;">SIC</b> — Sistema Inteligente de Cobranza · Cofersa · por ${generadoPor}.
+      </div>
+    </div>`
+  }
+
+  async function enviarCorreo() {
+    const toList = para.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+    if (toList.length === 0) { setErrEnvio('Ingresá al menos un correo.'); return }
+    setEnviando(true); setErrEnvio(null)
+    try {
+      const base64   = await generarTablaPDFBase64(exportParams())
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/reportes/enviar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: toList.join(', '),
+          cc: cc.split(/[;,]/).map(s => s.trim()).filter(Boolean),
+          subject: `SIC · Resumen Ejecutivo de Cartera — ${fmtFecha(data.fechaCorte)}`,
+          html: htmlBodyEjecutivo(),
+          adjunto: { base64, mimeType: 'application/pdf', filename: 'resumen-ejecutivo-cartera.pdf' },
+          providerToken: session?.provider_token ?? null,
+          providerRefreshToken: session?.provider_refresh_token ?? null,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.email_sent) {
+        setEnviado(true)
+        setTimeout(() => { setShowEnviar(false); setEnviado(false); setPara(''); setCc('') }, 1600)
+      } else {
+        setErrEnvio(d.error || 'No se pudo enviar el correo.')
+      }
+    } catch {
+      setErrEnvio('Error de red al enviar.')
+    } finally {
+      setEnviando(false)
+    }
+  }
 
   function exportParams() {
     const top = (c?.top10 ?? []) as ConcentracionRow[]
@@ -69,7 +137,63 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
   )
 
   return (
-    <ReporteShell kpis={kpisStrip} onExportPDF={onPDF} onExportExcel={onExcel} exportando={exportando}>
+    <ReporteShell kpis={kpisStrip} onExportPDF={onPDF} onExportExcel={onExcel} onEnviar={() => setShowEnviar(true)} exportando={exportando}>
+
+      {/* Modal de envío */}
+      {showEnviar && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+             onClick={() => !enviando && setShowEnviar(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full" style={{ maxWidth: '460px' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-[15px] font-bold text-gray-900">Enviar Resumen Ejecutivo</h3>
+                <p className="text-[12px] text-gray-400">Se adjunta el PDF del reporte</p>
+              </div>
+              <button onClick={() => !enviando && setShowEnviar(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+            {enviado ? (
+              <div className="p-10 flex flex-col items-center text-center">
+                <CheckCircle2 size={42} style={{ color: '#22c55e' }} className="mb-3" />
+                <p className="text-[14px] font-bold text-gray-800">Resumen enviado</p>
+              </div>
+            ) : (
+              <div className="p-5 space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Para</label>
+                  <input type="text" value={para} onChange={e => setPara(e.target.value)}
+                    placeholder="correo@cofersa.cr; otro@cofersa.cr"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">CC (opcional)</label>
+                  <input type="text" value={cc} onChange={e => setCc(e.target.value)}
+                    placeholder="copia@cofersa.cr"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-200" />
+                </div>
+                <p className="text-[11px] text-gray-400">Podés poner varios correos separados por <b>;</b> o <b>,</b></p>
+                {errEnvio && (
+                  <div className="rounded-lg border px-3 py-2 flex items-start gap-2" style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
+                    <AlertCircle size={14} style={{ color: '#dc2626', marginTop: '1px', flexShrink: 0 }} />
+                    <div>
+                      <p className="text-[12px] font-semibold text-red-700">{errEnvio}</p>
+                      {/Google|expirada|401/i.test(errEnvio) && <p className="text-[11px] text-red-500 mt-0.5">Cerrá sesión y volvé a entrar con Google, luego reintentá.</p>}
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button onClick={() => setShowEnviar(false)} disabled={enviando}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-slate-200 text-gray-600">Cancelar</button>
+                  <button onClick={enviarCorreo} disabled={enviando}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-semibold text-white disabled:opacity-50"
+                    style={{ background: '#009ee3' }}>
+                    {enviando ? <Loader2 size={13} className="animate-spin" /> : null} Enviar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Aging consolidado */}
       <div className="bg-white rounded-xl border border-slate-100 p-4">

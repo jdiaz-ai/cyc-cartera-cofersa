@@ -12,15 +12,22 @@ export default async function MoraVendedorPage() {
 
   const { data: perfilRow } = await supabase
     .from('usuarios')
-    .select('rol, nombre')
+    .select('rol, nombre, telefono, whatsapp')
     .eq('email', user.email!)
     .limit(1)
     .maybeSingle()
 
-  const rol = (perfilRow as { rol: string; nombre: string } | null)?.rol ?? 'ANALISTA'
+  const perfil = perfilRow as { rol: string; nombre: string; telefono?: string | null; whatsapp?: string | null } | null
+  const rol = perfil?.rol ?? 'ANALISTA'
   if (rol !== 'COORDINADOR') redirect('/reportes')
 
-  const nombre = (perfilRow as { nombre: string } | null)?.nombre ?? user.email!
+  const nombre = perfil?.nombre ?? user.email!
+  const remitente = {
+    nombre,
+    puesto:   'Coordinador de Crédito y Cobro',
+    telefono: perfil?.telefono ?? null,
+    whatsapp: perfil?.whatsapp ?? null,
+  }
 
-  return <MoraVendedorCliente generadoPor={nombre} />
+  return <MoraVendedorCliente generadoPor={nombre} remitente={remitente} />
 }

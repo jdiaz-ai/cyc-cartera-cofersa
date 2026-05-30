@@ -7,6 +7,7 @@ import ReporteShell from '@/components/reportes/ReporteShell'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
 import DetalleBloqueados from './detalle-bloqueados'
 import { exportTablaPDF, exportTablaExcel, type ColumnaReporte } from '@/lib/reportes/export-tabla'
+import type { RemitenteCorreo } from '@/lib/reportes/email-vendedor'
 import type { MoraVendedorResult, MoraVendedorRow } from '@/types/reportes'
 
 type Vista = 'resumen' | 'detalle'
@@ -38,9 +39,9 @@ function Skeleton() {
   )
 }
 
-interface Props { generadoPor: string }
+interface Props { generadoPor: string; remitente: RemitenteCorreo }
 
-export default function MoraVendedorCliente({ generadoPor }: Props) {
+export default function MoraVendedorCliente({ generadoPor, remitente }: Props) {
   const [vista,      setVista]      = useState<Vista>('resumen')
   const [data,       setData]       = useState<MoraVendedorResult | null>(null)
   const [loading,    setLoading]    = useState(true)
@@ -83,7 +84,7 @@ export default function MoraVendedorCliente({ generadoPor }: Props) {
   useEffect(() => { fetchData() }, [fetchData])
 
   // Vista Detalle (clientes bloqueados) — componente propio con su panel de envío
-  if (vista === 'detalle') return <DetalleBloqueados toggle={toggle} />
+  if (vista === 'detalle') return <DetalleBloqueados toggle={toggle} remitente={remitente} />
 
   if (loading) return <div className="px-5 py-5"><Skeleton /></div>
   if (error) return (

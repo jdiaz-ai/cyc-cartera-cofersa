@@ -11,11 +11,12 @@ export async function POST(req: NextRequest) {
   let body: {
     to?: string; cc?: string[]; subject?: string; html?: string
     providerToken?: string | null; providerRefreshToken?: string | null
+    adjunto?: { base64: string; mimeType: string; filename: string } | null
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 }) }
 
-  const { to, cc, subject, html, providerToken, providerRefreshToken } = body
+  const { to, cc, subject, html, providerToken, providerRefreshToken, adjunto } = body
   if (!to?.trim() || !subject?.trim() || !html?.trim()) {
     return NextResponse.json({ error: 'to, subject y html son requeridos' }, { status: 400 })
   }
@@ -40,16 +41,46 @@ export async function POST(req: NextRequest) {
 
   const encH    = (s: string) => `=?UTF-8?B?${Buffer.from(s, 'utf-8').toString('base64')}?=`
   const ccList  = (cc ?? []).filter(x => x && x.trim())
-  const rawEmail = [
-    `From: ${encH(nombre)} <${user.email}>`,
-    `To: ${to.trim()}`,
-    ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
-    `Subject: ${encH(subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    html,
-  ].join('\r\n')
+
+  let rawEmail: string
+  if (adjunto?.base64 && adjunto.mimeType && adjunto.filename) {
+    const boundary   = `----=_SIC_${Date.now()}`
+    const htmlBase64 = Buffer.from(html, 'utf-8').toString('base64')
+    rawEmail = [
+      `From: ${encH(nombre)} <${user.email}>`,
+      `To: ${to.trim()}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
+      `Subject: ${encH(subject)}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      htmlBase64,
+      '',
+      `--${boundary}`,
+      `Content-Type: ${adjunto.mimeType}; name="${adjunto.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${adjunto.filename}"`,
+      '',
+      adjunto.base64,
+      '',
+      `--${boundary}--`,
+    ].join('\r\n')
+  } else {
+    rawEmail = [
+      `From: ${encH(nombre)} <${user.email}>`,
+      `To: ${to.trim()}`,
+      ...(ccList.length > 0 ? [`Cc: ${ccList.join(', ')}`] : []),
+      `Subject: ${encH(subject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      html,
+    ].join('\r\n')
+  }
 
   const encoded = Buffer.from(rawEmail).toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
