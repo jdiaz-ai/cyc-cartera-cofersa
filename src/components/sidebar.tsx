@@ -15,6 +15,7 @@ import {
   PieChart,
   AlertTriangle,
   CalendarRange,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Usuario, Notificacion } from '@/types/database'
@@ -129,10 +130,11 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Gestión de Cartera',
     roles: ['ANALISTA'],
     items: [
-      { label: 'Clientes',    href: '/clientes',    icon: <Users size={16} />,         roles: ['ANALISTA'] },
-      { label: 'Gestiones',   href: '/gestiones',   icon: <ClipboardList size={16} />, roles: ['ANALISTA'] },
-      { label: 'Promesas',    href: '/promesas',    icon: <Handshake size={16} />,     roles: ['ANALISTA'] },
-      { label: 'Solicitudes', href: '/solicitudes', icon: <FileText size={16} />,      roles: ['ANALISTA'] },
+      { label: 'Clientes',          href: '/clientes',                 icon: <Users size={16} />,         roles: ['ANALISTA'] },
+      { label: 'Gestiones',         href: '/gestiones',                icon: <ClipboardList size={16} />, roles: ['ANALISTA'] },
+      { label: 'Promesas',          href: '/promesas',                 icon: <Handshake size={16} />,     roles: ['ANALISTA'] },
+      { label: 'Solicitudes',       href: '/solicitudes',              icon: <FileText size={16} />,      roles: ['ANALISTA'] },
+      { label: 'Estados de Cuenta', href: '/reportes/estados-cuenta',  icon: <Mail size={16} />,          roles: ['ANALISTA'] },
     ],
   },
 
