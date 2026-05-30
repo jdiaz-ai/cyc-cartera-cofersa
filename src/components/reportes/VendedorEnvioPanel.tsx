@@ -33,6 +33,7 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
   const [progreso,   setProgreso]   = useState<{ hechos: number; total: number } | null>(null)
   const [resultado,  setResultado]  = useState<Map<string, EstadoEnvio>>(new Map())
   const [testEmail,  setTestEmail]  = useState('')
+  const [errorMsg,   setErrorMsg]   = useState<string | null>(null)
 
   const modoPrueba = testEmail.trim().length > 0 && /\S+@\S+\.\S+/.test(testEmail.trim())
 
@@ -61,8 +62,10 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
     if (seleccion.length === 0 || corriendo) return
     setCorriendo(true)
     setResultado(new Map())
+    setErrorMsg(null)
     setProgreso({ hechos: 0, total: seleccion.length })
     const res = new Map<string, EstadoEnvio>()
+    let primerError: string | null = null
 
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
@@ -90,14 +93,18 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
           }),
         })
         const data = await r.json().catch(() => ({}))
-        res.set(v.vendedor_cod, r.ok && data.email_sent ? 'ok' : 'error')
-      } catch {
+        const ok = r.ok && data.email_sent
+        res.set(v.vendedor_cod, ok ? 'ok' : 'error')
+        if (!ok && !primerError) primerError = data.error || `Error ${r.status}`
+      } catch (err) {
         res.set(v.vendedor_cod, 'error')
+        if (!primerError) primerError = err instanceof Error ? err.message : 'Error de red'
       }
       setResultado(new Map(res))
       hechos++; setProgreso({ hechos, total: seleccion.length })
       await sleep(450)
     }
+    setErrorMsg(primerError)
     setCorriendo(false)
   }
 
@@ -146,6 +153,22 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
           </button>
         </div>
       </div>
+
+      {/* Error */}
+      {errorMsg && (
+        <div className="rounded-xl border px-4 py-3 flex items-start gap-2"
+             style={{ background: '#fef2f2', borderColor: '#fecaca' }}>
+          <AlertCircle size={15} style={{ color: '#dc2626', marginTop: '1px', flexShrink: 0 }} />
+          <div>
+            <p className="text-[12px] font-semibold text-red-700">{errorMsg}</p>
+            {/Google|expirada|401/i.test(errorMsg) && (
+              <p className="text-[11px] text-red-500 mt-0.5">
+                Cerrá sesión (menú arriba a la derecha) y volvé a entrar con Google; luego reintentá el envío.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Progreso */}
       {progreso && (
