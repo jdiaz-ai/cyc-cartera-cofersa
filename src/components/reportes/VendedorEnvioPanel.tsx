@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Send, Loader2, CheckCircle2, AlertCircle, MailX } from 'lucide-react'
+import { ChevronDown, ChevronRight, Send, Loader2, CheckCircle2, AlertCircle, MailX, FlaskConical } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type EstadoEnvio = 'ok' | 'error' | 'sin-correo' | 'procesando'
@@ -32,9 +32,12 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
   const [corriendo,  setCorriendo]  = useState(false)
   const [progreso,   setProgreso]   = useState<{ hechos: number; total: number } | null>(null)
   const [resultado,  setResultado]  = useState<Map<string, EstadoEnvio>>(new Map())
+  const [testEmail,  setTestEmail]  = useState('')
 
-  const conCorreo  = vendedores.filter(v => v.vendedor_email?.trim())
-  const todosMarc  = conCorreo.length > 0 && conCorreo.every(v => sel.has(v.vendedor_cod))
+  const modoPrueba = testEmail.trim().length > 0 && /\S+@\S+\.\S+/.test(testEmail.trim())
+
+  const seleccionables = modoPrueba ? vendedores : vendedores.filter(v => v.vendedor_email?.trim())
+  const todosMarc  = seleccionables.length > 0 && seleccionables.every(v => sel.has(v.vendedor_cod))
   const seleccion  = vendedores.filter(v => sel.has(v.vendedor_cod))
 
   function toggle(cod: string) {
@@ -43,8 +46,8 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
   function toggleTodos() {
     setSel(prev => {
       const n = new Set(prev)
-      if (todosMarc) conCorreo.forEach(v => n.delete(v.vendedor_cod))
-      else           conCorreo.forEach(v => n.add(v.vendedor_cod))
+      if (todosMarc) seleccionables.forEach(v => n.delete(v.vendedor_cod))
+      else           seleccionables.forEach(v => n.add(v.vendedor_cod))
       return n
     })
   }
@@ -68,19 +71,21 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
 
     let hechos = 0
     for (const v of seleccion) {
-      if (!v.vendedor_email?.trim()) {
+      // En modo prueba todo va a tu correo, sin CC; en modo real al vendedor
+      if (!modoPrueba && !v.vendedor_email?.trim()) {
         res.set(v.vendedor_cod, 'sin-correo'); setResultado(new Map(res))
         hechos++; setProgreso({ hechos, total: seleccion.length }); continue
       }
       res.set(v.vendedor_cod, 'procesando'); setResultado(new Map(res))
-      const cc = [v.supervisor_email ?? '', ...(v.analistas_email ?? [])].filter(x => x && x.trim())
+      const to      = modoPrueba ? testEmail.trim() : v.vendedor_email!.trim()
+      const cc      = modoPrueba ? [] : [v.supervisor_email ?? '', ...(v.analistas_email ?? [])].filter(x => x && x.trim())
+      const subject = modoPrueba ? `[PRUEBA] ${buildSubject(v)}` : buildSubject(v)
       try {
         const r = await fetch('/api/reportes/enviar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: v.vendedor_email.trim(), cc,
-            subject: buildSubject(v), html: buildHtml(v),
+            to, cc, subject, html: buildHtml(v),
             providerToken, providerRefreshToken,
           }),
         })
@@ -104,17 +109,40 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
     <div className="space-y-4">
       {kpis}
 
+      {/* Modo prueba */}
+      <div className="bg-white rounded-xl border px-4 py-2.5 flex flex-wrap items-center gap-2"
+           style={{ borderColor: modoPrueba ? '#f59e0b' : '#e2e8f0' }}>
+        <FlaskConical size={14} style={{ color: modoPrueba ? '#f59e0b' : '#94a3b8' }} />
+        <span className="text-[12px] font-semibold text-gray-600">Modo prueba:</span>
+        <input
+          type="text"
+          value={testEmail}
+          onChange={e => setTestEmail(e.target.value)}
+          placeholder="tu-correo@cofersa.cr (opcional)"
+          className="flex-1 min-w-[200px] rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-200"
+        />
+        <span className="text-[11px] text-gray-400">
+          {modoPrueba
+            ? '⚠ Todos los envíos irán a tu correo (sin CC, asunto [PRUEBA]).'
+            : 'Dejalo vacío para enviar de verdad a cada vendedor.'}
+        </span>
+      </div>
+
       {/* Toolbar de envío */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button onClick={toggleTodos} className="text-[12px] font-semibold text-[#009ee3] hover:underline">
-          {todosMarc ? 'Quitar todos' : `Seleccionar todos (${conCorreo.length})`}
+          {todosMarc ? 'Quitar todos' : `Seleccionar todos (${seleccionables.length})`}
         </button>
         <div className="flex items-center gap-2">
           <span className="text-[12px] font-semibold text-gray-500">{seleccion.length} vendedor{seleccion.length !== 1 ? 'es' : ''}</span>
           <button onClick={enviar} disabled={corriendo || seleccion.length === 0}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition disabled:opacity-40"
-            style={{ background: '#009ee3', color: 'white', border: '1px solid #009ee3' }}>
-            {corriendo ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Enviar a vendedores
+            style={{
+              background: modoPrueba ? '#f59e0b' : '#009ee3', color: 'white',
+              border: `1px solid ${modoPrueba ? '#f59e0b' : '#009ee3'}`,
+            }}>
+            {corriendo ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {modoPrueba ? 'Enviar prueba a mi correo' : 'Enviar a vendedores'}
           </button>
         </div>
       </div>
@@ -148,7 +176,7 @@ export default function VendedorEnvioPanel<T extends VendedorBase>({
                  style={{ borderColor: marcado ? '#009ee3' : '#e2e8f0' }}>
               {/* Header */}
               <div className="flex items-center gap-3 px-4 py-3">
-                <input type="checkbox" checked={marcado} disabled={sinMail}
+                <input type="checkbox" checked={marcado} disabled={sinMail && !modoPrueba}
                        onChange={() => toggle(v.vendedor_cod)} />
                 <button onClick={() => toggleAbierto(v.vendedor_cod)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
                   {open ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />}
