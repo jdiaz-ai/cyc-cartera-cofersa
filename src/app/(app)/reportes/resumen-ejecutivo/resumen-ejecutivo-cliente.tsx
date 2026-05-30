@@ -8,7 +8,7 @@ import ReporteShell from '@/components/reportes/ReporteShell'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
 import ICPBadge from '@/components/analisis-pagos/ICPBadge'
 import DSOTendenciaCard from '@/components/coordinador/DSOTendenciaCard'
-import { exportTablaPDF, exportTablaExcel, generarTablaPDFBase64, type ColumnaReporte } from '@/lib/reportes/export-tabla'
+import { exportTablaPDF, exportTablaExcel, type ColumnaReporte } from '@/lib/reportes/export-tabla'
 import type { ResumenEjecutivoData } from './page'
 import type { ConcentracionRow } from '@/types/analisis-pagos'
 
@@ -44,10 +44,68 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
 
   const dsoColor = data.dso > 45 ? '#ef4444' : data.dso > 35 ? '#f59e0b' : '#16a34a'
 
-  function htmlBodyEjecutivo(): string {
-    const NAVY = '#003B5C'
+  function htmlResumenEjecutivo(): string {
+    const NAVY = '#003B5C', CYAN = '#009ee3'
+    const dColor = data.dso > 45 ? '#ef4444' : data.dso > 35 ? '#f59e0b' : '#16a34a'
+
+    // ── 5 KPI cards ──────────────────────────────────────────────────────
+    const kpis = [
+      { label: 'Cartera total',   valor: fmtCRC(data.cartera),    sub: `${data.nClientes} clientes`, color: NAVY },
+      { label: '% Mora',          valor: `${data.pctMora}%`,      sub: fmtCRC(data.mora),            color: '#dc2626' },
+      { label: 'DSO',             valor: `${data.dso}d`,          sub: 'días de cobro',              color: dColor },
+      { label: 'Vencido >30d',    valor: `${data.pctVenc30}%`,    sub: fmtCRC(data.venc30),          color: '#ea580c' },
+      { label: 'Clientes en mora',valor: `${data.nMora}`,         sub: `de ${data.nClientes}`,       color: '#f59e0b' },
+    ]
+    const kpiCells = kpis.map(k => `
+      <td width="20%" style="padding:3px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-top:3px solid ${k.color};border-radius:6px;">
+          <tr><td style="padding:8px 10px;text-align:center;">
+            <div style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">${k.label}</div>
+            <div style="font-size:17px;font-weight:800;color:${NAVY};margin-top:3px;">${k.valor}</div>
+            <div style="font-size:9px;color:#94a3b8;margin-top:2px;">${k.sub}</div>
+          </td></tr>
+        </table>
+      </td>`).join('')
+
+    // ── Barra de aging ───────────────────────────────────────────────────
+    const tramos = TRAMOS.map(t => ({ ...t, val: data[t.key] as number }))
+    const segs = tramos.filter(t => t.val > 0).map(t => {
+      const pct = data.cartera > 0 ? (t.val / data.cartera) * 100 : 0
+      return `<td style="background:${t.color};color:#fff;font-size:10px;font-weight:700;text-align:center;padding:7px 0;white-space:nowrap;" width="${pct.toFixed(2)}%">${pct >= 6 ? Math.round(pct) + '%' : ''}</td>`
+    }).join('')
+    const leyenda = tramos.map(t => `
+      <td style="padding:3px 10px 3px 0;font-size:10px;color:#555;white-space:nowrap;">
+        <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${t.color};margin-right:4px;"></span>${t.label}: <b>${fmtCRC(t.val)}</b>
+      </td>`).join('')
+
+    // ── Top 10 deudores ──────────────────────────────────────────────────
+    const thS = `background:${NAVY};color:#fff;padding:6px 8px;font-size:10px;font-weight:700;text-transform:uppercase;`
+    const top = (c?.top10 ?? [])
+    const filasTop = top.map((r, i) => {
+      const acum = r.pct_acumulado > 40 ? '#dc2626' : '#E36C00'
+      return `<tr style="background:${i % 2 === 0 ? '#FBFBFB' : '#fff'};">
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;text-align:center;color:#94a3b8;font-weight:700;">${r.rank}</td>
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;font-weight:600;color:#0f172a;">${(r.cliente_nombre || '').replace(/</g,'&lt;')}</td>
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;color:#475569;">${(r.vendedor_nombre || '').replace(/</g,'&lt;')}</td>
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;text-align:right;font-weight:700;color:#dc2626;white-space:nowrap;">${fmtCRC(r.mora_total)}</td>
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;text-align:right;color:#64748b;">${r.pct_mora}%</td>
+        <td style="border:1px solid #eee;padding:5px 8px;font-size:11px;text-align:right;font-weight:700;color:${acum};">${r.pct_acumulado}%</td>
+      </tr>`
+    }).join('')
+
+    const hhiColor = c?.kpis.hhi_nivel === 'ALTO' ? '#dc2626' : c?.kpis.hhi_nivel === 'MEDIO' ? '#f59e0b' : '#16a34a'
+    const concBlock = c ? `
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:14px;">
+        <tr>
+          <td width="25%" style="padding:3px;"><table width="100%" style="border:1px solid #e5e7eb;border-top:3px solid ${hhiColor};border-radius:6px;"><tr><td style="padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;text-transform:uppercase;">Concentración HHI</div><div style="font-size:16px;font-weight:800;color:${hhiColor};">${c.kpis.hhi_nivel}</div><div style="font-size:9px;color:#94a3b8;">${(c.kpis.hhi_valor ?? 0).toLocaleString()} pts</div></td></tr></table></td>
+          <td width="25%" style="padding:3px;"><table width="100%" style="border:1px solid #e5e7eb;border-radius:6px;"><tr><td style="padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;text-transform:uppercase;">Top 10 / mora</div><div style="font-size:16px;font-weight:800;color:${NAVY};">${c.kpis.pct_top10}%</div></td></tr></table></td>
+          <td width="25%" style="padding:3px;"><table width="100%" style="border:1px solid #e5e7eb;border-radius:6px;"><tr><td style="padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;text-transform:uppercase;">Top 3 vendedores</div><div style="font-size:16px;font-weight:800;color:${CYAN};">${c.kpis.pct_top3_vendedores}%</div></td></tr></table></td>
+          <td width="25%" style="padding:3px;"><table width="100%" style="border:1px solid #e5e7eb;border-radius:6px;"><tr><td style="padding:8px;text-align:center;"><div style="font-size:9px;color:#94a3b8;text-transform:uppercase;">Clientes "Grandes"</div><div style="font-size:16px;font-weight:800;color:#f59e0b;">${c.kpis.pct_grandes}%</div></td></tr></table></td>
+        </tr>
+      </table>` : ''
+
     return `
-    <div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:680px;">
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#222;max-width:760px;">
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
         <tr><td style="background:${NAVY};padding:14px 18px;border-radius:6px 6px 0 0;">
           <div style="font-size:10px;color:#A8C4E0;letter-spacing:1px;text-transform:uppercase;">SIC · Sistema Inteligente de Cobranza — Cofersa</div>
@@ -55,17 +113,27 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
           <div style="font-size:12px;color:#A8C4E0;margin-top:2px;">Corte: <b style="color:#fff;">${fmtFecha(data.fechaCorte)}</b></div>
         </td><td style="background:#F4A61C;width:8px;border-radius:0 6px 0 0;"></td></tr>
       </table>
-      <p style="font-size:12.5px;margin:14px 0 10px;">Adjunto el Resumen Ejecutivo de Cartera al corte indicado. Resumen de indicadores:</p>
-      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12.5px;">
-        <tr><td style="padding:4px 16px 4px 0;color:#555;">Cartera total</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${fmtCRC(data.cartera)}</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#555;">% Mora</td><td style="padding:4px 0;font-weight:700;color:#C00000;">${data.pctMora}% (${fmtCRC(data.mora)})</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#555;">DSO</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${data.dso} días</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#555;">Vencido &gt;30d</td><td style="padding:4px 0;font-weight:700;color:#E36C00;">${data.pctVenc30}% (${fmtCRC(data.venc30)})</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#555;">Clientes en mora</td><td style="padding:4px 0;font-weight:700;color:${NAVY};">${data.nMora} de ${data.nClientes}</td></tr>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:12px 0 8px;"><tr>${kpiCells}</tr></table>
+
+      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px;">Antigüedad de la cartera</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:6px;overflow:hidden;"><tr>${segs}</tr></table>
+      <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:6px;"><tr>${leyenda}</tr></table>
+
+      <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 6px;">Top 10 deudores — Total: ${fmtCRC(c?.total_mora ?? 0)}</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+        <thead><tr>
+          <th style="${thS}text-align:center;">#</th><th style="${thS}text-align:left;">Cliente</th>
+          <th style="${thS}text-align:left;">Vendedor</th><th style="${thS}text-align:right;">Mora total</th>
+          <th style="${thS}text-align:right;">% Mora</th><th style="${thS}text-align:right;">% Acum.</th>
+        </tr></thead>
+        <tbody>${filasTop}</tbody>
       </table>
-      <p style="font-size:12px;color:#444;margin:12px 0;">El detalle completo (top 10 deudores, concentración) está en el <b>PDF adjunto</b>.</p>
-      <div style="margin-top:12px;font-size:10px;color:#94a3b8;border-top:1px solid #eee;padding-top:8px;">
-        Reporte generado desde <b style="color:#009ee3;">SIC</b> — Sistema Inteligente de Cobranza · Cofersa · por ${generadoPor}.
+
+      ${concBlock}
+
+      <div style="margin-top:16px;font-size:10px;color:#94a3b8;border-top:1px solid #eee;padding-top:8px;">
+        Reporte generado desde <b style="color:${CYAN};">SIC</b> — Sistema Inteligente de Cobranza · Cofersa · por ${generadoPor}.
       </div>
     </div>`
   }
@@ -75,7 +143,6 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
     if (toList.length === 0) { setErrEnvio('Ingresá al menos un correo.'); return }
     setEnviando(true); setErrEnvio(null)
     try {
-      const base64   = await generarTablaPDFBase64(exportParams())
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       const r = await fetch('/api/reportes/enviar', {
@@ -84,8 +151,7 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
           to: toList.join(', '),
           cc: cc.split(/[;,]/).map(s => s.trim()).filter(Boolean),
           subject: `SIC · Resumen Ejecutivo de Cartera — ${fmtFecha(data.fechaCorte)}`,
-          html: htmlBodyEjecutivo(),
-          adjunto: { base64, mimeType: 'application/pdf', filename: 'resumen-ejecutivo-cartera.pdf' },
+          html: htmlResumenEjecutivo(),
           providerToken: session?.provider_token ?? null,
           providerRefreshToken: session?.provider_refresh_token ?? null,
         }),
@@ -147,7 +213,7 @@ export default function ResumenEjecutivoCliente({ data, generadoPor }: Props) {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <h3 className="text-[15px] font-bold text-gray-900">Enviar Resumen Ejecutivo</h3>
-                <p className="text-[12px] text-gray-400">Se adjunta el PDF del reporte</p>
+                <p className="text-[12px] text-gray-400">Se envía el resumen en el cuerpo del correo</p>
               </div>
               <button onClick={() => !enviando && setShowEnviar(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
             </div>

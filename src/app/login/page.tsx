@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [loginHint, setLoginHint] = useState<string | null>(null)
   // needsInteraction = true cuando prompt:none falló (Google lo requirió)
   const [needsInteraction, setNeedsInteraction] = useState(false)
+  // reconsent = true cuando venimos a re-autorizar para capturar el refresh token
+  const [reconsent, setReconsent] = useState(false)
 
   // ── Al montar: leer cookie con el email del último login ─────
   // y detectar si venimos de un fallo de silent auth (prompt:none)
@@ -25,6 +27,9 @@ export default function LoginPage() {
     // el modo interactivo para que el siguiente clic muestre select_account
     const params = new URLSearchParams(window.location.search)
     if (params.get('needs_interaction')) setNeedsInteraction(true)
+    // reconsent=1 → el callback detectó que falta el refresh token de Gmail;
+    // forzamos el flujo con consentimiento para capturarlo (una sola vez).
+    if (params.get('reconsent')) { setNeedsInteraction(true); setReconsent(true) }
   })
 
   // ── Google OAuth ──────────────────────────────────────────────
@@ -217,6 +222,14 @@ export default function LoginPage() {
           {error && (
             <div className="mb-5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
               {error}
+            </div>
+          )}
+
+          {/* Reconsent — capturar permiso de envío de correos */}
+          {reconsent && !error && (
+            <div className="mb-5 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              Para habilitar el <b>envío de correos</b> desde el SIC sin que se cierre la sesión,
+              continuá con Google y aceptá los permisos. Es una sola vez.
             </div>
           )}
 
