@@ -110,9 +110,9 @@ export const REPORTES: ReporteDef[] = [
     icono:       'CalendarClock',
     roles:       ['COORDINADOR'],
     href:        '/reportes/facturas-plazo-especial',
-    formatos:    ['pantalla', 'pdf', 'excel'],
+    formatos:    ['pantalla'],
     programable: true,
-    disponible:  false,
+    disponible:  true,
   },
 
   // ═══ ANALISTA (reportes simples — ya existían) ════════════════════════════

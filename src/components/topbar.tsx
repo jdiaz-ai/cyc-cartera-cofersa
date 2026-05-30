@@ -24,6 +24,7 @@ const PAGE_LABELS: Record<string, { title: string; sub: string }> = {
   '/reportes/resumen-ejecutivo':       { title: 'Resumen Ejecutivo',      sub: 'Cartera, mora, DSO y concentración' },
   '/reportes/mora-vendedor':           { title: 'Mora por Vendedor',      sub: 'Antigüedad de saldos por vendedor' },
   '/reportes/estados-cuenta':          { title: 'Estados de Cuenta',      sub: 'Enviar o descargar estados de cuenta por cliente' },
+  '/reportes/facturas-plazo-especial': { title: 'Facturas con Plazo Especial', sub: 'Envío al vendedor con copia al supervisor' },
   '/reportes/icp-vendedor':            { title: 'Comportamiento por Vendedor', sub: 'ICP y puntualidad de pago por vendedor' },
   '/reportes':                         { title: 'Hub de Reportes',        sub: 'Reportes operativos, comerciales y ejecutivos' },
   '/configuracion':                    { title: 'Configuración',          sub: 'Parámetros del sistema' },

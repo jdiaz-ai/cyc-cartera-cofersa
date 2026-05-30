@@ -5,8 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtCRC } from '@/lib/utils/formato'
 import ReporteShell from '@/components/reportes/ReporteShell'
 import KPICardAnalisis from '@/components/analisis-pagos/KPICardAnalisis'
+import DetalleBloqueados from './detalle-bloqueados'
 import { exportTablaPDF, exportTablaExcel, type ColumnaReporte } from '@/lib/reportes/export-tabla'
 import type { MoraVendedorResult, MoraVendedorRow } from '@/types/reportes'
+
+type Vista = 'resumen' | 'detalle'
 
 // ── Columnas para export ──────────────────────────────────────────────────
 const COLUMNAS: ColumnaReporte[] = [
@@ -38,11 +41,29 @@ function Skeleton() {
 interface Props { generadoPor: string }
 
 export default function MoraVendedorCliente({ generadoPor }: Props) {
+  const [vista,      setVista]      = useState<Vista>('resumen')
   const [data,       setData]       = useState<MoraVendedorResult | null>(null)
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState<string | null>(null)
   const [supervisor, setSupervisor] = useState('')
   const [exportando, setExportando] = useState(false)
+
+  // Toggle Resumen ↔ Detalle (compartido por ambas vistas)
+  const toggle = (
+    <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: '#E2E8F0' }}>
+      {([['resumen', 'Resumen de mora'], ['detalle', 'Clientes bloqueados']] as [Vista, string][]).map(([v, label]) => (
+        <button key={v} onClick={() => setVista(v)}
+          className="px-3 py-1.5 rounded-md text-[11px] font-bold transition-all whitespace-nowrap"
+          style={{
+            background: vista === v ? 'white' : 'transparent',
+            color:      vista === v ? '#003B5C' : '#94a3b8',
+            boxShadow:  vista === v ? '0 1px 3px rgba(0,0,0,0.10)' : 'none',
+          }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null)
@@ -60,6 +81,9 @@ export default function MoraVendedorCliente({ generadoPor }: Props) {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Vista Detalle (clientes bloqueados) — componente propio con su panel de envío
+  if (vista === 'detalle') return <DetalleBloqueados toggle={toggle} />
 
   if (loading) return <div className="px-5 py-5"><Skeleton /></div>
   if (error) return (
@@ -116,17 +140,22 @@ export default function MoraVendedorCliente({ generadoPor }: Props) {
   async function onPDF()   { setExportando(true); try { await exportTablaPDF(exportParams()) }   finally { setExportando(false) } }
   async function onExcel() { setExportando(true); try { await exportTablaExcel(exportParams()) } finally { setExportando(false) } }
 
-  const filtros = supervisores.length > 0 ? (
-    <select
-      value={supervisor}
-      onChange={e => setSupervisor(e.target.value)}
-      className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] bg-white text-gray-700 focus:outline-none"
-      style={{ minWidth: '180px' }}
-    >
-      <option value="">Todos los supervisores</option>
-      {supervisores.map(s => <option key={s} value={s}>{s}</option>)}
-    </select>
-  ) : null
+  const filtros = (
+    <>
+      {toggle}
+      {supervisores.length > 0 && (
+        <select
+          value={supervisor}
+          onChange={e => setSupervisor(e.target.value)}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12px] bg-white text-gray-700 focus:outline-none"
+          style={{ minWidth: '180px' }}
+        >
+          <option value="">Todos los supervisores</option>
+          {supervisores.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      )}
+    </>
+  )
 
   const kpisStrip = (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
