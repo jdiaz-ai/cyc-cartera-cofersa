@@ -384,8 +384,9 @@ export default function TabRankingClientes({ periodo, userEmail }: Props) {
                 row.tendencia_3m >  3 ? '#16a34a' : '#94a3b8'
               const tendLabel =
                 row.tendencia_3m < -3 ? `▼ ${tendN} pts` :
-                row.tendencia_3m >  3 ? `▲ ${tendN} pts` : '— sin cambio'
-              const tendSize  = Math.abs(row.tendencia_3m) <= 3 ? '11px' : '12px'
+                row.tendencia_3m >  3 ? `▲ ${tendN} pts` : 'sin cambio'
+              const tendSize     = Math.abs(row.tendencia_3m) <= 3 ? '11px' : '12px'
+              const isSinCambio  = Math.abs(row.tendencia_3m) <= 3
 
               return (
                 <tr
@@ -456,16 +457,20 @@ export default function TabRankingClientes({ periodo, userEmail }: Props) {
                   </td>
 
                   {/* Tendencia */}
-                  <td style={{
-                    padding: '10px 12px', textAlign: 'center',
-                    fontSize: tendSize, fontWeight: Math.abs(row.tendencia_3m) > 3 ? 700 : 400,
-                    color: tendColor, fontVariantNumeric: 'tabular-nums',
-                  }}>
+                  <td
+                    title="ICP actual vs hace 3 meses"
+                    style={{
+                      padding: '10px 12px', textAlign: 'center',
+                      fontSize: tendSize, fontWeight: isSinCambio ? 400 : 700,
+                      fontStyle: isSinCambio ? 'italic' : 'normal',
+                      color: tendColor, fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
                     {tendLabel}
                   </td>
 
                   {/* Mora Activa */}
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  <td style={{ padding: '10px 20px 10px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {row.cartera_actual > 0 ? (
                       <span style={{ fontSize: '12px', fontWeight: 600, color: '#374151' }}>
                         {fmtCRC(row.cartera_actual)}
